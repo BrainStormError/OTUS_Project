@@ -1,0 +1,36 @@
+import { Pool } from 'pg';
+
+import { env } from '@/core/config/env';
+
+const globalForPool = globalThis as unknown as { __birthdayPool?: Pool };
+
+export function getPool(): Pool {
+  if (!globalForPool.__birthdayPool) {
+    globalForPool.__birthdayPool = new Pool({
+      connectionString: env.DATABASE_URL,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
+  }
+  return globalForPool.__birthdayPool;
+}
+
+export async function query<T extends Record<string, unknown>>(
+  text: string,
+  params: readonly unknown[] = [],
+): Promise<T[]> {
+  const result = await getPool().query(text, params as unknown[]);
+  return result.rows as T[];
+}
+
+export async function pingDatabase(): Promise<void> {
+  await getPool().query('SELECT 1');
+}
+
+export async function closePool(): Promise<void> {
+  if (globalForPool.__birthdayPool) {
+    await globalForPool.__birthdayPool.end();
+    globalForPool.__birthdayPool = undefined;
+  }
+}
