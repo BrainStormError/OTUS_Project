@@ -5,6 +5,8 @@ const config = [
     ignores: [
       '.next/**',
       'node_modules/**',
+      '.kilo/**',
+      '.kilocode/**',
       'coverage/**',
       'playwright-report/**',
       'test-results/**',

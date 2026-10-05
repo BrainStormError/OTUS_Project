@@ -22,4 +22,10 @@ describe('proxy CSP', () => {
   it('generates unique nonces', () => {
     expect(createNonce()).not.toBe(createNonce());
   });
+
+  it('allows unsafe-eval in development but not in production', () => {
+    expect(buildCsp('n', 'development')).toContain("'unsafe-eval'");
+    expect(buildCsp('n', 'test')).toContain("'unsafe-eval'");
+    expect(buildCsp('n', 'production')).not.toContain("'unsafe-eval'");
+  });
 });

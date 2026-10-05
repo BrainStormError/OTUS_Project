@@ -3,24 +3,25 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Banners } from '@/components/layout/banners';
-import { ThemeSwitcher } from '@/components/layout/theme-switcher';
+import { ThemeSelect } from '@/components/features/movie-tracker/ThemeSelect';
 
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.setAttribute('data-theme', 'light');
 });
 
-describe('ThemeSwitcher', () => {
+describe('ThemeSelect (Settings only)', () => {
   it('changes the theme through the data-theme attribute without editing components', async () => {
-    render(<ThemeSwitcher />);
-    const button = await screen.findByRole('button', { name: /тёмную тему/i });
+    render(<ThemeSelect />);
+    const dark = await screen.findByRole('radio', { name: 'Тёмная' });
 
-    await userEvent.click(button);
+    await userEvent.click(dark);
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     expect(window.localStorage.getItem('theme')).toBe('dark');
 
-    await userEvent.click(button);
+    await userEvent.click(screen.getByRole('radio', { name: 'Светлая' }));
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(window.localStorage.getItem('theme')).toBe('light');
   });
 });
 

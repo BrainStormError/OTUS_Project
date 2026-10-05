@@ -1,0 +1,52 @@
+import type { PoolClient } from 'pg';
+
+import type { Actor } from '@/core/auth/policy';
+import { err, ok, type Result } from '@/core/result';
+
+import { decodeCursor } from './domain';
+import { findVisibleEvent, insertActivityEvent, listFeedEvents } from './repository';
+import type { ListFeedInput } from './schema';
+import type { ActivityEvent, FeedItem, ListFeedResult, NewActivityEvent } from './types';
+
+export async function recordEvent(
+  tx: PoolClient,
+  event: NewActivityEvent,
+): Promise<ActivityEvent> {
+  return insertActivityEvent(tx, event);
+}
+
+export async function listFeed(
+  actor: Actor,
+  input: ListFeedInput,
+): Promise<Result<ListFeedResult>> {
+  let cursor = null;
+  if (input.cursor) {
+    cursor = decodeCursor(input.cursor);
+    if (!cursor) {
+      return err('VALIDATION', 'Некорректный cursor');
+    }
+  }
+
+  let since = null;
+  if (input.since) {
+    since = decodeCursor(input.since);
+    if (!since) {
+      return err('VALIDATION', 'Некорректный cursor');
+    }
+  }
+
+  const page = await listFeedEvents({
+    viewerId: actor.id,
+    limit: input.limit,
+    cursor,
+    since,
+  });
+  return ok(page);
+}
+
+export async function getVisibleEvent(
+  viewerId: string,
+  eventId: string,
+): Promise<FeedItem | null> {
+  return findVisibleEvent(viewerId, eventId);
+}

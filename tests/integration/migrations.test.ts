@@ -60,11 +60,14 @@ describe('initial migration', () => {
       await runMigrations('up', target.toString());
       expect(await tableExists(target.toString(), 'users')).toBe(true);
       expect(await tableExists(target.toString(), 'directory_entries')).toBe(true);
+      expect(await tableExists(target.toString(), 'activity_events')).toBe(true);
 
-      await runMigrations('down', target.toString());
+      while ((await countMigrations(target.toString())) > 0) {
+        await runMigrations('down', target.toString());
+      }
+
+      expect(await tableExists(target.toString(), 'activity_events')).toBe(false);
       expect(await tableExists(target.toString(), 'directory_entries')).toBe(false);
-
-      await runMigrations('down', target.toString());
       expect(await tableExists(target.toString(), 'users')).toBe(false);
     } finally {
       await admin.query(`DROP DATABASE IF EXISTS ${dbName}`);
@@ -85,6 +88,19 @@ async function tableExists(connectionString: string, table: string): Promise<boo
       [table],
     );
     return result.rows[0]?.exists === true;
+  } finally {
+    await client.end();
+  }
+}
+
+async function countMigrations(connectionString: string): Promise<number> {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const result = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM pgmigrations`,
+    );
+    return Number(result.rows[0]?.count ?? '0');
   } finally {
     await client.end();
   }

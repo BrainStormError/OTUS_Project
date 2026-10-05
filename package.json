@@ -17,9 +17,10 @@
     "test:e2e:critical": "playwright test tests/e2e/critical-path.spec.ts",
     "audit": "npm audit --omit=dev --audit-level=high",
     "verify:env": "tsx scripts/verify-env.ts",
-    "db:migrate": "node-pg-migrate up -m src/core/db/migrations",
-    "db:rollback": "node-pg-migrate down -m src/core/db/migrations",
-    "db:new": "node-pg-migrate create -m src/core/db/migrations -j sql"
+    "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m src/core/db/migrations",
+    "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m src/core/db/migrations",
+    "db:new": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create -m src/core/db/migrations -j sql",
+    "db:seed": "node --env-file-if-exists=.env node_modules/tsx/dist/cli.mjs scripts/seed-dev.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "1.3.3",

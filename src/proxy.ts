@@ -1,15 +1,25 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { readNodeEnv } from '@/core/config/env';
+
 export const CSP_NONCE_HEADER = 'x-nonce';
 
 export function createNonce(): string {
   return crypto.randomUUID().replace(/-/g, '');
 }
 
-export function buildCsp(nonce: string): string {
+export function buildCsp(
+  nonce: string,
+  nodeEnv: string | undefined = readNodeEnv(),
+): string {
+  const scriptSrc = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
+  if (nodeEnv !== 'production') {
+    scriptSrc.push("'unsafe-eval'");
+  }
+
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src ${scriptSrc.join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",

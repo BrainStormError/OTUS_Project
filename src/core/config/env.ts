@@ -27,6 +27,10 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
   return parsed.data;
 }
 
+export function readNodeEnv(): string | undefined {
+  return process.env.NODE_ENV;
+}
+
 let cachedEnv: Env | null = null;
 
 export function getEnv(): Env {

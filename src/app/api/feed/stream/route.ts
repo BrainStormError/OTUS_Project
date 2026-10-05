@@ -1,0 +1,78 @@
+import { toFeedEvent } from '@/components/features/movie-tracker/feed';
+import { subscribeToActivity } from '@/core/db/activity-channel';
+import { json } from '@/core/http/responses';
+import { getVisibleEvent, listFeed, MAX_FEED_LIMIT } from '@/modules/activity';
+import { getActor } from '@/modules/auth/session';
+
+export const dynamic = 'force-dynamic';
+
+const HEARTBEAT_MS = 25_000;
+
+export async function GET(request: Request): Promise<Response> {
+  const actor = await getActor();
+  if (!actor) {
+    return json({ error: 'Требуется вход' }, 401);
+  }
+
+  const encoder = new TextEncoder();
+  let unsubscribe: (() => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (text: string) => {
+        try {
+          controller.enqueue(encoder.encode(text));
+        } catch {
+          // The client has already disconnected.
+        }
+      };
+
+      const sendItem = (item: Awaited<ReturnType<typeof getVisibleEvent>>) => {
+        if (!item) return;
+        const event = toFeedEvent(item, actor.id);
+        send(`event: activity\nid: ${event.cursor}\ndata: ${JSON.stringify(event)}\n\n`);
+      };
+
+      unsubscribe = await subscribeToActivity((eventId) => {
+        void getVisibleEvent(actor.id, eventId).then(sendItem);
+      });
+
+      send(': connected\n\n');
+
+      const lastEventId = request.headers.get('last-event-id');
+      if (lastEventId) {
+        const catchup = await listFeed(actor, { limit: MAX_FEED_LIMIT, since: lastEventId });
+        if (catchup.ok) {
+          for (const item of [...catchup.value.items].reverse()) {
+            sendItem(item);
+          }
+        }
+      }
+
+      heartbeat = setInterval(() => send(': heartbeat\n\n'), HEARTBEAT_MS);
+
+      request.signal.addEventListener('abort', () => {
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe?.();
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+      });
+    },
+    cancel() {
+      if (heartbeat) clearInterval(heartbeat);
+      unsubscribe?.();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      'x-accel-buffering': 'no',
+    },
+  });
+}
