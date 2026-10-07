@@ -10,26 +10,48 @@ import { Card } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 
 import { RatingForm, type RatingPayload } from './RatingForm';
-import { useWatchedRecords } from './record-store';
-import type { Movie } from './types';
+import { deleteRemoteRecord, saveRemoteRating } from './report-rating';
+import type { Movie, WatchedRecord } from './types';
 
-export function FilmDetail({ movie }: { movie: Movie }) {
-  const { records, upsert, toggle } = useWatchedRecords();
+export function FilmDetail({
+  movie,
+  initialRecord = null,
+}: {
+  movie: Movie;
+  initialRecord?: WatchedRecord | null;
+}) {
+  const [record, setRecord] = useState<WatchedRecord | null>(initialRecord);
   const [open, setOpen] = useState(false);
 
-  const record = records.find((item) => item.movie.tmdbId === movie.tmdbId);
   const watched = Boolean(record);
   const poster = movie.posterUrl ?? null;
 
   function handleSave(payload: RatingPayload) {
-    upsert({
-      id: record?.id ?? `w-${movie.tmdbId}`,
+    setRecord({
+      id: record?.id ?? movie.tmdbId,
       movie,
       rating: payload.rating,
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
+    void saveRemoteRating({
+      mediaKind: 'film',
+      mediaRef: String(movie.tmdbId),
+      title: movie.title,
+      year: movie.year,
+      genres: movie.genres,
+      rating: payload.rating,
+      comment: payload.comment,
+      watchedAt: payload.watchedAt,
+    }).catch(() => undefined);
     setOpen(false);
+  }
+
+  function unwatch() {
+    if (record) {
+      void deleteRemoteRecord(record.id).catch(() => undefined);
+    }
+    setRecord(null);
   }
 
   return (
@@ -99,7 +121,7 @@ export function FilmDetail({ movie }: { movie: Movie }) {
               type="button"
               variant={watched ? 'secondary' : 'default'}
               aria-pressed={watched}
-              onClick={() => toggle(movie, !watched)}
+              onClick={() => (watched ? unwatch() : setOpen(true))}
             >
               {watched ? (
                 <>

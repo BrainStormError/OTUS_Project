@@ -1,17 +1,33 @@
 export type Role = 'employee' | 'admin';
 
-export type Actor = { id: string; role: Role; email?: string };
+export type Actor = {
+  id: number;
+  role: Role;
+  email?: string;
+  name?: string | null;
+  handle?: string | null;
+};
+
+export type GroupRole = 'admin' | 'member';
 
 export type Action =
   | 'wish:create'
   | 'wish:edit'
   | 'donation:change'
   | 'thread:read'
-  | 'admin:view'
-  | 'directory:create'
-  | 'directory:edit';
+  | 'friend:request'
+  | 'friend:withdraw'
+  | 'group:rate'
+  | 'group:discuss'
+  | 'group:discuss:create'
+  | 'group:discuss:attach'
+  | 'admin:view';
 
-export type Resource = { ownerId?: string; authorId?: string };
+export type Resource = {
+  ownerId?: number;
+  authorId?: number;
+  groupRole?: GroupRole | null;
+};
 
 export function can(actor: Actor, action: Action, resource?: Resource): boolean {
   switch (action) {
@@ -20,13 +36,18 @@ export function can(actor: Actor, action: Action, resource?: Resource): boolean 
       return actor.role === 'admin';
     case 'thread:read':
       return actor.role === 'admin' || resource?.ownerId === actor.id;
+    case 'friend:request':
+    case 'friend:withdraw':
+      return true;
     case 'wish:create':
       return true;
     case 'wish:edit':
       return actor.role === 'admin' || resource?.authorId === actor.id;
-    case 'directory:create':
-      return actor.role === 'admin';
-    case 'directory:edit':
-      return actor.role === 'admin' || resource?.ownerId === actor.id;
+    case 'group:rate':
+    case 'group:discuss':
+      return resource?.groupRole === 'admin' || resource?.groupRole === 'member';
+    case 'group:discuss:create':
+    case 'group:discuss:attach':
+      return resource?.groupRole === 'admin';
   }
 }

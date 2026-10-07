@@ -1,15 +1,5 @@
-export type MediaKind = 'film' | 'series';
+import type { RatingEntry } from '@/modules/ratings';
 
-export type WatchedRecordEntry = {
-  id: string;
-  userId: string;
-  mediaKind: MediaKind;
-  mediaRef: string;
-  title: string;
-  year: number | null;
-  genres: string[];
-  rating: number;
-  comment: string | null;
-  watchedAt: string;
-  createdAt: string;
-};
+export type { MediaKind } from '@/modules/ratings';
+
+export type WatchedRecordEntry = RatingEntry;

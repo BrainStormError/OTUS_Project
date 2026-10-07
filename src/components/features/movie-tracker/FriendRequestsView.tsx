@@ -11,7 +11,7 @@ import { FriendRequestItem } from './FriendRequestItem';
 import { decideFriendship } from './social-actions';
 import type { FriendRequest } from './types';
 
-function decide(pending: FriendRequest[], userId: string, decision: 'accept' | 'decline') {
+function decide(pending: FriendRequest[], userId: number, decision: 'accept' | 'decline') {
   const request = pending.find((item) => item.user.id === userId);
   if (request) {
     decideFriendship(request.id, decision);

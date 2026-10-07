@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { closePool, query } from '@/core/db/pool';
 import { resolveActor } from '@/modules/auth/actor';
 import { authorizeDemoUser } from '@/modules/auth/demo';
-import { insertUser } from '@/modules/auth/repository';
+import { insertUser, updatePrivacy } from '@/modules/auth/repository';
 
 afterAll(async () => {
   await closePool();
@@ -35,7 +35,14 @@ describe('actor resolution', () => {
       role: 'admin',
     });
     const actor = await resolveActor(row.id);
-    expect(actor).toEqual({ id: row.id, role: 'admin', email: row.email });
+    expect(actor).toEqual({
+      id: row.id,
+      role: 'admin',
+      email: row.email,
+      name: row.name,
+      handle: row.handle,
+    });
+    expect(actor?.handle).toBeTruthy();
   });
 
   it('treats a removed user as unauthenticated', async () => {
@@ -50,5 +57,28 @@ describe('actor resolution', () => {
 
   it('returns null when there is no user id', async () => {
     expect(await resolveActor(undefined)).toBeNull();
+  });
+});
+
+describe('privacy persistence', () => {
+  it('round-trips the profile and statistics privacy flags', async () => {
+    const row = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Privacy',
+      role: 'employee',
+    });
+    expect(row.profileHidden).toBe(false);
+    expect(row.statsHidden).toBe(false);
+
+    const updated = await updatePrivacy(row.id, {
+      profileHidden: true,
+      statsHidden: true,
+    });
+    expect(updated?.profileHidden).toBe(true);
+    expect(updated?.statsHidden).toBe(true);
+
+    const partial = await updatePrivacy(row.id, { profileHidden: false });
+    expect(partial?.profileHidden).toBe(false);
+    expect(partial?.statsHidden).toBe(true);
   });
 });

@@ -10,42 +10,174 @@ const { databaseUrl } = JSON.parse(
   readFileSync(resolve(process.cwd(), 'tests/integration/.db-url.json'), 'utf8'),
 ) as { databaseUrl: string };
 
-describe('initial migration', () => {
-  it('creates the users table with the expected columns and unique indexes', async () => {
+async function columns(table: string): Promise<string[]> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1`,
+      [table],
+    );
+    return result.rows.map((row) => row.column_name);
+  } finally {
+    await client.end();
+  }
+}
+
+async function indexes(table: string): Promise<string[]> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query<{ indexdef: string }>(
+      `SELECT indexdef FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = $1`,
+      [table],
+    );
+    return result.rows.map((row) => row.indexdef);
+  } finally {
+    await client.end();
+  }
+}
+
+async function dataType(table: string, column: string): Promise<string | null> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query<{ data_type: string }>(
+      `SELECT data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+      [table, column],
+    );
+    return result.rows[0]?.data_type ?? null;
+  } finally {
+    await client.end();
+  }
+}
+
+describe('users migration', () => {
+  it('creates the compact users table with numeric ids and unique indexes', async () => {
+    const names = await columns('users');
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'id',
+        'email',
+        'name',
+        'handle',
+        'role',
+        'provider',
+        'provider_subject',
+        'profile_hidden',
+        'stats_hidden',
+        'created_at',
+        'updated_at',
+      ]),
+    );
+    expect(await dataType('users', 'id')).toBe('bigint');
+    expect(await dataType('users', 'role')).toBe('smallint');
+
+    const indexDefs = await indexes('users');
+    expect(indexDefs.some((def) => def.includes('users_email_key'))).toBe(true);
+    expect(indexDefs.some((def) => def.includes('users_handle_key'))).toBe(true);
+    expect(indexDefs.some((def) => def.includes('users_provider_subject_key'))).toBe(true);
+  });
+
+  it('does not install the pgcrypto extension and drops the old tables', async () => {
     const client = new Client({ connectionString: databaseUrl });
     await client.connect();
     try {
-      const columns = await client.query<{ column_name: string }>(
-        `SELECT column_name FROM information_schema.columns
-          WHERE table_schema = 'public' AND table_name = 'users'`,
+      const extension = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM pg_extension WHERE extname = 'pgcrypto'`,
       );
-      const names = columns.rows.map((row) => row.column_name);
-      expect(names).toEqual(
-        expect.arrayContaining([
-          'id',
-          'email',
-          'name',
-          'role',
-          'provider',
-          'provider_subject',
-          'created_at',
-          'updated_at',
-        ]),
-      );
-
-      const indexes = await client.query<{ indexname: string }>(
-        `SELECT indexname FROM pg_indexes
-          WHERE schemaname = 'public' AND tablename = 'users'`,
-      );
-      const indexNames = indexes.rows.map((row) => row.indexname);
-      expect(indexNames).toContain('users_email_key');
-      expect(indexNames).toContain('users_provider_subject_key');
+      expect(extension.rows[0]?.count).toBe('0');
+      expect(await tableExists(databaseUrl, 'watched_records')).toBe(false);
+      expect(await tableExists(databaseUrl, 'group_ratings')).toBe(false);
+      expect(await tableExists(databaseUrl, 'directory_entries')).toBe(false);
     } finally {
       await client.end();
     }
   });
+});
 
-  it('reverses the up migration on a dedicated database', async () => {
+describe('compact domain migrations', () => {
+  it('creates media with a unique business key and genre codes', async () => {
+    const names = await columns('media');
+    expect(names).toEqual(
+      expect.arrayContaining(['id', 'kind', 'external_ref', 'title', 'year', 'genre_ids']),
+    );
+    const indexDefs = await indexes('media');
+    expect(indexDefs.some((def) => def.includes('media_kind_ref_key') && def.includes('UNIQUE'))).toBe(
+      true,
+    );
+    expect(await columns('genres')).toEqual(expect.arrayContaining(['id', 'name']));
+  });
+
+  it('creates the unified ratings table with partial unique indexes', async () => {
+    const names = await columns('ratings');
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'id',
+        'user_id',
+        'media_id',
+        'group_id',
+        'rating',
+        'comment',
+        'watched_at',
+        'created_at',
+      ]),
+    );
+    expect(await dataType('ratings', 'rating')).toBe('smallint');
+
+    const indexDefs = await indexes('ratings');
+    const personal = indexDefs.find((def) => def.includes('ratings_personal_key'));
+    expect(personal).toContain('UNIQUE');
+    expect(personal).toContain('WHERE (group_id IS NULL)');
+    const group = indexDefs.find((def) => def.includes('ratings_group_key'));
+    expect(group).toContain('UNIQUE');
+    expect(group).toContain('WHERE (group_id IS NOT NULL)');
+  });
+
+  it('creates groups with tag codes and a media partial unique index on discussions', async () => {
+    expect(await columns('groups')).toEqual(
+      expect.arrayContaining(['id', 'name', 'description', 'tag_ids', 'restricted', 'created_at']),
+    );
+    expect(await columns('tags')).toEqual(expect.arrayContaining(['id', 'name']));
+
+    expect(await columns('group_discussions')).toEqual(
+      expect.arrayContaining(['id', 'group_id', 'author_id', 'title', 'media_id', 'created_at']),
+    );
+    const discussionIndexes = await indexes('group_discussions');
+    const mediaIndex = discussionIndexes.find((def) =>
+      def.includes('group_discussions_media_key'),
+    );
+    expect(mediaIndex).toContain('UNIQUE');
+    expect(mediaIndex).toContain('WHERE (media_id IS NOT NULL)');
+  });
+
+  it('creates discussion posts, friendships and activity events without a payload', async () => {
+    expect(await columns('discussion_posts')).toEqual(
+      expect.arrayContaining(['id', 'discussion_id', 'author_id', 'body', 'created_at']),
+    );
+    expect(await columns('friendships')).toEqual(
+      expect.arrayContaining(['id', 'requester_id', 'addressee_id', 'status', 'created_at', 'updated_at']),
+    );
+    expect(await columns('activity_events')).toEqual(
+      expect.arrayContaining([
+        'id',
+        'actor_id',
+        'kind',
+        'group_id',
+        'media_id',
+        'discussion_id',
+        'created_at',
+      ]),
+    );
+    expect(await columns('activity_events')).not.toContain('payload');
+    expect(await columns('activity_events')).not.toContain('target_type');
+    expect(await dataType('activity_events', 'kind')).toBe('smallint');
+  });
+
+  it('reverses every migration on a dedicated database', async () => {
     const adminUrl = new URL(databaseUrl);
     adminUrl.pathname = '/postgres';
     const admin = new Client({ connectionString: adminUrl.toString() });
@@ -58,17 +190,41 @@ describe('initial migration', () => {
       target.pathname = `/${dbName}`;
 
       await runMigrations('up', target.toString());
-      expect(await tableExists(target.toString(), 'users')).toBe(true);
-      expect(await tableExists(target.toString(), 'directory_entries')).toBe(true);
-      expect(await tableExists(target.toString(), 'activity_events')).toBe(true);
+      for (const table of [
+        'users',
+        'media',
+        'genres',
+        'ratings',
+        'friendships',
+        'groups',
+        'group_members',
+        'tags',
+        'group_discussions',
+        'discussion_posts',
+        'activity_events',
+      ]) {
+        expect(await tableExists(target.toString(), table), table).toBe(true);
+      }
 
       while ((await countMigrations(target.toString())) > 0) {
         await runMigrations('down', target.toString());
       }
 
-      expect(await tableExists(target.toString(), 'activity_events')).toBe(false);
-      expect(await tableExists(target.toString(), 'directory_entries')).toBe(false);
-      expect(await tableExists(target.toString(), 'users')).toBe(false);
+      for (const table of [
+        'activity_events',
+        'discussion_posts',
+        'group_discussions',
+        'group_members',
+        'groups',
+        'tags',
+        'friendships',
+        'ratings',
+        'media',
+        'genres',
+        'users',
+      ]) {
+        expect(await tableExists(target.toString(), table), table).toBe(false);
+      }
     } finally {
       await admin.query(`DROP DATABASE IF EXISTS ${dbName}`);
       await admin.end();

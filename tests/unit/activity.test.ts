@@ -28,16 +28,17 @@ describe('activity feed schema', () => {
 });
 
 describe('activity cursor', () => {
-  it('round-trips a createdAt and id pair', () => {
-    const cursor = encodeCursor('2026-08-24T10:00:00.000Z', 'event-1');
+  it('round-trips a createdAt and numeric id pair', () => {
+    const cursor = encodeCursor('2026-08-24T10:00:00.000Z', 42);
     expect(decodeCursor(cursor)).toEqual({
       createdAt: '2026-08-24T10:00:00.000Z',
-      id: 'event-1',
+      id: 42,
     });
   });
 
   it('rejects malformed cursors', () => {
     expect(decodeCursor('not-a-cursor')).toBeNull();
     expect(decodeCursor('')).toBeNull();
+    expect(decodeCursor(Buffer.from('2026-08-24T10:00:00.000Z|event-1').toString('base64url'))).toBeNull();
   });
 });

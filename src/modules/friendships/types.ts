@@ -1,21 +1,30 @@
 export type FriendshipStatus = 'pending' | 'accepted' | 'declined';
 
 export type Friendship = {
-  id: string;
-  requesterId: string;
-  addresseeId: string;
+  id: number;
+  requesterId: number;
+  addresseeId: number;
   status: FriendshipStatus;
   createdAt: string;
   updatedAt: string;
 };
 
 export type SocialUser = {
-  id: string;
+  id: number;
   name: string;
   handle: string;
 };
 
 export type FriendRequestSummary = {
-  id: string;
+  id: number;
   user: SocialUser;
+};
+
+export type RelationshipStatus = 'friend' | 'pending_in' | 'pending_out' | 'none';
+
+export type UserSearchResult = {
+  id: number;
+  name: string;
+  handle: string;
+  relationship: RelationshipStatus;
 };

@@ -1,24 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { seasonAverage, seriesAverage } from '@/components/features/movie-tracker/series';
-import {
-  SERIES_REMOVED_STORAGE_KEY,
-  SERIES_STORAGE_KEY,
-  loadRemovedSeries,
-  loadSeries,
-  mergeWithSampleSeries,
-  saveRemovedSeries,
-  saveSeries,
-} from '@/components/features/movie-tracker/series-store';
 import { findSeries } from '@/components/features/movie-tracker/series-data';
 import type { SeriesRecord } from '@/components/features/movie-tracker/types';
 
 const breakingBad = findSeries('breaking-bad')!;
 const chernobyl = findSeries('chernobyl')!;
-
-beforeEach(() => {
-  window.localStorage.clear();
-});
 
 describe('series averages', () => {
   it('averages only rated episodes, per season and across seasons', () => {
@@ -72,36 +59,5 @@ describe('series averages', () => {
     };
     expect(seasonAverage(record, 1)).toBeNull();
     expect(seriesAverage(record)).toBeNull();
-  });
-});
-
-describe('series store', () => {
-  it('persists records and removals under its own keys', () => {
-    const record: SeriesRecord = {
-      id: 'r1',
-      series: chernobyl,
-      mode: 'whole',
-      seriesRating: 8,
-      watchedAt: '2026-01-01',
-    };
-    saveSeries([record]);
-    expect(window.localStorage.getItem(SERIES_STORAGE_KEY)).toBeTruthy();
-    expect(loadSeries()).toEqual([record]);
-
-    saveRemovedSeries(['breaking-bad']);
-    expect(window.localStorage.getItem(SERIES_REMOVED_STORAGE_KEY)).toBeTruthy();
-    expect(loadRemovedSeries()).toEqual(['breaking-bad']);
-  });
-
-  it('merges stored records with samples while excluding removed series', () => {
-    const stored: SeriesRecord = {
-      id: 'r1',
-      series: chernobyl,
-      mode: 'whole',
-      seriesRating: 8,
-      watchedAt: '2026-01-01',
-    };
-    const merged = mergeWithSampleSeries([stored], ['breaking-bad']);
-    expect(merged.map((record) => record.series.id)).toEqual(['chernobyl', 'squid-game']);
   });
 });

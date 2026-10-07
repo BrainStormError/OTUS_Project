@@ -2,7 +2,7 @@ import type { FeedItem } from '@/modules/activity';
 
 // Kept in sync with the activity module cursor format; duplicated here so the
 // client bundle never imports the server-only activity module graph.
-function encodeCursor(createdAt: string, id: string): string {
+function encodeCursor(createdAt: string, id: number | string): string {
   const base64 = btoa(`${createdAt}|${id}`);
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -11,7 +11,7 @@ export type FeedSource = 'friend' | 'group' | 'you';
 export type FeedKind = 'film' | 'series' | 'friendship' | 'group';
 
 export type FeedEvent = {
-  id: string;
+  id: number;
   cursor: string;
   source: FeedSource;
   sourceName: string;
@@ -25,7 +25,7 @@ export type FeedEvent = {
 
 const FALLBACK_NAME = 'Пользователь';
 
-export function toFeedEvent(item: FeedItem, viewerId: string): FeedEvent {
+export function toFeedEvent(item: FeedItem, viewerId: number): FeedEvent {
   const cursor = encodeCursor(item.createdAt, item.id);
   const actorName = item.actorName ?? FALLBACK_NAME;
   const groupName = item.groupName ?? '';
@@ -41,11 +41,10 @@ export function toFeedEvent(item: FeedItem, viewerId: string): FeedEvent {
         source: item.groupId ? 'group' : item.actorId === viewerId ? 'you' : 'friend',
         sourceName: item.groupId ? groupName || FALLBACK_NAME : actorName,
         kind: isFilm ? 'film' : 'series',
-        title: item.payload.title ?? '',
-        rating: typeof item.payload.rating === 'number' ? item.payload.rating : null,
+        title: item.title ?? '',
+        rating: item.rating,
         watchedAt,
-        href:
-          item.payload.href ?? (isFilm ? `/film/${item.targetId}` : '/series'),
+        href: item.href ?? '/',
         action: item.groupId ? 'оценил(а) в группе' : 'оценил(а)',
       };
     }
@@ -59,7 +58,7 @@ export function toFeedEvent(item: FeedItem, viewerId: string): FeedEvent {
         title: 'Новая дружба',
         rating: null,
         watchedAt,
-        href: item.actorHandle ? `/u/${item.actorHandle}` : '/',
+        href: item.href ?? '/',
         action: 'теперь в друзьях',
       };
     case 'group_joined':
@@ -69,10 +68,10 @@ export function toFeedEvent(item: FeedItem, viewerId: string): FeedEvent {
         source: item.groupId ? 'group' : item.actorId === viewerId ? 'you' : 'friend',
         sourceName: actorName,
         kind: 'group',
-        title: groupName || 'Группа',
+        title: item.title ?? (groupName || 'Группа'),
         rating: null,
         watchedAt,
-        href: item.groupId ? `/groups/${item.groupId}` : '/',
+        href: item.href ?? '/',
         action: 'вступил(а) в группу',
       };
     default:
@@ -82,10 +81,10 @@ export function toFeedEvent(item: FeedItem, viewerId: string): FeedEvent {
         source: item.groupId ? 'group' : item.actorId === viewerId ? 'you' : 'friend',
         sourceName: item.groupId ? groupName || FALLBACK_NAME : actorName,
         kind: 'film',
-        title: item.payload.title ?? 'Активность',
+        title: item.title ?? 'Активность',
         rating: null,
         watchedAt,
-        href: item.payload.href ?? '/',
+        href: item.href ?? '/',
         action: 'активность',
       };
   }

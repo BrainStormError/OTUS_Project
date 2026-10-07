@@ -1,6 +1,10 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 
 import { env } from '@/core/config/env';
+
+// bigint (int8, OID 20) is returned as a string by node-postgres. Identity
+// keys in the compact schema are bigint, so parse them as numbers everywhere.
+types.setTypeParser(20, (value: string) => Number(value));
 
 const globalForPool = globalThis as unknown as { __birthdayPool?: Pool };
 

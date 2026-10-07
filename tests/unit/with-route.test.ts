@@ -6,7 +6,7 @@ import { withRoute, type WithRouteConfig } from '@/core/http/with-route';
 import { err, ok } from '@/core/result';
 
 const schema = z.object({ name: z.string().min(1).max(5) });
-const actor: Actor = { id: 'user-1', role: 'employee' };
+const actor: Actor = { id: 1, role: 'employee' };
 
 function request(body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('http://localhost/api/test', {

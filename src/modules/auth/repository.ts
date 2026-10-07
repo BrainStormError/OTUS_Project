@@ -3,43 +3,73 @@ import { query } from '@/core/db/pool';
 import type { UserRow } from './types';
 
 type UserDbRow = {
-  id: string;
+  id: number;
   email: string;
   name: string | null;
-  role: 'employee' | 'admin';
+  handle: string | null;
+  role: number;
   provider: string | null;
   provider_subject: string | null;
+  profile_hidden: boolean;
+  stats_hidden: boolean;
   created_at: Date;
 };
 
-const COLUMNS = 'id, email, name, role, provider, provider_subject, created_at';
+const ROLE_CODE = { employee: 0, admin: 1 } as const;
+
+function roleFromCode(code: number): 'employee' | 'admin' {
+  return code === 1 ? 'admin' : 'employee';
+}
+
+const COLUMNS =
+  'id, email, name, handle, role, provider, provider_subject, profile_hidden, stats_hidden, created_at';
 
 function mapUser(row: UserDbRow): UserRow {
   return {
     id: row.id,
     email: row.email,
     name: row.name,
-    role: row.role,
+    handle: row.handle,
+    role: roleFromCode(row.role),
     provider: row.provider,
     providerSubject: row.provider_subject,
+    profileHidden: row.profile_hidden,
+    statsHidden: row.stats_hidden,
     createdAt: row.created_at.toISOString(),
   };
 }
 
-export async function findUserById(id: string): Promise<UserRow | null> {
-  const rows = await query<UserDbRow>(
-    `SELECT ${COLUMNS} FROM users WHERE id = $1`,
-    [id],
+// Derives a stable, non-null handle from an email so every account can be
+// addressed through /u/<handle>. The short hash suffix keeps handles unique
+// across domains that share a local part.
+export function deriveHandle(email: string): string {
+  const local = email.split('@')[0] ?? '';
+  const base = (local.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'user').slice(
+    0,
+    40,
   );
+  let hash = 0;
+  for (let index = 0; index < email.length; index += 1) {
+    hash = (hash * 31 + email.charCodeAt(index)) | 0;
+  }
+  const suffix = Math.abs(hash).toString(36).slice(0, 6) || '0';
+  return `${base}-${suffix}`.slice(0, 50);
+}
+
+export async function findUserById(id: number): Promise<UserRow | null> {
+  const rows = await query<UserDbRow>(`SELECT ${COLUMNS} FROM users WHERE id = $1`, [id]);
   const row = rows[0];
   return row ? mapUser(row) : null;
 }
 
 export async function findUserByEmail(email: string): Promise<UserRow | null> {
-  const rows = await query<UserDbRow>(
-    `SELECT ${COLUMNS} FROM users WHERE email = $1`,
-    [email],
-  );
+  const rows = await query<UserDbRow>(`SELECT ${COLUMNS} FROM users WHERE email = $1`, [email]);
+  const row = rows[0];
+  return row ? mapUser(row) : null;
+}
+
+export async function findUserByHandle(handle: string): Promise<UserRow | null> {
+  const rows = await query<UserDbRow>(`SELECT ${COLUMNS} FROM users WHERE handle = $1`, [handle]);
   const row = rows[0];
   return row ? mapUser(row) : null;
 }
@@ -47,18 +77,20 @@ export async function findUserByEmail(email: string): Promise<UserRow | null> {
 export async function insertUser(input: {
   email: string;
   name: string | null;
+  handle?: string | null;
   role: 'employee' | 'admin';
   provider?: string | null;
   providerSubject?: string | null;
 }): Promise<UserRow> {
   const rows = await query<UserDbRow>(
-    `INSERT INTO users (email, name, role, provider, provider_subject)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO users (email, name, handle, role, provider, provider_subject)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${COLUMNS}`,
     [
       input.email,
       input.name,
-      input.role,
+      input.handle ?? deriveHandle(input.email),
+      ROLE_CODE[input.role],
       input.provider ?? null,
       input.providerSubject ?? null,
     ],
@@ -70,10 +102,24 @@ export async function insertUser(input: {
   return mapUser(row);
 }
 
-export async function findOrCreateDemoUser(
-  email: string,
-  name?: string,
-): Promise<UserRow> {
+export async function updatePrivacy(
+  userId: number,
+  input: { profileHidden?: boolean; statsHidden?: boolean },
+): Promise<UserRow | null> {
+  const rows = await query<UserDbRow>(
+    `UPDATE users
+        SET profile_hidden = COALESCE($2, profile_hidden),
+            stats_hidden = COALESCE($3, stats_hidden),
+            updated_at = now()
+      WHERE id = $1
+      RETURNING ${COLUMNS}`,
+    [userId, input.profileHidden ?? null, input.statsHidden ?? null],
+  );
+  const row = rows[0];
+  return row ? mapUser(row) : null;
+}
+
+export async function findOrCreateDemoUser(email: string, name?: string): Promise<UserRow> {
   const existing = await findUserByEmail(email);
   if (existing) {
     return existing;

@@ -1,24 +1,12 @@
-'use client';
-
 import Link from 'next/link';
 import { Star } from 'lucide-react';
-import { useMemo } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
 
-import { mergeWithSample, useWatchedRecords } from './record-store';
+import type { WatchedRecord } from './types';
 
-export function RecordView({ id }: { id: string }) {
-  const { records, removed, ready } = useWatchedRecords();
-  const merged = useMemo(() => mergeWithSample(records, removed), [records, removed]);
-  const record = merged.find((item) => item.id === id);
-
-  if (!ready) {
-    return <Skeleton className="h-40 w-full" />;
-  }
-
+export function RecordView({ record }: { record: WatchedRecord | null }) {
   if (!record) {
     return (
       <EmptyState

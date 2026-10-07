@@ -10,7 +10,7 @@ export type Movie = {
 };
 
 export type WatchedRecord = {
-  id: string;
+  id: number;
   movie: Movie;
   rating: number;
   comment?: string;
@@ -27,7 +27,7 @@ export type UserStats = {
 };
 
 export type PublicUser = {
-  id: string;
+  id: number;
   handle: string;
   name: string;
   avatarUrl?: string | null;
@@ -39,19 +39,19 @@ export type PublicUser = {
 };
 
 export type FriendRequest = {
-  id: string;
+  id: number;
   user: PublicUser;
 };
 
 export type GroupMember = {
-  id: string;
+  id: number;
   name: string;
   handle: string;
   role: 'admin' | 'member';
 };
 
 export type Group = {
-  id: string;
+  id: number;
   name: string;
   description?: string;
   tags: string[];

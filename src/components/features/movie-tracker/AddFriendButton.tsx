@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-export function AddFriendButton({ userId }: { userId: string }) {
+export function AddFriendButton({ userId }: { userId: number }) {
   const [sent, setSent] = useState(false);
 
   return (

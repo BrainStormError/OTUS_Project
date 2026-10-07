@@ -5,16 +5,14 @@ import { Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/components/ui/utils';
 
 import { movieMatches } from './data';
 import { episodeKey, seasonAverage, seriesAverage, seriesToMovie } from './series';
 import { listSeries } from './series-data';
 import { SeriesModal } from './SeriesModal';
-import { mergeWithSampleSeries, useSeriesRecords } from './series-store';
+import { useSeriesRecords } from './series-store';
 import { SearchField } from './SearchField';
 import type { SearchFilters, Series, SeriesRecord } from './types';
 
@@ -136,10 +134,9 @@ function SeriesExpansion({
   );
 }
 
-export function MySeriesView() {
-  const { records, removed, ready, upsert, remove } = useSeriesRecords();
-  const merged = useMemo(() => mergeWithSampleSeries(records, removed), [records, removed]);
-  const options = useMemo(() => merged.map((record) => seriesToMovie(record.series)), [merged]);
+export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[] }) {
+  const { records, upsert, remove } = useSeriesRecords(initialRecords);
+  const options = useMemo(() => records.map((record) => seriesToMovie(record.series)), [records]);
 
   const [filters, setFilters] = useState<SearchFilters>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -154,8 +151,8 @@ export function MySeriesView() {
   });
 
   const filtered = useMemo(
-    () => merged.filter((record) => movieMatches(seriesToMovie(record.series), '', filters)),
-    [merged, filters],
+    () => records.filter((record) => movieMatches(seriesToMovie(record.series), '', filters)),
+    [records, filters],
   );
 
   const sorted = useMemo(() => {
@@ -184,16 +181,6 @@ export function MySeriesView() {
     setExpandedSeason(null);
   }
 
-  if (!ready) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-14 w-full" />
-      </div>
-    );
-  }
-
   function saveRecord(record: SeriesRecord) {
     upsert(record);
     setEditing(null);
@@ -218,7 +205,7 @@ export function MySeriesView() {
         </Button>
       </div>
 
-      {merged.length === 0 ? (
+      {records.length === 0 ? (
         <EmptyState
           title="Вы ещё не отметили ни одного сериала"
           description="Добавьте сериал, чтобы он появился здесь."
@@ -383,30 +370,36 @@ function AddSeriesForm({
   onSelect: (series: Series) => void;
   onCancel: () => void;
 }) {
-  const [query, setQuery] = useState('');
+  const catalog = useMemo(() => listSeries(), []);
+  const catalogMovies = useMemo(() => catalog.map(seriesToMovie), [catalog]);
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [committed, setCommitted] = useState<SearchFilters | null>(null);
 
-  const catalog = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const all = listSeries();
-    return q ? all.filter((series) => series.title.toLowerCase().includes(q)) : all;
-  }, [query]);
+  const visible = useMemo(() => {
+    if (!committed) {
+      return catalog;
+    }
+    return catalog.filter((series) => movieMatches(seriesToMovie(series), '', committed));
+  }, [catalog, committed]);
 
   return (
     <div className="space-y-3">
-      <Input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Название сериала"
-        aria-label="Выбор сериала"
+      <SearchField
+        movies={catalogMovies}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onSearch={(next) => setCommitted(next)}
+        onReset={() => setCommitted(null)}
+        hiddenFilters={['actor', 'director']}
+        ariaLabel="Поиск сериалов"
       />
-      {catalog.length === 0 ? (
+      {visible.length === 0 ? (
         <p role="status" className="text-sm text-muted-foreground">
           Ничего не найдено
         </p>
       ) : (
         <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-          {catalog.map((series) => (
+          {visible.map((series) => (
             <li key={series.id}>
               <button
                 type="button"

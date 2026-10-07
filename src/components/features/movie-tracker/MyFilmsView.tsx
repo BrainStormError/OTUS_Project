@@ -5,16 +5,13 @@ import { Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/components/ui/utils';
 
 import { listMovies, movieMatches } from './data';
 import type { RatingPayload } from './RatingForm';
+import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
-import { mergeWithSample, useWatchedRecords } from './record-store';
-import { reportRating } from './report-rating';
 import { SearchField } from './SearchField';
 import type { Movie, SearchFilters, WatchedRecord } from './types';
 
@@ -50,13 +47,12 @@ function SortableHeader({
   );
 }
 
-export function MyFilmsView() {
-  const { records, removed, ready, upsert, remove } = useWatchedRecords();
-  const merged = useMemo(() => mergeWithSample(records, removed), [records, removed]);
-  const movieOptions = useMemo(() => merged.map((record) => record.movie), [merged]);
+export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[] }) {
+  const { records, upsert, remove } = useWatchedRecords(initialRecords);
+  const movieOptions = useMemo(() => records.map((record) => record.movie), [records]);
 
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editing, setEditing] = useState<WatchedRecord | null>(null);
   const [deleting, setDeleting] = useState<WatchedRecord | null>(null);
   const [adding, setAdding] = useState(false);
@@ -67,8 +63,8 @@ export function MyFilmsView() {
   });
 
   const filtered = useMemo(
-    () => merged.filter((record) => movieMatches(record.movie, '', filters)),
-    [merged, filters],
+    () => records.filter((record) => movieMatches(record.movie, '', filters)),
+    [records, filters],
   );
 
   const sorted = useMemo(() => {
@@ -92,26 +88,15 @@ export function MyFilmsView() {
     );
   }
 
-  if (!ready) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-14 w-full" />
-      </div>
-    );
-  }
-
   function saveRecord(movie: Movie, payload: RatingPayload) {
-    const existing = merged.find((record) => record.movie.tmdbId === movie.tmdbId);
+    const existing = records.find((record) => record.movie.tmdbId === movie.tmdbId);
     upsert({
-      id: existing?.id ?? `w-${movie.tmdbId}`,
+      id: existing?.id ?? movie.tmdbId,
       movie,
       rating: payload.rating,
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
-    reportRating(movie, payload);
     setEditing(null);
     setAddMovie(null);
     setAdding(false);
@@ -134,7 +119,7 @@ export function MyFilmsView() {
         </Button>
       </div>
 
-      {merged.length === 0 ? (
+      {records.length === 0 ? (
         <EmptyState
           title="Вы ещё не отметили ни одного фильма"
           description="Добавьте фильм, чтобы он появился здесь."
@@ -309,29 +294,31 @@ function AddRecordForm({
   onSelect: (movie: Movie) => void;
   onCancel: () => void;
 }) {
-  const [query, setQuery] = useState('');
+  const catalog = useMemo(() => listMovies(), []);
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [committed, setCommitted] = useState<SearchFilters | null>(null);
 
-  const catalog = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? listMovies().filter((movie) => movieMatches(movie, q)) : listMovies();
-  }, [query]);
+  const visible = useMemo(
+    () => (committed ? catalog.filter((movie) => movieMatches(movie, '', committed)) : catalog),
+    [catalog, committed],
+  );
 
   return (
     <div className="space-y-3">
-      <Input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Название, жанр или актёр"
-        aria-label="Выбор фильма"
+      <SearchField
+        movies={catalog}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onSearch={(next) => setCommitted(next)}
+        onReset={() => setCommitted(null)}
       />
-      {catalog.length === 0 ? (
+      {visible.length === 0 ? (
         <p role="status" className="text-sm text-muted-foreground">
           Ничего не найдено
         </p>
       ) : (
         <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-          {catalog.map((movie) => (
+          {visible.map((movie) => (
             <li key={movie.tmdbId}>
               <button
                 type="button"

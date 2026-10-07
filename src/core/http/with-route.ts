@@ -22,11 +22,16 @@ const STATUS_BY_CODE: Record<ErrCode, number> = {
 
 const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 
-export type RouteContext = { actor: Actor; requestId: string };
+export type RouteContext<TQuery = undefined> = {
+  actor: Actor;
+  requestId: string;
+  query: TQuery;
+};
 
-export type WithRouteConfig<TIn> = {
+export type WithRouteConfig<TIn, TQuery = undefined> = {
   operation: string;
   schema: ZodType<TIn>;
+  querySchema?: ZodType<TQuery>;
   resolveActor?: () => Promise<Actor | null>;
   isTrusted?: (request: Request) => boolean;
   rateLimit?: {
@@ -39,9 +44,9 @@ export type WithRouteConfig<TIn> = {
 
 export type RouteHandler = (request: Request) => Promise<Response>;
 
-export function withRoute<TIn, TOut>(
-  config: WithRouteConfig<TIn>,
-  handler: (input: TIn, context: RouteContext) => Promise<Result<TOut>>,
+export function withRoute<TIn, TOut, TQuery = undefined>(
+  config: WithRouteConfig<TIn, TQuery>,
+  handler: (input: TIn, context: RouteContext<TQuery>) => Promise<Result<TOut>>,
 ): RouteHandler {
   const limiter = new RateLimiter();
   const maxBodyBytes = config.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
@@ -96,6 +101,17 @@ export function withRoute<TIn, TOut>(
       raw = undefined;
     }
 
+    let query: TQuery | undefined;
+    if (config.querySchema) {
+      const params = Object.fromEntries(new URL(request.url).searchParams);
+      const parsedQuery = config.querySchema.safeParse(params);
+      if (!parsedQuery.success) {
+        log('info', 'mutation.invalid_input', { requestId, operation: config.operation });
+        return json({ error: 'Некорректный запрос' }, 400, responseHeaders);
+      }
+      query = parsedQuery.data;
+    }
+
     const parsed = config.schema.safeParse(raw);
     if (!parsed.success) {
       log('info', 'mutation.invalid_input', { requestId, operation: config.operation });
@@ -103,7 +119,7 @@ export function withRoute<TIn, TOut>(
     }
 
     try {
-      const result = await handler(parsed.data, { actor, requestId });
+      const result = await handler(parsed.data, { actor, requestId, query: query as TQuery });
       if (!result.ok) {
         log('info', 'mutation.rejected', {
           requestId,

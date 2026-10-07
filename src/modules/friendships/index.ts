@@ -1,15 +1,28 @@
 export {
   acceptFriendship,
+  createFriendRequest,
   declineFriendship,
   getFriends,
   getIncomingRequests,
   getOutgoingRequests,
+  searchUsers,
+  withdrawFriendRequest,
 } from './service';
-export { friendshipDecisionInput } from './schema';
-export type { FriendshipDecisionInput } from './schema';
+export {
+  createFriendRequestInput,
+  friendshipDecisionInput,
+  userSearchInput,
+} from './schema';
+export type {
+  CreateFriendRequestInput,
+  FriendshipDecisionInput,
+  UserSearchInput,
+} from './schema';
 export type {
   FriendshipStatus,
   Friendship,
+  RelationshipStatus,
   SocialUser,
   FriendRequestSummary,
+  UserSearchResult,
 } from './types';

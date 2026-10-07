@@ -7,20 +7,28 @@ async function login(page: Page) {
   await page.goto('/login');
   await page.getByLabel('Email').fill('admin@demo.local');
   await page.getByRole('button', { name: 'Войти' }).click();
-  await page.waitForURL('**/directory');
+  await page.waitForURL((url) => url.pathname === '/');
 }
 
-test('critical path: login -> directory read -> mutation -> admin', async ({ page }) => {
+test('critical path: login -> home -> rate a film -> feed entry', async ({ page }) => {
   await login(page);
+  await expect(page.getByRole('heading', { name: 'Лента активности' })).toBeVisible();
 
-  await expect(page.getByRole('heading', { name: 'Справочник' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Новая запись' })).toBeVisible();
+  await page.getByLabel('Название').fill('Тёмный рыцарь');
+  await page.getByRole('button', { name: 'Найти' }).click();
+  await page.getByRole('link', { name: /Тёмный рыцарь/ }).first().click();
+  await page.waitForURL('**/film/**');
 
-  const name = `E2E ${Date.now()}`;
-  await page.getByLabel('Название').fill(name);
-  await page.getByRole('button', { name: 'Добавить запись' }).click();
+  await page.getByRole('button', { name: 'Оценить' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('spinbutton', { name: 'Оценка (0–10)' }).fill('8.5');
+  await dialog.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(dialog).toBeHidden();
 
-  await expect(page.getByText(name)).toBeVisible();
+  await page.goto('/');
+  const feed = page.getByTestId('social-feed');
+  await expect(feed.getByText('Тёмный рыцарь')).toBeVisible();
 });
 
 test('theme switch persists across reloads', async ({ page }) => {
@@ -66,7 +74,7 @@ test('home renders the centered brand and the activity feed', async ({ page }) =
 
 test('group admin panel opens for an admin', async ({ page }) => {
   await login(page);
-  await page.goto('/groups/g1/admin');
+  await page.goto('/groups/1/admin');
 
   await expect(page.getByRole('heading', { name: /Управление группой/ })).toBeVisible();
   await expect(page.getByTestId('admin-member-panel')).toBeVisible();

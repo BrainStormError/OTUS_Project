@@ -1,4 +1,4 @@
-import type { Series, SeriesRecord } from './types';
+import type { Series } from './types';
 
 function poster(label: string, bg: string, fg: string): string {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='450'><rect width='100%' height='100%' fill='${bg}'/><text x='50%' y='52%' fill='${fg}' font-family='sans-serif' font-size='24' text-anchor='middle' dominant-baseline='middle'>${label}</text></svg>`;
@@ -89,35 +89,3 @@ export function listSeries(): Series[] {
 export function findSeries(id: string): Series | undefined {
   return seriesCatalog.find((series) => series.id === id);
 }
-
-export const seriesRecords: SeriesRecord[] = [
-  {
-    id: 's-breaking-bad',
-    series: seriesCatalog[0]!,
-    mode: 'per-episode',
-    episodes: {
-      '1:1': { rating: 9, comment: 'Пилот' },
-      '1:2': { rating: 8.5 },
-      '2:1': { rating: 10 },
-    },
-    watchedAt: '2026-08-10',
-  },
-  {
-    id: 's-chernobyl',
-    series: seriesCatalog[1]!,
-    mode: 'whole',
-    seriesRating: 9.4,
-    seriesComment: 'Мощно.',
-    watchedAt: '2026-07-15',
-  },
-  {
-    id: 's-squid-game',
-    series: seriesCatalog[2]!,
-    mode: 'per-episode',
-    episodes: {
-      '1:1': { rating: 8 },
-      '1:2': { rating: 7.5 },
-    },
-    watchedAt: '2026-06-01',
-  },
-];

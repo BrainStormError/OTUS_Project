@@ -1,8 +1,6 @@
 import type {
-  FriendRequest,
   Group,
   Movie,
-  PublicUser,
   SearchFilters,
   UserStats,
   WatchedRecord,
@@ -173,141 +171,29 @@ export function computeStats(records: WatchedRecord[]): UserStats {
   };
 }
 
-export const watchedRecords: WatchedRecord[] = [
-  {
-    id: 'w1',
-    movie: movies[0]!,
-    rating: 9,
-    comment: 'Отличная структура сна.',
-    watchedAt: '2026-08-12',
-  },
-  {
-    id: 'w2',
-    movie: movies[3]!,
-    rating: 8.5,
-    watchedAt: '2026-08-02',
-  },
-  {
-    id: 'w3',
-    movie: movies[4]!,
-    rating: 7.5,
-    comment: 'Тёплое кино.',
-    watchedAt: '2026-07-21',
-  },
-  {
-    id: 'w4',
-    movie: movies[6]!,
-    rating: 9.5,
-    watchedAt: '2026-07-05',
-  },
-];
-
-export const currentUserStats: UserStats = computeStats(watchedRecords);
-
-export const currentUser: PublicUser = {
-  id: 'u-me',
-  handle: 'me',
-  name: 'Алексей',
-  stats: currentUserStats,
-  recent: watchedRecords,
-};
-
-export const otherUsers: PublicUser[] = [
-  {
-    id: 'u-2',
-    handle: 'maria',
-    name: 'Мария',
-    isFriend: true,
-    stats: {
-      count: 42,
-      genres: [
-        { genre: 'драма', count: 18 },
-        { genre: 'романтика', count: 11 },
-        { genre: 'анимация', count: 7 },
-      ],
-      years: [
-        { year: 2019, count: 6 },
-        { year: 2001, count: 4 },
-        { year: 1994, count: 3 },
-      ],
-    },
-    recent: watchedRecords.slice(0, 2),
-  },
-  {
-    id: 'u-3',
-    handle: 'ivan',
-    name: 'Иван',
-    statsHidden: true,
-    stats: currentUserStats,
-    recent: [],
-  },
-  {
-    id: 'u-4',
-    handle: 'secret',
-    name: 'Скрытый пользователь',
-    profileHidden: true,
-    statsHidden: true,
-    stats: currentUserStats,
-    recent: [],
-  },
-  {
-    id: 'u-5',
-    handle: 'nina',
-    name: 'Нина',
-    stats: {
-      count: 12,
-      genres: [{ genre: 'фэнтези', count: 5 }],
-      years: [{ year: 2010, count: 3 }],
-    },
-    recent: [watchedRecords[0]!],
-  },
-];
-
-export function findUser(handle: string): PublicUser | undefined {
-  if (handle === 'me') return currentUser;
-  return otherUsers.find((user) => user.handle === handle);
-}
-
-export function searchFriends(query: string, ownFriends: PublicUser[]): PublicUser[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const matches = (user: PublicUser) =>
-    user.name.toLowerCase().includes(q) || user.handle.toLowerCase().includes(q);
-  const scoped = ownFriends.filter(matches);
-  if (scoped.length > 0) return scoped;
-  return otherUsers.filter((user) => !user.profileHidden && matches(user));
-}
-
-export const friendRequests: FriendRequest[] = [
-  { id: 'r1', user: otherUsers[3]! },
-  { id: 'r2', user: otherUsers[1]! },
-];
-
-export const friends: PublicUser[] = [otherUsers[0]!];
-
-export const outgoingRequests: FriendRequest[] = [{ id: 'o1', user: otherUsers[3]! }];
+const emptyStats: UserStats = { count: 0, genres: [], years: [] };
 
 export const groups: Group[] = [
   {
-    id: 'g1',
+    id: 1,
     name: 'Киновечера',
     description: 'Смотрим и обсуждаем по пятницам.',
     tags: ['пятница', 'обсуждение', 'компания'],
     members: [
-      { id: 'u-me', name: 'Алексей', handle: 'me', role: 'admin' },
-      { id: 'u-2', name: 'Мария', handle: 'maria', role: 'member' },
-      { id: 'u-5', name: 'Нина', handle: 'nina', role: 'member' },
+      { id: 1, name: 'Алексей', handle: 'me', role: 'admin' },
+      { id: 2, name: 'Мария', handle: 'maria', role: 'member' },
+      { id: 5, name: 'Нина', handle: 'nina', role: 'member' },
     ],
-    stats: currentUserStats,
+    stats: emptyStats,
   },
   {
-    id: 'g2',
+    id: 2,
     name: 'Классика',
     description: 'Фильмы до 1990 года.',
     tags: ['классика', 'ретро'],
     members: [
-      { id: 'u-3', name: 'Иван', handle: 'ivan', role: 'admin' },
-      { id: 'u-me', name: 'Алексей', handle: 'me', role: 'member' },
+      { id: 3, name: 'Иван', handle: 'ivan', role: 'admin' },
+      { id: 1, name: 'Алексей', handle: 'me', role: 'member' },
     ],
     stats: {
       count: 18,
@@ -317,51 +203,17 @@ export const groups: Group[] = [
   },
 ];
 
-export function findGroup(id: string): Group | undefined {
+export function findGroup(id: number): Group | undefined {
   return groups.find((group) => group.id === id);
 }
 
-export type GroupActivity = {
-  groupId: string;
-  kind: 'film' | 'series';
-  title: string;
-  rating: number;
-  watchedAt: string;
-};
-
-export const groupActivity: GroupActivity[] = [
-  {
-    groupId: 'g2',
-    kind: 'series',
-    title: 'Во все тяжкие',
-    rating: 9,
-    watchedAt: '2026-08-24',
-  },
-  {
-    groupId: 'g1',
-    kind: 'film',
-    title: 'Тёмный рыцарь',
-    rating: 8.5,
-    watchedAt: '2026-08-20',
-  },
-  {
-    groupId: 'g1',
-    kind: 'film',
-    title: 'Матрица',
-    rating: 8.2,
-    watchedAt: '2026-08-15',
-  },
-];
-
-export function isGroupAdmin(group: Group, userId = 'u-me'): boolean {
+export function isGroupAdmin(group: Group, userId = 1): boolean {
   return group.members.some((member) => member.id === userId && member.role === 'admin');
 }
 
-const emptyStats: UserStats = { count: 0, genres: [], years: [] };
-
 export const otherGroups: Group[] = [
   {
-    id: 'g3',
+    id: 3,
     name: 'Документальное кино',
     description: 'Реальные истории и биографии.',
     tags: ['документальное', 'биография'],
@@ -369,7 +221,7 @@ export const otherGroups: Group[] = [
     stats: emptyStats,
   },
   {
-    id: 'g4',
+    id: 4,
     name: 'Закрытый клуб',
     description: 'Только по приглашению.',
     tags: ['закрытый'],

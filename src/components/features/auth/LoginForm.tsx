@@ -19,14 +19,14 @@ export function LoginForm({ demoEnabled }: { demoEnabled: boolean }) {
     const result = await signIn('demo', {
       email,
       redirect: false,
-      callbackUrl: '/directory',
+      callbackUrl: '/',
     });
     if (!result || (typeof result !== 'string' && result.error)) {
       setError('Не удалось войти. Проверьте email.');
       setPending(false);
       return;
     }
-    router.push('/directory');
+    router.push('/');
     router.refresh();
   }
 
@@ -62,7 +62,7 @@ export function LoginForm({ demoEnabled }: { demoEnabled: boolean }) {
         <Button
           type="button"
           className="w-full"
-          onClick={() => signIn('google', { callbackUrl: '/directory' })}
+          onClick={() => signIn('google', { callbackUrl: '/' })}
         >
           Войти через OAuth
         </Button>

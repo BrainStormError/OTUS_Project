@@ -8,7 +8,7 @@ export async function authorizeDemoUser(credentials: unknown) {
   }
   const user = await findOrCreateDemoUser(parsed.data.email, parsed.data.name);
   return {
-    id: user.id,
+    id: String(user.id),
     email: user.email,
     name: user.name ?? user.email,
   };

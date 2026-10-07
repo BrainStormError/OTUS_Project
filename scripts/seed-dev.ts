@@ -1,15 +1,7 @@
 import { Client } from 'pg';
 
-const ME = '11111111-1111-4111-8111-111111111111';
-const MARIA = '22222222-2222-4222-8222-222222222222';
-const IVAN = '33333333-3333-4333-8333-333333333333';
-const NINA = '44444444-4444-4444-8444-444444444444';
-const SECRET = '55555555-5555-4555-8555-555555555555';
-
-const GROUP_KLASSIKA = 'aaaaaaaa-0000-4000-8000-000000000001';
-const GROUP_KINOVECHERA = 'aaaaaaaa-0000-4000-8000-000000000002';
-const GROUP_DOCS = 'aaaaaaaa-0000-4000-8000-000000000003';
-const GROUP_CLOSED = 'aaaaaaaa-0000-4000-8000-000000000004';
+// All identifiers are fixed numbers so the seed is deterministic and activity
+// events can reference stored ratings/discussions exactly.
 
 async function main() {
   if (process.env.NODE_ENV === 'production') {
@@ -25,85 +17,166 @@ async function main() {
   try {
     await client.query('BEGIN');
 
+    // Reset the whole dataset so re-running the seed is deterministic: the
+    // login form resolves demo accounts by email, so stale rows would shadow
+    // the fixed seed identifiers. RESTART IDENTITY also resets sequences.
     await client.query(
-      `INSERT INTO users (id, email, name, role, handle, profile_hidden)
-       VALUES
-         ($1, 'me@example.com', 'Алексей', 'employee', 'me', false),
-         ($2, 'maria@example.com', 'Мария', 'employee', 'maria', false),
-         ($3, 'ivan@example.com', 'Иван', 'employee', 'ivan', false),
-         ($4, 'nina@example.com', 'Нина', 'employee', 'nina', false),
-         ($5, 'secret@example.com', 'Скрытый пользователь', 'employee', 'secret', true)
-       ON CONFLICT (id) DO NOTHING`,
-      [ME, MARIA, IVAN, NINA, SECRET],
+      `TRUNCATE activity_events, discussion_posts, group_discussions, ratings,
+         group_members, friendships, groups, media, tags, genres, users
+       RESTART IDENTITY CASCADE`,
     );
 
     await client.query(
-      `INSERT INTO friendships (id, requester_id, addressee_id, status)
-       VALUES
-         ('bbbbbbbb-0000-4000-8000-000000000001', $1, $2, 'accepted'),
-         ('bbbbbbbb-0000-4000-8000-000000000002', $4, $1, 'pending'),
-         ('bbbbbbbb-0000-4000-8000-000000000003', $1, $3, 'pending'),
-         ('bbbbbbbb-0000-4000-8000-000000000004', $5, $1, 'pending')
-       ON CONFLICT (id) DO NOTHING`,
-      [ME, MARIA, IVAN, NINA, SECRET],
+      `INSERT INTO genres (id, name) VALUES
+         (1, 'фантастика'),
+         (2, 'боевик'),
+         (3, 'драма'),
+         (4, 'криминал'),
+         (5, 'романтика'),
+         (6, 'триллер'),
+         (7, 'анимация'),
+         (8, 'фэнтези')`,
     );
 
     await client.query(
-      `INSERT INTO groups (id, name, description, tags, restricted)
-       VALUES
-         ($1, 'Киновечера', 'Смотрим и обсуждаем по пятницам.', ARRAY['пятница','обсуждение','компания'], false),
-         ($2, 'Классика', 'Фильмы до 1990 года.', ARRAY['классика','ретро'], false),
-         ($3, 'Документальное кино', 'Реальные истории и биографии.', ARRAY['документальное','биография'], false),
-         ($4, 'Закрытый клуб', 'Только по приглашению.', ARRAY['закрытый'], true)
-       ON CONFLICT (id) DO NOTHING`,
-      [GROUP_KINOVECHERA, GROUP_KLASSIKA, GROUP_DOCS, GROUP_CLOSED],
+      `INSERT INTO tags (id, name) VALUES
+         (1, 'пятница'),
+         (2, 'обсуждение'),
+         (3, 'компания'),
+         (4, 'классика'),
+         (5, 'ретро'),
+         (6, 'документальное'),
+         (7, 'биография'),
+         (8, 'закрытый')`,
+    );
+
+    // Users: ids 1..6. Employee role = 0, admin = 1.
+    await client.query(
+      `INSERT INTO users (id, email, name, role, handle, profile_hidden) VALUES
+         (1, 'employee@demo.local', 'Алексей', 0, 'me', false),
+         (2, 'maria@example.com', 'Мария', 0, 'maria', false),
+         (3, 'ivan@example.com', 'Иван', 0, 'ivan', false),
+         (4, 'nina@example.com', 'Нина', 0, 'nina', false),
+         (5, 'secret@example.com', 'Скрытый пользователь', 0, 'secret', true),
+         (6, 'admin@demo.local', 'Пётр', 1, 'admin', false)`,
+    );
+
+    // Media: kind 0 = film, 1 = series.
+    await client.query(
+      `INSERT INTO media (id, kind, external_ref, title, year, genre_ids) VALUES
+         (1, 0, '27205', 'Начало', 2010, '{1,2}'::smallint[]),
+         (2, 0, '603', 'Матрица', 1999, '{1,2}'::smallint[]),
+         (3, 0, '155', 'Тёмный рыцарь', 2008, '{2,3}'::smallint[]),
+         (4, 0, '680', 'Криминальное чтиво', 1994, '{3,4}'::smallint[]),
+         (5, 1, 'breaking-bad', 'Во все тяжкие', 2008, '{3,4}'::smallint[]),
+         (6, 0, '13', 'Форрест Гамп', 1994, '{3,5}'::smallint[])`,
+    );
+
+    // Friendships: status 0 = pending, 1 = accepted, 2 = declined.
+    await client.query(
+      `INSERT INTO friendships (id, requester_id, addressee_id, status) VALUES
+         (1, 1, 2, 1),
+         (2, 4, 1, 0),
+         (3, 1, 3, 0),
+         (4, 5, 1, 0),
+         (5, 6, 1, 1),
+         (6, 6, 2, 1),
+         (7, 3, 4, 2)`,
     );
 
     await client.query(
-      `INSERT INTO group_members (group_id, user_id, role)
-       VALUES
-         ($1, $4, 'admin'),
-         ($1, $5, 'member'),
-         ($1, $6, 'member'),
-         ($2, $4, 'member'),
-         ($2, $7, 'admin'),
-         ($3, $7, 'admin')
-       ON CONFLICT (group_id, user_id) DO NOTHING`,
-      [GROUP_KINOVECHERA, GROUP_KLASSIKA, GROUP_CLOSED, ME, MARIA, NINA, IVAN],
+      `INSERT INTO groups (id, name, description, tag_ids, restricted) VALUES
+         (1, 'Киновечера', 'Смотрим и обсуждаем по пятницам.', '{1,2,3}'::smallint[], false),
+         (2, 'Классика', 'Фильмы до 1990 года.', '{4,5}'::smallint[], false),
+         (3, 'Документальное кино', 'Реальные истории и биографии.', '{6,7}'::smallint[], false),
+         (4, 'Закрытый клуб', 'Только по приглашению.', '{8}'::smallint[], true)`,
+    );
+
+    // Group members: role 1 = admin, 0 = member.
+    await client.query(
+      `INSERT INTO group_members (group_id, user_id, role) VALUES
+         (1, 1, 1),
+         (1, 2, 0),
+         (1, 4, 0),
+         (1, 6, 1),
+         (2, 1, 0),
+         (2, 3, 1),
+         (2, 6, 0),
+         (3, 3, 1)`,
+    );
+
+    // Personal ratings (group_id NULL). rating is stored in tenths (0..100).
+    // Every demo account gets at least one personal rating so profiles and
+    // statistics are non-empty for all of them.
+    await client.query(
+      `INSERT INTO ratings (id, user_id, media_id, group_id, rating, comment, watched_at) VALUES
+         (1, 1, 1, NULL, 90, 'Отличная структура сна.', '2026-08-12'),
+         (2, 1, 2, NULL, 85, NULL, '2026-08-02'),
+         (3, 2, 3, NULL, 85, NULL, '2026-08-20'),
+         (4, 2, 4, NULL, 85, 'Классика.', '2026-08-18'),
+         (5, 4, 5, NULL, 90, NULL, '2026-08-24'),
+         (6, 3, 6, NULL, 80, NULL, '2026-08-10'),
+         (7, 2, 6, NULL, 70, repeat('я', 1000), '2026-08-05'),
+         (11, 5, 6, NULL, 60, NULL, '2026-08-06'),
+         (12, 5, 4, NULL, 70, NULL, '2026-08-11'),
+         (13, 6, 1, NULL, 95, 'Шедевр.', '2026-08-07'),
+         (14, 6, 3, NULL, 88, NULL, '2026-08-08'),
+         (15, 6, 5, NULL, 92, NULL, '2026-08-09'),
+         (16, 3, 1, NULL, 82, NULL, '2026-08-12'),
+         (17, 4, 2, NULL, 78, NULL, '2026-08-13')`,
+    );
+
+    // Group ratings for «Киновечера» (group_id = 1).
+    await client.query(
+      `INSERT INTO ratings (id, user_id, media_id, group_id, rating, comment, watched_at) VALUES
+         (8, 1, 1, 1, 90, NULL, '2026-08-12'),
+         (9, 2, 1, 1, 80, 'Пересматриваю с удовольствием.', '2026-08-13'),
+         (10, 3, 2, 1, 75, NULL, '2026-08-14')`,
     );
 
     await client.query(
-      `INSERT INTO watched_records (id, user_id, media_kind, media_ref, title, year, genres, rating, comment, watched_at)
-       VALUES
-         ('cccccccc-0000-4000-8000-000000000001', $1, 'film', '27205', 'Начало', 2010, ARRAY['фантастика','боевик'], 9.0, 'Отличная структура сна.', '2026-08-12'),
-         ('cccccccc-0000-4000-8000-000000000002', $1, 'film', '603', 'Матрица', 1999, ARRAY['фантастика','боевик'], 8.5, NULL, '2026-08-02'),
-         ('cccccccc-0000-4000-8000-000000000003', $2, 'film', '155', 'Тёмный рыцарь', 2008, ARRAY['боевик','драма'], 8.5, NULL, '2026-08-20'),
-         ('cccccccc-0000-4000-8000-000000000004', $2, 'film', '680', 'Криминальное чтиво', 1994, ARRAY['драма','криминал'], 8.5, 'Классика.', '2026-08-18'),
-         ('cccccccc-0000-4000-8000-000000000005', $4, 'series', 'breaking-bad', 'Во все тяжкие', 2008, ARRAY['драма','криминал'], 9.0, NULL, '2026-08-24'),
-         ('cccccccc-0000-4000-8000-000000000006', $3, 'film', '13', 'Форрест Гамп', 1994, ARRAY['драма','романтика'], 8.0, NULL, '2026-08-10')
-       ON CONFLICT (id) DO NOTHING`,
-      [ME, MARIA, IVAN, NINA],
+      `INSERT INTO group_discussions (id, group_id, author_id, title, media_id) VALUES
+         (1, 1, 1, 'Обсуждаем «Начало»', 1),
+         (2, 1, 1, 'Что смотрим в пятницу?', NULL)`,
     );
 
-    const existing = await client.query<{ count: string }>(
-      'SELECT count(*)::text AS count FROM activity_events',
+    await client.query(
+      `INSERT INTO discussion_posts (id, discussion_id, author_id, body) VALUES
+         (1, 1, 2, 'Финал гениален, спорить бесполезно.'),
+         (2, 1, 1, 'Согласен, но второй уровень слабее.')`,
     );
-    if (existing.rows[0]?.count === '0') {
+
+    // Activity kinds: 0 film_rated, 1 series_rated, 2 friendship_accepted,
+    // 3 group_joined, 4 post_created, 5 comment_created. Rating events select
+    // a stored rating with the same actor/media/group, so the feed can derive
+    // the value by joining.
+    await client.query(
+      `INSERT INTO activity_events (id, actor_id, kind, group_id, media_id, discussion_id, created_at) VALUES
+         (1, 2, 0, NULL, 3, NULL, '2026-08-20T10:00:00Z'),
+         (2, 2, 0, NULL, 4, NULL, '2026-08-18T10:00:00Z'),
+         (3, 4, 1, NULL, 5, NULL, '2026-08-24T10:00:00Z'),
+         (4, 3, 0, NULL, 6, NULL, '2026-08-10T10:00:00Z'),
+         (5, 2, 0, 1, 1, NULL, '2026-08-12T10:00:00Z'),
+         (6, 1, 4, 1, NULL, 1, '2026-08-12T11:00:00Z'),
+         (7, 2, 5, 1, NULL, 1, '2026-08-12T12:00:00Z'),
+         (8, 4, 3, 1, NULL, NULL, '2026-08-11T10:00:00Z'),
+         (9, 2, 2, NULL, NULL, NULL, '2026-08-09T10:00:00Z')`,
+    );
+
+    // Explicit identity values do not advance the sequence; align each one so
+    // newly created rows (for example demo logins) cannot collide.
+    for (const table of [
+      'users',
+      'media',
+      'ratings',
+      'friendships',
+      'groups',
+      'group_discussions',
+      'discussion_posts',
+      'activity_events',
+    ]) {
       await client.query(
-        `INSERT INTO activity_events (id, actor_id, kind, group_id, target_type, target_id, payload)
-         VALUES
-           ('dddddddd-0000-4000-8000-000000000001', $1, 'film_rated', NULL, 'film', '155',
-             '{"title":"Тёмный рыцарь","rating":8.5,"year":2008,"actorName":"Мария","actorHandle":"maria","href":"/film/155"}'::jsonb),
-           ('dddddddd-0000-4000-8000-000000000002', $1, 'film_rated', NULL, 'film', '680',
-             '{"title":"Криминальное чтиво","rating":8.5,"year":1994,"actorName":"Мария","actorHandle":"maria","href":"/film/680"}'::jsonb),
-           ('dddddddd-0000-4000-8000-000000000003', $3, 'series_rated', NULL, 'series', 'breaking-bad',
-             '{"title":"Во все тяжкие","rating":9,"year":2008,"actorName":"Нина","actorHandle":"nina","href":"/series"}'::jsonb),
-           ('dddddddd-0000-4000-8000-000000000004', $2, 'film_rated', NULL, 'film', '13',
-             '{"title":"Форрест Гамп","rating":8,"year":1994,"actorName":"Иван","actorHandle":"ivan","href":"/film/13"}'::jsonb),
-           ('dddddddd-0000-4000-8000-000000000005', $1, 'film_rated', $4, 'film', '27205',
-             '{"title":"Начало","rating":9,"year":2010,"actorName":"Мария","actorHandle":"maria","href":"/film/27205"}'::jsonb)
-         ON CONFLICT (id) DO NOTHING`,
-        [MARIA, IVAN, NINA, GROUP_KINOVECHERA],
+        `SELECT setval(pg_get_serial_sequence('${table}', 'id'), (SELECT max(id) FROM ${table}))`,
       );
     }
 

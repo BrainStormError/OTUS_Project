@@ -24,11 +24,11 @@ export function AdminMemberPanel({
     return <RestrictedState kind="no-permission" />;
   }
 
-  function changeRole(id: string, role: GroupMember['role']) {
+  function changeRole(id: number, role: GroupMember['role']) {
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, role } : member)));
   }
 
-  function removeMember(id: string) {
+  function removeMember(id: number) {
     setMembers((prev) => prev.filter((member) => member.id !== id));
   }
 
@@ -38,7 +38,7 @@ export function AdminMemberPanel({
     if (!value) return;
     setMembers((prev) => [
       ...prev,
-      { id: `invited-${value}`, name: value, handle: value, role: 'member' },
+      { id: -(prev.length + 1), name: value, handle: value, role: 'member' },
     ]);
     setHandle('');
   }

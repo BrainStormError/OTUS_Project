@@ -22,12 +22,18 @@ beforeEach(() => {
 
 function Harness() {
   const [open, setOpen] = useState(false);
+  const [comment, setComment] = useState('');
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}>
         Открыть
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title="Форма">
+        <input
+          aria-label="Комментарий"
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+        />
         <button type="button">Внутри</button>
       </Modal>
     </>
@@ -42,9 +48,10 @@ describe('modal keyboard operation', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    const close = screen.getByRole('button', { name: 'Закрыть' });
-    expect(document.activeElement).toBe(close);
+    const field = screen.getByLabelText('Комментарий');
+    expect(document.activeElement).toBe(field);
 
+    const close = screen.getByRole('button', { name: 'Закрыть' });
     const inside = screen.getByRole('button', { name: 'Внутри' });
     inside.focus();
     fireEvent.keyDown(document, { key: 'Tab' });
@@ -56,6 +63,18 @@ describe('modal keyboard operation', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('keeps focus on the field while typing', async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'Открыть' }));
+
+    const field = screen.getByLabelText('Комментарий');
+    await userEvent.type(field, 'текст');
+
+    expect(field).toHaveValue('текст');
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Закрыть' }));
   });
 });
 

@@ -106,6 +106,7 @@ describe('navigation shell', () => {
     render(<TopBar name="Алексей" tag="me" />);
     const brand = screen.getByRole('link', { name: /Смотровик/ });
     expect(brand).toHaveAttribute('href', '/');
+    expect(brand.className).toContain('text-lg');
   });
 
   it('renders six reachable tabs with the current one marked on mobile', () => {

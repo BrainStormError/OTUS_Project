@@ -117,7 +117,7 @@ describe('statistics and privacy primitives', () => {
 
 describe('friend, group, and admin primitives', () => {
   it('renders a friend list item linking to the profile with an action', () => {
-    render(<FriendListItem user={{ id: '1', name: 'Мария', handle: 'maria' }} action={<button>Действие</button>} />);
+    render(<FriendListItem user={{ id: 1, name: 'Мария', handle: 'maria' }} action={<button>Действие</button>} />);
     expect(screen.getByRole('link', { name: /Мария/ })).toHaveAttribute('href', '/u/maria');
     expect(screen.getByRole('button', { name: 'Действие' })).toBeInTheDocument();
   });
@@ -125,11 +125,11 @@ describe('friend, group, and admin primitives', () => {
   it('handles accept and decline on a friend request', async () => {
     const onAccept = vi.fn();
     const onDecline = vi.fn();
-    render(<FriendRequestItem user={{ id: 'r1', name: 'Иван', handle: 'ivan' }} onAccept={onAccept} onDecline={onDecline} />);
+    render(<FriendRequestItem user={{ id: 7, name: 'Иван', handle: 'ivan' }} onAccept={onAccept} onDecline={onDecline} />);
     await userEvent.click(screen.getByRole('button', { name: /Принять заявку от Иван/ }));
     await userEvent.click(screen.getByRole('button', { name: /Отклонить заявку от Иван/ }));
-    expect(onAccept).toHaveBeenCalledWith('r1');
-    expect(onDecline).toHaveBeenCalledWith('r1');
+    expect(onAccept).toHaveBeenCalledWith(7);
+    expect(onDecline).toHaveBeenCalledWith(7);
   });
 
   it('renders a group card as a link with description and tags and no statistics', () => {
@@ -141,7 +141,7 @@ describe('friend, group, and admin primitives', () => {
     expect(card).not.toHaveTextContent('Средняя оценка');
     expect(within(card).getByRole('link', { name: /Киновечера/ })).toHaveAttribute(
       'href',
-      '/groups/g1',
+      '/groups/1',
     );
   });
 

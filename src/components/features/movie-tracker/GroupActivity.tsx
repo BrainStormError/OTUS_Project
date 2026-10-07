@@ -1,0 +1,86 @@
+import Link from 'next/link';
+
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { RestrictedState } from '@/components/ui/restricted-state';
+import type { FeedItem } from '@/modules/activity';
+
+const FALLBACK_NAME = 'Пользователь';
+
+function actionLabel(event: FeedItem): string {
+  switch (event.kind) {
+    case 'film_rated':
+    case 'series_rated': {
+      const rating = event.rating !== null ? ` — ${event.rating}` : '';
+      return `оценил(а) «${event.title ?? 'медиа'}»${rating}`;
+    }
+    case 'post_created':
+      return `создал(а) обсуждение «${event.title ?? ''}»`;
+    case 'comment_created':
+      return `оставил(а) комментарий в «${event.title ?? ''}»`;
+    case 'group_joined':
+      return 'вступил(а) в группу';
+    default:
+      return 'активность';
+  }
+}
+
+function isRating(event: FeedItem): boolean {
+  return event.kind === 'film_rated' || event.kind === 'series_rated';
+}
+
+export function GroupActivity({
+  groupId,
+  events,
+  visible,
+}: {
+  groupId: number;
+  events: FeedItem[];
+  visible: boolean;
+}) {
+  if (!visible) {
+    return <RestrictedState kind="no-permission" />;
+  }
+
+  if (events.length === 0) {
+    return (
+      <EmptyState
+        title="Пока нет активности"
+        description="События группы появятся здесь, как только участники начнут оценивать и обсуждать."
+      />
+    );
+  }
+
+  return (
+    <ul
+      data-testid="group-activity"
+      className="divide-y divide-border rounded-lg border border-border"
+    >
+      {events.map((event) => (
+        <li
+          key={event.id}
+          className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-2"
+        >
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium">
+              {event.actorName ?? FALLBACK_NAME}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {actionLabel(event)}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+            <span>{event.createdAt.slice(0, 10)}</span>
+            {isRating(event) && event.discussionId ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/groups/${groupId}?tab=discussions&discussion=${event.discussionId}`}>
+                  К обсуждению
+                </Link>
+              </Button>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}

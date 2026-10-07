@@ -3,8 +3,16 @@
 import { useState } from 'react';
 
 import { IdentitySelect } from './IdentitySelect';
-import { PrivacyToggle } from './PrivacyToggle';
+import { PrivacyToggle, type SaveStatus } from './PrivacyToggle';
 import { ThemeSelect } from './ThemeSelect';
+
+type FlagKey = 'profileHidden' | 'statsHidden';
+type Flags = Record<FlagKey, boolean>;
+
+const IDLE_STATUS: Record<FlagKey, SaveStatus> = {
+  profileHidden: 'idle',
+  statsHidden: 'idle',
+};
 
 export function SettingsView({
   initialProfileHidden = false,
@@ -13,8 +21,37 @@ export function SettingsView({
   initialProfileHidden?: boolean;
   initialStatsHidden?: boolean;
 }) {
-  const [profileHidden, setProfileHidden] = useState(initialProfileHidden);
-  const [statsHidden, setStatsHidden] = useState(initialStatsHidden);
+  const [flags, setFlags] = useState<Flags>({
+    profileHidden: initialProfileHidden,
+    statsHidden: initialStatsHidden,
+  });
+  const [status, setStatus] = useState<Record<FlagKey, SaveStatus>>(IDLE_STATUS);
+
+  async function save(key: FlagKey, next: boolean) {
+    const previous = flags;
+    const nextFlags = { ...flags, [key]: next };
+    setFlags(nextFlags);
+    setStatus((current) => ({ ...current, [key]: 'saving' }));
+    try {
+      const response = await fetch('/api/me/privacy', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(nextFlags),
+      });
+      if (!response.ok) {
+        throw new Error('privacy update failed');
+      }
+      const data = (await response.json()) as Partial<Flags>;
+      setFlags({
+        profileHidden: data.profileHidden ?? nextFlags.profileHidden,
+        statsHidden: data.statsHidden ?? nextFlags.statsHidden,
+      });
+      setStatus((current) => ({ ...current, [key]: 'saved' }));
+    } catch {
+      setFlags(previous);
+      setStatus((current) => ({ ...current, [key]: 'error' }));
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -37,14 +74,16 @@ export function SettingsView({
           <PrivacyToggle
             label="Скрыть профиль"
             description="Другие увидят только ваше имя."
-            checked={profileHidden}
-            onChange={setProfileHidden}
+            checked={flags.profileHidden}
+            status={status.profileHidden}
+            onChange={(next) => void save('profileHidden', next)}
           />
           <PrivacyToggle
             label="Скрыть статистику"
             description="Оценки и распределения не будут видны другим."
-            checked={statsHidden}
-            onChange={setStatsHidden}
+            checked={flags.statsHidden}
+            status={status.statsHidden}
+            onChange={(next) => void save('statsHidden', next)}
           />
         </div>
       </section>

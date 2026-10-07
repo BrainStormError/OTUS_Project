@@ -51,12 +51,12 @@ function mutation(
   });
 }
 
-async function countEvents(actorId: string): Promise<number> {
-  const rows = await query<{ count: string }>(
-    'SELECT count(*)::text AS count FROM activity_events WHERE actor_id = $1',
+async function countEvents(actorId: number): Promise<number> {
+  const rows = await query<{ count: number }>(
+    'SELECT count(*)::int AS count FROM activity_events WHERE actor_id = $1',
     [actorId],
   );
-  return Number(rows[0]?.count ?? '0');
+  return Number(rows[0]?.count ?? 0);
 }
 
 afterAll(async () => {
@@ -79,10 +79,7 @@ describe('GET /api/feed', () => {
       await withTransaction((tx) =>
         recordEvent(tx, {
           actorId: viewer.id,
-          kind: 'film_rated',
-          targetType: 'film',
-          targetId: String(index),
-          payload: { title: `api-${index}`, rating: 5 },
+          kind: 'friendship_accepted',
         }),
       );
     }
@@ -92,7 +89,7 @@ describe('GET /api/feed', () => {
     );
     expect(first.status).toBe(200);
     const firstPage = (await first.json()) as {
-      items: { id: string; cursor: string }[];
+      items: { id: number; cursor: string }[];
       nextCursor: string | null;
     };
     expect(firstPage.items).toHaveLength(2);
@@ -105,7 +102,7 @@ describe('GET /api/feed', () => {
       ),
     );
     expect(second.status).toBe(200);
-    const secondPage = (await second.json()) as { items: { id: string }[] };
+    const secondPage = (await second.json()) as { items: { id: number }[] };
     const firstIds = firstPage.items.map((item) => item.id);
     expect(secondPage.items.some((item) => firstIds.includes(item.id))).toBe(false);
 
@@ -116,7 +113,7 @@ describe('GET /api/feed', () => {
       }),
     );
     expect(catchup.status).toBe(200);
-    const catchupPage = (await catchup.json()) as { items: { id: string }[] };
+    const catchupPage = (await catchup.json()) as { items: { id: number }[] };
     expect(catchupPage.items).toHaveLength(1);
     expect(catchupPage.items[0]!.id).toBe(firstPage.items[0]!.id);
   });
@@ -176,9 +173,9 @@ describe('POST mutation routes', () => {
   it('accepts a friendship through the route', async () => {
     const requester = await makeUser(`api-req-${randomUUID().slice(0, 8)}`);
     const addressee = await makeUser(`api-addr-${randomUUID().slice(0, 8)}`);
-    const rows = await query<{ id: string }>(
+    const rows = await query<{ id: number }>(
       `INSERT INTO friendships (requester_id, addressee_id, status)
-       VALUES ($1, $2, 'pending') RETURNING id`,
+       VALUES ($1, $2, 0) RETURNING id`,
       [requester.id, addressee.id],
     );
     state.actor = addressee;
@@ -193,11 +190,11 @@ describe('POST mutation routes', () => {
   it('joins an open group and refuses a restricted one', async () => {
     const actor = await makeUser(`api-join-${randomUUID().slice(0, 8)}`);
     state.actor = actor;
-    const open = await query<{ id: string }>(
+    const open = await query<{ id: number }>(
       `INSERT INTO groups (name) VALUES ($1) RETURNING id`,
       [`api-open-${randomUUID().slice(0, 8)}`],
     );
-    const closed = await query<{ id: string }>(
+    const closed = await query<{ id: number }>(
       `INSERT INTO groups (name, restricted) VALUES ($1, true) RETURNING id`,
       [`api-closed-${randomUUID().slice(0, 8)}`],
     );
@@ -222,10 +219,7 @@ describe('GET /api/feed/stream', () => {
     const older = await withTransaction((tx) =>
       recordEvent(tx, {
         actorId: viewer.id,
-        kind: 'film_rated',
-        targetType: 'film',
-        targetId: '1',
-        payload: { title: 'older', rating: 5 },
+        kind: 'friendship_accepted',
       }),
     );
 
@@ -244,15 +238,12 @@ describe('GET /api/feed/stream', () => {
     const newer = await withTransaction((tx) =>
       recordEvent(tx, {
         actorId: viewer.id,
-        kind: 'film_rated',
-        targetType: 'film',
-        targetId: '2',
-        payload: { title: 'newer', rating: 7 },
+        kind: 'friendship_accepted',
       }),
     );
 
     const live = await readUntil(reader, 'event: activity');
-    expect(live).toContain(newer.id);
+    expect(live).toContain(String(newer.id));
 
     controller.abort();
 
@@ -264,13 +255,13 @@ describe('GET /api/feed/stream', () => {
       }),
     );
     const resumeReader = resumeResponse.body!.getReader();
-    const resumed = await readUntil(resumeReader, newer.id);
-    expect(resumed).toContain(newer.id);
+    const resumed = await readUntil(resumeReader, String(newer.id));
+    expect(resumed).toContain(String(newer.id));
     resumeController.abort();
   });
 });
 
-function encode(event: { createdAt: string; id: string }): string {
+function encode(event: { createdAt: string; id: number }): string {
   return Buffer.from(`${event.createdAt}|${event.id}`, 'utf8').toString('base64url');
 }
 

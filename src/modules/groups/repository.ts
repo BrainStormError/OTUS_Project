@@ -4,26 +4,35 @@ import { query } from '@/core/db/pool';
 
 import type { GroupMemberSummary, GroupSummary } from './types';
 
+const ROLE_CODE = { member: 0, admin: 1 } as const;
+
+function roleFromCode(code: number): 'admin' | 'member' {
+  return code === 1 ? 'admin' : 'member';
+}
+
 type GroupRow = {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
-  tags: string[];
+  tags: string[] | null;
   restricted: boolean;
 };
 
 type MemberRow = {
-  group_id: string;
-  id: string;
+  group_id: number;
+  id: number;
   name: string | null;
   handle: string | null;
-  role: 'admin' | 'member';
+  role: number;
 };
 
-const GROUP_COLUMNS = 'id, name, description, tags, restricted';
+const GROUP_SELECT = `g.id, g.name, g.description, g.restricted,
+  COALESCE((SELECT array_agg(t.name ORDER BY t.id) FROM tags t WHERE t.id = ANY(g.tag_ids)), '{}') AS tags`;
 
-async function membersByGroup(groupIds: string[]): Promise<Map<string, GroupMemberSummary[]>> {
-  const map = new Map<string, GroupMemberSummary[]>();
+async function membersByGroup(
+  groupIds: number[],
+): Promise<Map<number, GroupMemberSummary[]>> {
+  const map = new Map<number, GroupMemberSummary[]>();
   if (groupIds.length === 0) {
     return map;
   }
@@ -31,7 +40,7 @@ async function membersByGroup(groupIds: string[]): Promise<Map<string, GroupMemb
     `SELECT gm.group_id, u.id, u.name, u.handle, gm.role
        FROM group_members gm
        JOIN users u ON u.id = gm.user_id
-      WHERE gm.group_id = ANY($1::uuid[])
+      WHERE gm.group_id = ANY($1::bigint[])
       ORDER BY u.name NULLS LAST, u.id`,
     [groupIds],
   );
@@ -40,8 +49,8 @@ async function membersByGroup(groupIds: string[]): Promise<Map<string, GroupMemb
     list.push({
       id: row.id,
       name: row.name ?? 'Пользователь',
-      handle: row.handle ?? row.id.slice(0, 8),
-      role: row.role,
+      handle: row.handle ?? String(row.id),
+      role: roleFromCode(row.role),
     });
     map.set(row.group_id, list);
   }
@@ -53,15 +62,15 @@ function mapGroup(row: GroupRow, members: GroupMemberSummary[]): GroupSummary {
     id: row.id,
     name: row.name,
     description: row.description,
-    tags: row.tags,
+    tags: row.tags ?? [],
     restricted: row.restricted,
     members,
   };
 }
 
-export async function listGroupsForUser(userId: string): Promise<GroupSummary[]> {
+export async function listGroupsForUser(userId: number): Promise<GroupSummary[]> {
   const rows = await query<GroupRow>(
-    `SELECT g.${GROUP_COLUMNS.split(', ').join(', g.')}
+    `SELECT ${GROUP_SELECT}
        FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
       WHERE gm.user_id = $1
@@ -72,9 +81,9 @@ export async function listGroupsForUser(userId: string): Promise<GroupSummary[]>
   return rows.map((row) => mapGroup(row, members.get(row.id) ?? []));
 }
 
-export async function listDiscoverableGroups(userId: string): Promise<GroupSummary[]> {
+export async function listDiscoverableGroups(userId: number): Promise<GroupSummary[]> {
   const rows = await query<GroupRow>(
-    `SELECT g.${GROUP_COLUMNS.split(', ').join(', g.')}
+    `SELECT ${GROUP_SELECT}
        FROM groups g
       WHERE g.restricted = false
         AND NOT EXISTS (
@@ -87,8 +96,8 @@ export async function listDiscoverableGroups(userId: string): Promise<GroupSumma
   return rows.map((row) => mapGroup(row, members.get(row.id) ?? []));
 }
 
-export async function findGroupById(id: string): Promise<GroupSummary | null> {
-  const rows = await query<GroupRow>(`SELECT ${GROUP_COLUMNS} FROM groups WHERE id = $1`, [id]);
+export async function findGroupById(id: number): Promise<GroupSummary | null> {
+  const rows = await query<GroupRow>(`SELECT ${GROUP_SELECT} FROM groups g WHERE g.id = $1`, [id]);
   const row = rows[0];
   if (!row) {
     return null;
@@ -97,7 +106,7 @@ export async function findGroupById(id: string): Promise<GroupSummary | null> {
   return mapGroup(row, members.get(row.id) ?? []);
 }
 
-export async function isGroupMember(groupId: string, userId: string): Promise<boolean> {
+export async function isGroupMember(groupId: number, userId: number): Promise<boolean> {
   const rows = await query<{ exists: boolean }>(
     `SELECT EXISTS (
        SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2
@@ -109,15 +118,27 @@ export async function isGroupMember(groupId: string, userId: string): Promise<bo
 
 export async function insertGroupMember(
   tx: PoolClient,
-  groupId: string,
-  userId: string,
+  groupId: number,
+  userId: number,
   role: 'admin' | 'member' = 'member',
 ): Promise<boolean> {
   const result = await tx.query(
     `INSERT INTO group_members (group_id, user_id, role)
      VALUES ($1, $2, $3)
      ON CONFLICT (group_id, user_id) DO NOTHING`,
-    [groupId, userId, role],
+    [groupId, userId, ROLE_CODE[role]],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+export async function getGroupRole(
+  groupId: number,
+  userId: number,
+): Promise<'admin' | 'member' | null> {
+  const rows = await query<{ role: number }>(
+    `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+    [groupId, userId],
+  );
+  const row = rows[0];
+  return row ? roleFromCode(row.role) : null;
 }

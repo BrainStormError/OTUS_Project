@@ -1,35 +1,33 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId } from 'react';
 
 import { cn } from '@/components/ui/utils';
 
-export type SaveStatus = 'idle' | 'saving' | 'saved';
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+const STATUS_LABEL: Record<Exclude<SaveStatus, 'idle'>, string> = {
+  saving: 'Сохранение…',
+  saved: 'Сохранено',
+  error: 'Не сохранено',
+};
 
 export function PrivacyToggle({
   label,
   description,
   checked,
   onChange,
-  saving = false,
+  status = 'idle',
   className,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   onChange: (next: boolean) => void;
-  saving?: boolean;
+  status?: SaveStatus;
   className?: string;
 }) {
   const id = useId();
-  const [saved, setSaved] = useState(false);
-
-  function toggle() {
-    const next = !checked;
-    onChange(next);
-    setSaved(false);
-    window.setTimeout(() => setSaved(true), 400);
-  }
 
   return (
     <div className={cn('flex items-center justify-between gap-4 py-3', className)}>
@@ -42,8 +40,14 @@ export function PrivacyToggle({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
-        <span aria-live="polite" className="text-xs text-muted-foreground">
-          {saving ? 'Сохранение…' : saved ? 'Сохранено' : ''}
+        <span
+          aria-live="polite"
+          className={cn(
+            'text-xs',
+            status === 'error' ? 'text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {status === 'idle' ? '' : STATUS_LABEL[status]}
         </span>
         <button
           id={id}
@@ -51,7 +55,7 @@ export function PrivacyToggle({
           role="switch"
           aria-checked={checked}
           aria-labelledby={`${id}-label`}
-          onClick={toggle}
+          onClick={() => onChange(!checked)}
           className={cn(
             'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             checked ? 'bg-primary' : 'bg-muted',

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FriendsView } from '@/components/features/movie-tracker/FriendsView';
 import { GroupsView } from '@/components/features/movie-tracker/GroupsView';
@@ -11,18 +11,85 @@ import { ProfileView } from '@/components/features/movie-tracker/ProfileView';
 import { RecordView } from '@/components/features/movie-tracker/RecordView';
 import { SettingsView } from '@/components/features/movie-tracker/SettingsView';
 import { StatisticsView } from '@/components/features/movie-tracker/StatisticsView';
-import {
-  currentUser,
-  currentUserStats,
-  findUser,
-  friendRequests,
-  friends,
-  groups,
-  listMovies,
-  searchFriends,
-  searchGroups,
-} from '@/components/features/movie-tracker/data';
-import { RECORDS_STORAGE_KEY } from '@/components/features/movie-tracker/record-store';
+import { groups, listMovies, searchGroups } from '@/components/features/movie-tracker/data';
+import { listSeries } from '@/components/features/movie-tracker/series-data';
+import type {
+  FriendRequest,
+  PublicUser,
+  SeriesRecord,
+  UserStats,
+  WatchedRecord,
+} from '@/components/features/movie-tracker/types';
+
+const movies = listMovies();
+const seriesCatalog = listSeries();
+
+const filmRecords: WatchedRecord[] = [
+  { id: 1, movie: movies[0]!, rating: 9, comment: 'Отличная структура сна.', watchedAt: '2026-08-12' },
+  { id: 2, movie: movies[3]!, rating: 8.5, watchedAt: '2026-08-02' },
+  { id: 3, movie: movies[4]!, rating: 7.5, comment: 'Тёплое кино.', watchedAt: '2026-07-21' },
+  { id: 4, movie: movies[6]!, rating: 9.5, watchedAt: '2026-07-05' },
+];
+
+const seriesRecords: SeriesRecord[] = [
+  {
+    id: 's1',
+    series: seriesCatalog[1]!,
+    mode: 'whole',
+    seriesRating: 9.4,
+    seriesComment: 'Мощно.',
+    watchedAt: '2026-08-10',
+  },
+  { id: 's2', series: seriesCatalog[0]!, mode: 'whole', seriesRating: 9, watchedAt: '2026-07-15' },
+  { id: 's3', series: seriesCatalog[3]!, mode: 'whole', seriesRating: 7, watchedAt: '2026-06-01' },
+];
+
+const statsFixture: UserStats = {
+  count: 4,
+  genres: [{ genre: 'драма', count: 2 }],
+  years: [{ year: 2010, count: 1 }],
+};
+
+const maria: PublicUser = {
+  id: 2,
+  handle: 'maria',
+  name: 'Мария',
+  isFriend: true,
+  stats: statsFixture,
+  recent: [],
+};
+const ivan: PublicUser = {
+  id: 3,
+  handle: 'ivan',
+  name: 'Иван',
+  statsHidden: true,
+  stats: statsFixture,
+  recent: [],
+};
+const secret: PublicUser = {
+  id: 4,
+  handle: 'secret',
+  name: 'Скрытый пользователь',
+  profileHidden: true,
+  statsHidden: true,
+  stats: statsFixture,
+  recent: [],
+};
+const nina: PublicUser = { id: 5, handle: 'nina', name: 'Нина', stats: statsFixture, recent: [] };
+const ownProfile: PublicUser = {
+  id: 1,
+  handle: 'me',
+  name: 'Алексей',
+  stats: statsFixture,
+  recent: filmRecords,
+};
+
+const friendRequests: FriendRequest[] = [
+  { id: 1, user: nina },
+  { id: 2, user: ivan },
+];
+const friends: PublicUser[] = [maria];
+const outgoingRequests: FriendRequest[] = [{ id: 1, user: nina }];
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -31,8 +98,8 @@ beforeEach(() => {
 
 describe('My Films and records', () => {
   it('lists watched records as a table with title, rating, and date, and no permanent edit action', async () => {
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    const list = screen.getByTestId('my-films');
     expect(within(list).getByText('Начало')).toBeInTheDocument();
     expect(within(list).getByText('9.0')).toBeInTheDocument();
     expect(within(list).getByRole('columnheader', { name: /Название/ })).toBeInTheDocument();
@@ -47,8 +114,8 @@ describe('My Films and records', () => {
   });
 
   it('orders by watch date newest first by default and sorts by a column header', async () => {
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    const list = screen.getByTestId('my-films');
     const dateHeader = within(list).getByRole('columnheader', { name: /Дата просмотра/ });
     expect(dateHeader).toHaveAttribute('aria-sort', 'descending');
 
@@ -72,8 +139,8 @@ describe('My Films and records', () => {
   });
 
   it('expands a comment in place and shows a placeholder when empty', async () => {
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    const list = screen.getByTestId('my-films');
     const row = within(list).getByRole('button', { name: 'Начало' });
     expect(row).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(row);
@@ -86,8 +153,8 @@ describe('My Films and records', () => {
   });
 
   it('selects a record by clicking any part of the row and highlights it on hover', async () => {
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    const list = screen.getByTestId('my-films');
     const title = within(list).getByRole('button', { name: 'Начало' });
     const row = title.closest('tr')!;
     expect(row.className).toContain('hover:bg-secondary');
@@ -102,16 +169,15 @@ describe('My Films and records', () => {
   });
 
   it('filters the list live through the filter panel', async () => {
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    const list = screen.getByTestId('my-films');
     await userEvent.type(screen.getByLabelText('Название'), 'Матрица');
     expect(within(list).getByText('Матрица')).toBeInTheDocument();
     expect(within(list).queryByText('Начало')).not.toBeInTheDocument();
   });
 
   it('scopes genre, actor, director, and year options to watched films', async () => {
-    render(<MyFilmsView />);
-    await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
 
     await userEvent.click(screen.getByText('Жанр'));
     const genre = screen.getByRole('group', { name: 'Жанр' });
@@ -129,8 +195,7 @@ describe('My Films and records', () => {
   });
 
   it('adds a record through the modal', async () => {
-    render(<MyFilmsView />);
-    await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
     await userEvent.click(within(picker).getByRole('button', { name: /Паразиты/ }));
@@ -142,8 +207,8 @@ describe('My Films and records', () => {
   });
 
   it('edits a record and deletes it only after confirmation', async () => {
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    const list = screen.getByTestId('my-films');
 
     await userEvent.click(within(list).getByRole('button', { name: 'Начало' }));
     expect(within(list).getByRole('button', { name: 'Удалить' })).toBeInTheDocument();
@@ -167,30 +232,36 @@ describe('My Films and records', () => {
     await waitFor(() => expect(within(list).queryByText('Начало')).not.toBeInTheDocument());
   });
 
-  it('opens an individual record and shows an empty state for a missing one', async () => {
-    const { rerender } = render(<RecordView id="w1" />);
-    expect(await screen.findByRole('heading', { name: 'Начало' })).toBeInTheDocument();
+  it('opens an individual record and shows an empty state for a missing one', () => {
+    const { rerender } = render(<RecordView record={filmRecords[0]!} />);
+    expect(screen.getByRole('heading', { name: 'Начало' })).toBeInTheDocument();
     expect(screen.getByText(/Дата просмотра:/)).toBeInTheDocument();
 
-    rerender(<RecordView id="missing" />);
-    expect(await screen.findByText('Запись не найдена')).toBeInTheDocument();
+    rerender(<RecordView record={null} />);
+    expect(screen.getByText('Запись не найдена')).toBeInTheDocument();
   });
 
-  it('reflects a saved rating immediately', async () => {
-    window.localStorage.setItem(
-      RECORDS_STORAGE_KEY,
-      JSON.stringify([
-        {
-          id: 'w-680',
-          movie: { tmdbId: 680, title: 'Криминальное чтиво', year: 1994, rating: 8.5, genres: ['драма'] },
-          rating: 8.5,
-          comment: 'Классика',
-          watchedAt: '2026-09-01',
-        },
-      ]),
+  it('renders records passed from the server without a browser sample', async () => {
+    render(
+      <MyFilmsView
+        initialRecords={[
+          {
+            id: 680,
+            movie: {
+              tmdbId: 680,
+              title: 'Криминальное чтиво',
+              year: 1994,
+              rating: 8.5,
+              genres: ['драма'],
+            },
+            rating: 8.5,
+            comment: 'Классика',
+            watchedAt: '2026-09-01',
+          },
+        ]}
+      />,
     );
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
+    const list = screen.getByTestId('my-films');
     expect(within(list).getByText('Криминальное чтиво')).toBeInTheDocument();
     expect(within(list).getByText('2026-09-01')).toBeInTheDocument();
   });
@@ -198,21 +269,21 @@ describe('My Films and records', () => {
 
 describe('My Series', () => {
   it('lists series with title, rating, and date columns and sorts by header', async () => {
-    render(<MySeriesView />);
-    const list = await screen.findByTestId('my-series');
+    render(<MySeriesView initialRecords={seriesRecords} />);
+    const list = screen.getByTestId('my-series');
     expect(within(list).getByRole('columnheader', { name: /Название/ })).toBeInTheDocument();
     expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toBeInTheDocument();
     expect(within(list).getByRole('columnheader', { name: /Дата просмотра/ })).toBeInTheDocument();
 
     const dataRows = () => within(list).getAllByRole('row').slice(1);
-    expect(within(dataRows()[0]!).getByText('Во все тяжкие')).toBeInTheDocument();
+    expect(within(dataRows()[0]!).getByText('Чернобыль')).toBeInTheDocument();
 
     await userEvent.click(within(list).getByRole('button', { name: /Оценка/ }));
     expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute(
       'aria-sort',
       'ascending',
     );
-    expect(within(dataRows()[0]!).getByText('Игра в кальмара')).toBeInTheDocument();
+    expect(within(dataRows()[0]!).getByText('Тьма')).toBeInTheDocument();
 
     await userEvent.click(within(list).getByRole('button', { name: /Название/ }));
     expect(within(list).getByRole('columnheader', { name: /Название/ })).toHaveAttribute(
@@ -222,8 +293,8 @@ describe('My Series', () => {
   });
 
   it('expands a whole-series row in place without seasons or episodes', async () => {
-    render(<MySeriesView />);
-    const list = await screen.findByTestId('my-series');
+    render(<MySeriesView initialRecords={seriesRecords} />);
+    const list = screen.getByTestId('my-series');
     const button = within(list).getByRole('button', { name: 'Чернобыль' });
     await userEvent.click(button);
     expect(button).toHaveAttribute('aria-expanded', 'true');
@@ -232,68 +303,40 @@ describe('My Series', () => {
     expect(within(list).queryByText(/^Серия/)).not.toBeInTheDocument();
   });
 
-  it('expands a single-season series directly to episodes', async () => {
-    render(<MySeriesView />);
-    const list = await screen.findByTestId('my-series');
-    await userEvent.click(within(list).getByRole('button', { name: 'Игра в кальмара' }));
-    expect(within(list).getByText('Серия 1.1 — Игра началась')).toBeVisible();
-    expect(within(list).queryByText('Сезон 1')).not.toBeInTheDocument();
-  });
-
-  it('expands a multi-season series through seasons then episodes', async () => {
-    render(<MySeriesView />);
-    const list = await screen.findByTestId('my-series');
-    await userEvent.click(within(list).getByRole('button', { name: 'Во все тяжкие' }));
-    expect(within(list).getByText('Сезон 1')).toBeVisible();
-    expect(within(list).getByText('Сезон 2')).toBeVisible();
-    expect(within(list).queryByText(/^Серия 1\.1/)).not.toBeInTheDocument();
-
-    await userEvent.click(within(list).getByRole('button', { name: /Сезон 1/ }));
-    expect(within(list).getByText('Серия 1.1 — Пилот')).toBeVisible();
-  });
-
-  it('requires a rating before adding a series', async () => {
-    render(<MySeriesView />);
-    await screen.findByTestId('my-series');
+  it('adds a series through the whole-series rating modal', async () => {
+    render(<MySeriesView initialRecords={seriesRecords} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
-    await userEvent.click(within(picker).getByRole('button', { name: /Тьма/ }));
+    expect(within(picker).getByText('Поиск')).toBeInTheDocument();
+    expect(within(picker).queryByText('Актёр')).not.toBeInTheDocument();
+    expect(within(picker).queryByText('Режиссёр')).not.toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', { name: /Игра в кальмара/ }));
 
     const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }));
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(/хотя бы одну оценку серии/);
-
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'Целиком' }));
-    await userEvent.type(within(dialog).getByLabelText('Оценка сериала (0–10)'), '8');
+    await userEvent.type(within(dialog).getByLabelText(/^Оценка \(/), '8');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }));
     const list = screen.getByTestId('my-series');
-    expect(await within(list).findByText('Тьма')).toBeInTheDocument();
+    expect(await within(list).findByText('Игра в кальмара')).toBeInTheDocument();
   });
 
-  it('clears previous ratings only after confirming a mode change', async () => {
-    render(<MySeriesView />);
-    const list = await screen.findByTestId('my-series');
-    await userEvent.click(within(list).getByRole('button', { name: 'Во все тяжкие' }));
-    await userEvent.click(within(list).getByRole('button', { name: 'Изменить' }));
+  it('applies add-modal filters only after Найти', async () => {
+    render(<MySeriesView initialRecords={seriesRecords} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    const picker = screen.getByRole('dialog');
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Оценка серии 1.1')).toHaveValue(9);
+    await userEvent.click(within(picker).getByText('Жанр'));
+    await userEvent.click(within(picker).getByRole('checkbox', { name: 'фантастика' }));
 
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'Целиком' }));
-    const confirm = within(dialog).getByRole('alertdialog', { name: 'Смена режима' });
-    await userEvent.click(within(confirm).getByRole('button', { name: 'Отмена' }));
-    expect(within(dialog).getByLabelText('Оценка серии 1.1')).toHaveValue(9);
-
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'Целиком' }));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Сменить режим' }));
-    expect(within(dialog).queryByLabelText('Оценка серии 1.1')).not.toBeInTheDocument();
-    expect(within(dialog).getByLabelText('Оценка сериала (0–10)')).toHaveValue(null);
+    expect(within(picker).getByRole('button', { name: /Во все тяжкие/ })).toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    expect(within(picker).queryByRole('button', { name: /Во все тяжкие/ })).not.toBeInTheDocument();
+    expect(within(picker).getByRole('button', { name: /Тьма/ })).toBeInTheDocument();
   });
 });
 
 describe('Home watched flow', () => {
-  it('opens the rating form from a Home card and adds the film to My Films', async () => {
-    const { unmount } = render(<HomeView movies={listMovies()} />);
+  it('marks a film watched through the rating modal', async () => {
+    render(<HomeView movies={movies} />);
     const card = screen
       .getAllByTestId('movie-card')
       .find((node) => within(node).queryByText('Тёмный рыцарь'));
@@ -306,14 +349,18 @@ describe('Home watched flow', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    unmount();
-    render(<MyFilmsView />);
-    const list = await screen.findByTestId('my-films');
-    expect(within(list).getByText('Тёмный рыцарь')).toBeInTheDocument();
+    expect(await screen.findAllByTestId('watched-badge')).toHaveLength(1);
   });
 
   it('shows a non-interactive watched indicator on watched cards', async () => {
-    render(<HomeView movies={listMovies()} />);
+    render(
+      <HomeView
+        movies={movies}
+        initialRecords={[
+          { id: 155, movie: movies[1]!, rating: 8.5, watchedAt: '2026-08-20' },
+        ]}
+      />,
+    );
     const badges = await screen.findAllByTestId('watched-badge');
     expect(badges.length).toBeGreaterThan(0);
     expect(badges[0]).toHaveAttribute('title', 'Просмотрено');
@@ -324,7 +371,7 @@ describe('Home watched flow', () => {
 
 describe('ProfileView', () => {
   it('shows the own profile with identity, statistics, and activity only', () => {
-    render(<ProfileView user={currentUser} isOwn />);
+    render(<ProfileView user={ownProfile} isOwn />);
     expect(screen.getByRole('heading', { name: 'Алексей' })).toBeInTheDocument();
     expect(screen.getByTestId('statistics')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Активность' })).toBeInTheDocument();
@@ -333,20 +380,17 @@ describe('ProfileView', () => {
   });
 
   it('shows a relationship action on another users profile', () => {
-    const maria = findUser('maria')!;
     render(<ProfileView user={maria} isOwn={false} />);
     expect(screen.getByRole('button', { name: 'Добавить в друзья' })).toBeInTheDocument();
   });
 
   it('shows the restricted state to a non-permitted viewer but not to the owner', () => {
-    const secret = findUser('secret')!;
     render(<ProfileView user={secret} isOwn={false} />);
     expect(screen.getByTestId('restricted-profile')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Добавить в друзья' })).toBeInTheDocument();
   });
 
   it('restricts statistics for a non-permitted viewer while the owner still sees values', () => {
-    const ivan = findUser('ivan')!;
     const { rerender } = render(<ProfileView user={ivan} isOwn={false} />);
     expect(screen.getByTestId('restricted-statistics')).toBeInTheDocument();
 
@@ -357,7 +401,7 @@ describe('ProfileView', () => {
 
 describe('StatisticsView', () => {
   it('shows three statistics without an average rating card', () => {
-    render(<StatisticsView stats={currentUserStats} />);
+    render(<StatisticsView stats={statsFixture} />);
     const cards = screen.getAllByTestId('stat-card');
     expect(cards).toHaveLength(3);
     expect(screen.getByText('Всего фильмов')).toBeInTheDocument();
@@ -367,7 +411,7 @@ describe('StatisticsView', () => {
   });
 
   it('shows the restricted state instead of values', () => {
-    render(<StatisticsView stats={currentUserStats} restricted />);
+    render(<StatisticsView stats={statsFixture} restricted />);
     expect(screen.getByTestId('restricted-statistics')).toBeInTheDocument();
     expect(screen.queryByTestId('stat-card')).not.toBeInTheDocument();
   });
@@ -387,14 +431,47 @@ describe('FriendsView', () => {
 });
 
 describe('SettingsView', () => {
-  it('reflects privacy toggles and theme selection', async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('persists a privacy change and reflects the saved state', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ profileHidden: true, statsHidden: false }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
     render(<SettingsView />);
     const profileToggle = screen.getByRole('switch', { name: 'Скрыть профиль' });
     expect(profileToggle).toHaveAttribute('aria-checked', 'false');
+
     await userEvent.click(profileToggle);
+
     expect(profileToggle).toHaveAttribute('aria-checked', 'true');
     expect(await screen.findByText('Сохранено')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/me/privacy',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
 
+  it('rolls back and reports failure when saving fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
+    );
+    render(<SettingsView />);
+    const profileToggle = screen.getByRole('switch', { name: 'Скрыть профиль' });
+
+    await userEvent.click(profileToggle);
+
+    expect(await screen.findByText('Не сохранено')).toBeInTheDocument();
+    expect(profileToggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('reflects theme selection and identity display', async () => {
+    render(<SettingsView />);
     const dark = screen.getByRole('radio', { name: 'Тёмная' });
     await userEvent.click(dark);
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
@@ -409,39 +486,126 @@ describe('SettingsView', () => {
 });
 
 describe('Scoped search in Friends and Groups', () => {
-  it('searches own friends first and falls back to non-hidden profiles', () => {
-    expect(searchFriends('Мария', friends).map((user) => user.handle)).toEqual(['maria']);
-    expect(searchFriends('Нина', friends).map((user) => user.handle)).toEqual(['nina']);
-    expect(searchFriends('Скрытый', friends)).toEqual([]);
+  function stubUserSearch(overrides: Record<number, string> = {}) {
+    const directory = [maria, ivan, nina];
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost');
+      const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const items = directory
+        .filter((user) => user.name.toLowerCase().includes(q))
+        .map((user) => ({
+          id: user.id,
+          name: user.name,
+          handle: user.handle,
+          relationship:
+            overrides[user.id] ??
+            (friends.some((friend) => friend.id === user.id) ? 'friend' : 'none'),
+        }));
+      return Promise.resolve({ ok: true, json: async () => ({ items }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('searches own groups first and falls back to non-restricted groups', () => {
-    expect(searchGroups('Киновечера', groups).map((group) => group.id)).toEqual(['g1']);
-    expect(searchGroups('Документ', groups).map((group) => group.id)).toEqual(['g3']);
+    expect(searchGroups('Киновечера', groups).map((group) => group.id)).toEqual([1]);
+    expect(searchGroups('Документ', groups).map((group) => group.id)).toEqual([3]);
     expect(searchGroups('Закрытый', groups)).toEqual([]);
   });
 
   it('matches groups by tag, falling back to non-restricted groups', () => {
-    expect(searchGroups('ретро', groups).map((group) => group.id)).toEqual(['g2']);
-    expect(searchGroups('биография', groups).map((group) => group.id)).toEqual(['g3']);
+    expect(searchGroups('ретро', groups).map((group) => group.id)).toEqual([2]);
+    expect(searchGroups('биография', groups).map((group) => group.id)).toEqual([3]);
   });
 
   it('shows scoped friends in the UI and never leaks hidden profiles', async () => {
+    stubUserSearch();
     render(<FriendsView initialRequests={friendRequests} initialFriends={friends} />);
     const searchRegion = screen.getByRole('region', { name: 'Поиск людей' });
     const box = within(searchRegion).getByRole('searchbox', { name: 'Поиск людей' });
 
     await userEvent.type(box, 'Мария');
-    expect(within(searchRegion).getByRole('link', { name: /Мария/ })).toBeInTheDocument();
+    expect(await within(searchRegion).findByRole('link', { name: /Мария/ })).toBeInTheDocument();
+    expect(
+      within(searchRegion).queryByRole('button', { name: /Добавить/ }),
+    ).not.toBeInTheDocument();
 
     await userEvent.clear(box);
     await userEvent.type(box, 'Нина');
-    expect(within(searchRegion).getByRole('link', { name: /Нина/ })).toBeInTheDocument();
+    expect(
+      await within(searchRegion).findByRole('button', { name: 'Добавить Нина' }),
+    ).toBeInTheDocument();
 
     await userEvent.clear(box);
     await userEvent.type(box, 'Скрытый');
+    expect(await within(searchRegion).findByText('Никого не найдено')).toBeInTheDocument();
     expect(within(searchRegion).queryByRole('link', { name: /Скрытый/ })).not.toBeInTheDocument();
-    expect(within(searchRegion).getByText('Никого не найдено')).toBeInTheDocument();
+  });
+
+  it('sends a request from search and reflects the pending status', async () => {
+    const fetchMock = stubUserSearch();
+    render(<FriendsView initialRequests={[]} initialFriends={friends} />);
+    const searchRegion = screen.getByRole('region', { name: 'Поиск людей' });
+    const box = within(searchRegion).getByRole('searchbox', { name: 'Поиск людей' });
+
+    await userEvent.type(box, 'Нина');
+    await userEvent.click(await within(searchRegion).findByRole('button', { name: 'Добавить Нина' }));
+
+    expect(await within(searchRegion).findByText('Заявка отправлена')).toBeInTheDocument();
+    expect(
+      within(searchRegion).queryByRole('button', { name: 'Добавить Нина' }),
+    ).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/friendships',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const call = fetchMock.mock.calls.find(([url]) => url === '/api/friendships');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ addresseeId: 5 });
+  });
+
+  it('marks pending results without an add action', async () => {
+    stubUserSearch({ 5: 'pending_out' });
+    render(<FriendsView initialRequests={[]} initialFriends={friends} />);
+    const searchRegion = screen.getByRole('region', { name: 'Поиск людей' });
+    const box = within(searchRegion).getByRole('searchbox', { name: 'Поиск людей' });
+
+    await userEvent.type(box, 'Нина');
+
+    expect(await within(searchRegion).findByText('Заявка отправлена')).toBeInTheDocument();
+    expect(
+      within(searchRegion).queryByRole('button', { name: /Добавить/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders outgoing requests and withdraws one optimistically', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({ id: 1 }) }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <FriendsView
+        initialRequests={[]}
+        initialOutgoing={outgoingRequests}
+        initialFriends={friends}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Исходящие заявки' });
+    expect(within(section).getByRole('link', { name: /Нина/ })).toBeInTheDocument();
+
+    await userEvent.click(
+      within(section).getByRole('button', { name: 'Отменить заявку для Нина' }),
+    );
+
+    expect(within(section).queryByRole('link', { name: /Нина/ })).not.toBeInTheDocument();
+    expect(within(section).getByText('Исходящих заявок нет')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/friendships/1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
   });
 
   it('shows scoped groups in the UI with fallback and hides restricted groups', async () => {
@@ -466,7 +630,7 @@ describe('Scoped search in Friends and Groups', () => {
     const card = screen.getAllByTestId('group-card')[0]!;
     expect(within(card).getByRole('link', { name: /Киновечера/ })).toHaveAttribute(
       'href',
-      '/groups/g1',
+      '/groups/1',
     );
     expect(within(card).getByText('пятница')).toBeInTheDocument();
     expect(within(card).queryByText('Фильмов')).not.toBeInTheDocument();

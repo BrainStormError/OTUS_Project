@@ -95,8 +95,6 @@ export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[]
     );
   }
 
-  const visible = events.slice(0, size);
-
   function showNew() {
     if (listRef.current) {
       listRef.current.scrollTop = 0;
@@ -142,8 +140,12 @@ export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[]
         aria-live="polite"
         className="divide-y divide-border overflow-y-auto rounded-lg border border-border"
       >
-        {visible.map((event) => (
-          <li key={event.id} className="flex items-center justify-between gap-3 px-4 py-3">
+        {events.map((event) => (
+          <li
+            key={event.id}
+            style={{ height: `${ROW_HEIGHT_REM}rem` }}
+            className="flex items-center justify-between gap-3 px-4"
+          >
             <Link
               href={event.href}
               className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

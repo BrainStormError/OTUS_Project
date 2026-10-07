@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { toFriendRequest, toPublicUser } from '@/components/features/movie-tracker/adapters';
 import { FriendsView } from '@/components/features/movie-tracker/FriendsView';
 import { getActor } from '@/modules/auth/session';
-import { getFriends, getIncomingRequests } from '@/modules/friendships';
+import { getFriends, getIncomingRequests, getOutgoingRequests } from '@/modules/friendships';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +13,10 @@ export default async function FriendsPage() {
     redirect('/login');
   }
 
-  const [friends, requests] = await Promise.all([
+  const [friends, requests, outgoing] = await Promise.all([
     getFriends(actor),
     getIncomingRequests(actor),
+    getOutgoingRequests(actor),
   ]);
 
   return (
@@ -23,6 +24,7 @@ export default async function FriendsPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Друзья</h1>
       <FriendsView
         initialRequests={requests.ok ? requests.value.map(toFriendRequest) : []}
+        initialOutgoing={outgoing.ok ? outgoing.value.map(toFriendRequest) : []}
         initialFriends={friends.ok ? friends.value.map(toPublicUser) : []}
       />
     </div>

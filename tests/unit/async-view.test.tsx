@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { AsyncView } from '@/components/features/AsyncView';
-import { DirectoryList } from '@/components/features/directory/DirectoryList';
 
 describe('AsyncView', () => {
   it('renders the loading state', () => {
@@ -36,29 +35,3 @@ describe('AsyncView', () => {
   });
 });
 
-describe('DirectoryList', () => {
-  it('renders entries on success', () => {
-    render(
-      <DirectoryList
-        state={{
-          status: 'success',
-          data: [
-            {
-              id: '1',
-              name: 'Запись',
-              description: null,
-              ownerId: 'o1',
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        }}
-      />,
-    );
-    expect(screen.getByText('Запись')).toBeInTheDocument();
-  });
-
-  it('renders the empty state', () => {
-    render(<DirectoryList state={{ status: 'empty' }} />);
-    expect(screen.getByTestId('async-empty')).toHaveTextContent('Справочник пуст');
-  });
-});

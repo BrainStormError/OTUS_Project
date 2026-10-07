@@ -1,6 +1,6 @@
 import type { ActivityCursor } from './types';
 
-export function encodeCursor(createdAt: string, id: string): string {
+export function encodeCursor(createdAt: string, id: number | string): string {
   return Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url');
 }
 
@@ -12,8 +12,9 @@ export function decodeCursor(cursor: string): ActivityCursor | null {
       return null;
     }
     const createdAt = decoded.slice(0, separator);
-    const id = decoded.slice(separator + 1);
-    if (createdAt.length === 0 || id.length === 0) {
+    const rawId = decoded.slice(separator + 1);
+    const id = Number(rawId);
+    if (createdAt.length === 0 || rawId.length === 0 || !Number.isInteger(id)) {
       return null;
     }
     return { createdAt, id };

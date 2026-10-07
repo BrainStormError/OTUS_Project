@@ -25,6 +25,11 @@ export function Modal({
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) {
@@ -37,13 +42,17 @@ export function Modal({
       return node ? Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)) : [];
     }
 
-    const first = focusables()[0];
-    (first ?? node)?.focus();
+    // Focus the first meaningful control so typing does not land on the close
+    // button; fall back to the dialog when there is no form field.
+    const firstField = node?.querySelector<HTMLElement>(
+      'input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
+    );
+    (firstField ?? node)?.focus();
 
     function handleKeydown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') {
@@ -73,7 +82,7 @@ export function Modal({
       document.removeEventListener('keydown', handleKeydown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) {
     return null;

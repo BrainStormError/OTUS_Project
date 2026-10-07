@@ -2,7 +2,7 @@
 
 import { Modal } from '@/components/ui/modal';
 
-import { SeriesForm } from './SeriesForm';
+import { RatingForm } from './RatingForm';
 import type { Series, SeriesRecord } from './types';
 
 export function SeriesModal({
@@ -23,11 +23,22 @@ export function SeriesModal({
       title={series ? `Оценка «${series.title}»` : 'Сериал'}
     >
       {series ? (
-        <SeriesForm
+        <RatingForm
           key={record?.id ?? series.id}
-          series={series}
-          record={record}
-          onSubmit={onSubmit}
+          initialRating={record?.seriesRating}
+          initialComment={record?.seriesComment}
+          initialDate={record?.watchedAt ?? new Date().toISOString().slice(0, 10)}
+          submitLabel={record ? 'Сохранить' : 'Добавить'}
+          onSubmit={(payload) =>
+            onSubmit({
+              id: record?.id ?? `s-${series.id}`,
+              series,
+              mode: 'whole',
+              seriesRating: payload.rating,
+              seriesComment: payload.comment,
+              watchedAt: payload.watchedAt,
+            })
+          }
           onCancel={onClose}
         />
       ) : null}

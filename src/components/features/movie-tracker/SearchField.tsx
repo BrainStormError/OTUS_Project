@@ -19,6 +19,8 @@ export function SearchField({
   onSearch,
   onReset,
   className,
+  hiddenFilters,
+  ariaLabel = 'Поиск фильмов',
 }: {
   movies: Movie[];
   filters: SearchFilters;
@@ -26,6 +28,8 @@ export function SearchField({
   onSearch?: (filters: SearchFilters) => void;
   onReset?: () => void;
   className?: string;
+  hiddenFilters?: readonly MultiFilterKey[];
+  ariaLabel?: string;
 }) {
   const genres = useMemo(
     () =>
@@ -53,12 +57,15 @@ export function SearchField({
     [movies],
   );
 
-  const multiFilters: { key: MultiFilterKey; label: string; options: string[] }[] = [
+  const allFilters: { key: MultiFilterKey; label: string; options: string[] }[] = [
     { key: 'genre', label: 'Жанр', options: genres },
     { key: 'actor', label: 'Актёр', options: actors },
     { key: 'director', label: 'Режиссёр', options: directors },
     { key: 'year', label: 'Год', options: years.map(String) },
   ];
+  const multiFilters = hiddenFilters
+    ? allFilters.filter((filter) => !hiddenFilters.includes(filter.key))
+    : allFilters;
 
   function setTitle(value: string) {
     onFiltersChange({ ...filters, title: value || undefined });
@@ -93,7 +100,7 @@ export function SearchField({
   return (
     <section
       className={cn('space-y-3 rounded-lg border border-border bg-card p-4', className)}
-      aria-label="Поиск фильмов"
+      aria-label={ariaLabel}
     >
       <div className="flex min-h-11 items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Поиск</h2>

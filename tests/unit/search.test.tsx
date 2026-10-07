@@ -12,7 +12,7 @@ const movies = listMovies();
 
 const feedEvents: FeedEvent[] = [
   {
-    id: 'e1',
+    id: 1,
     cursor: 'c1',
     source: 'friend',
     sourceName: 'Мария',
@@ -24,7 +24,7 @@ const feedEvents: FeedEvent[] = [
     action: 'оценил(а)',
   },
   {
-    id: 'e2',
+    id: 2,
     cursor: 'c2',
     source: 'group',
     sourceName: 'Киновечера',
@@ -32,7 +32,7 @@ const feedEvents: FeedEvent[] = [
     title: 'Во все тяжкие',
     rating: 9,
     watchedAt: '2026-08-24',
-    href: '/groups/g1',
+    href: '/groups/1',
     action: 'оценил(а) в группе',
   },
 ];

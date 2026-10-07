@@ -33,7 +33,7 @@ class FakeEventSource {
   }
 }
 
-function event(id: string, title: string): FeedEvent {
+function event(id: number, title: string): FeedEvent {
   return {
     id,
     cursor: `cursor-${id}`,
@@ -68,12 +68,12 @@ afterEach(() => {
 
 describe('SocialFeed live updates', () => {
   it('prepends an event that arrives after subscription and shows the indicator', async () => {
-    render(<SocialFeed initialEvents={[event('1', 'Начало')]} />);
+    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
     const source = FakeEventSource.instances[0]!;
     expect(source.url).toBe('/api/feed/stream');
 
     act(() => {
-      source.emit('activity', event('2', 'Матрица'));
+      source.emit('activity', event(2, 'Матрица'));
     });
 
     expect(await screen.findByText('Матрица')).toBeInTheDocument();
@@ -83,11 +83,11 @@ describe('SocialFeed live updates', () => {
   it('falls back to re-fetching the feed when the stream errors', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ items: [event('9', 'Форрест Гамп')] }),
+      json: async () => ({ items: [event(9, 'Форрест Гамп')] }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SocialFeed initialEvents={[event('1', 'Начало')]} />);
+    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
     const source = FakeEventSource.instances[0]!;
 
     act(() => {
@@ -100,20 +100,40 @@ describe('SocialFeed live updates', () => {
 });
 
 describe('SocialFeed size control', () => {
-  it('shows five entries by default and grows the container to twenty-five', async () => {
+  it('renders every loaded event in a scrollable viewport sized by the selector', async () => {
     const events = Array.from({ length: 30 }, (_, index) =>
-      event(String(index), `Фильм ${index}`),
+      event(index, `Фильм ${index}`),
     );
     render(<SocialFeed initialEvents={events} />);
 
     const list = screen.getByTestId('social-feed');
     expect(list).toHaveAttribute('data-size', '5');
-    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    expect(list.className).toContain('overflow-y-auto');
+    expect(list.style.maxHeight).toBe('22.5rem');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(30);
 
     await userEvent.click(screen.getByRole('button', { name: '25' }));
 
     const grown = screen.getByTestId('social-feed');
     expect(grown).toHaveAttribute('data-size', '25');
-    expect(within(grown).getAllByRole('listitem')).toHaveLength(25);
+    expect(grown.style.maxHeight).toBe('112.5rem');
+    expect(within(grown).getAllByRole('listitem')).toHaveLength(30);
+  });
+
+  it('scrolls back to the newest entry when the pending indicator is used', async () => {
+    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
+    const source = FakeEventSource.instances[0]!;
+
+    act(() => {
+      source.emit('activity', event(2, 'Матрица'));
+    });
+
+    const list = screen.getByTestId('social-feed');
+    list.scrollTop = 120;
+
+    await userEvent.click(screen.getByRole('button', { name: /Новые записи/ }));
+
+    expect(list.scrollTop).toBe(0);
+    expect(screen.queryByRole('button', { name: /Новые записи/ })).not.toBeInTheDocument();
   });
 });

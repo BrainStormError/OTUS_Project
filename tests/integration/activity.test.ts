@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { Client } from 'pg';
@@ -32,12 +32,20 @@ async function makeUser(handle: string, profileHidden = false): Promise<Actor> {
   return { id: row.id, role: 'employee' };
 }
 
-async function countEvents(actorId: string): Promise<number> {
-  const rows = await query<{ count: string }>(
-    'SELECT count(*)::text AS count FROM activity_events WHERE actor_id = $1',
+async function countEvents(actorId: number): Promise<number> {
+  const rows = await query<{ count: number }>(
+    'SELECT count(*)::int AS count FROM activity_events WHERE actor_id = $1',
     [actorId],
   );
-  return Number(rows[0]?.count ?? '0');
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function makeMedia(externalRef: string): Promise<number> {
+  const rows = await query<{ id: number }>(
+    `INSERT INTO media (kind, external_ref, title) VALUES (0, $1, $2) RETURNING id`,
+    [externalRef, `media-${externalRef}`],
+  );
+  return rows[0]!.id;
 }
 
 afterAll(async () => {
@@ -60,10 +68,7 @@ describe('activity events migration and notification', () => {
     const event = await withTransaction((tx) =>
       recordEvent(tx, {
         actorId: actor.id,
-        kind: 'film_rated',
-        targetType: 'film',
-        targetId: '27205',
-        payload: { title: 'Начало', rating: 9 },
+        kind: 'friendship_accepted',
       }),
     );
 
@@ -73,7 +78,7 @@ describe('activity events migration and notification', () => {
         setTimeout(() => reject(new Error('notification timeout')), 5_000),
       ),
     ]);
-    expect(payload).toBe(event.id);
+    expect(Number(payload)).toBe(event.id);
 
     await listener.end();
   });
@@ -84,10 +89,7 @@ describe('activity events migration and notification', () => {
       withTransaction(async (tx) => {
         await recordEvent(tx, {
           actorId: actor.id,
-          kind: 'film_rated',
-          targetType: 'film',
-          targetId: '603',
-          payload: { title: 'Матрица', rating: 8 },
+          kind: 'friendship_accepted',
         });
         throw new Error('boom');
       }),
@@ -105,15 +107,15 @@ describe('activity feed visibility and pagination', () => {
     const hidden = await makeUser(`hidden-${randomUUID().slice(0, 8)}`, true);
 
     await query(
-      `INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'accepted')`,
+      `INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 1)`,
       [viewer.id, friend.id],
     );
 
-    const openGroup = await query<{ id: string }>(
+    const openGroup = await query<{ id: number }>(
       `INSERT INTO groups (name) VALUES ($1) RETURNING id`,
       [`open-${randomUUID().slice(0, 8)}`],
     );
-    const restrictedGroup = await query<{ id: string }>(
+    const restrictedGroup = await query<{ id: number }>(
       `INSERT INTO groups (name, restricted) VALUES ($1, true) RETURNING id`,
       [`closed-${randomUUID().slice(0, 8)}`],
     );
@@ -122,27 +124,22 @@ describe('activity feed visibility and pagination', () => {
       viewer.id,
     ]);
 
-    const event = (actorId: string, title: string) =>
+    const event = (actorId: number) =>
       withTransaction((tx) =>
         recordEvent(tx, {
           actorId,
-          kind: 'film_rated',
-          targetType: 'film',
-          targetId: '1',
-          payload: { title, rating: 5 },
+          kind: 'friendship_accepted',
         }),
       );
 
-    const friendEvent = await event(friend.id, 'friend-event');
-    const strangerEvent = await event(stranger.id, 'stranger-event');
-    const hiddenEvent = await event(hidden.id, 'hidden-event');
+    const friendEvent = await event(friend.id);
+    const strangerEvent = await event(stranger.id);
+    const hiddenEvent = await event(hidden.id);
     const groupEvent = await withTransaction((tx) =>
       recordEvent(tx, {
         actorId: friend.id,
         kind: 'group_joined',
         groupId: openGroup[0]!.id,
-        targetType: 'group',
-        targetId: openGroup[0]!.id,
       }),
     );
     const restrictedEvent = await withTransaction((tx) =>
@@ -150,11 +147,9 @@ describe('activity feed visibility and pagination', () => {
         actorId: stranger.id,
         kind: 'group_joined',
         groupId: restrictedGroup[0]!.id,
-        targetType: 'group',
-        targetId: restrictedGroup[0]!.id,
       }),
     );
-    const ownEvent = await event(viewer.id, 'own-event');
+    const ownEvent = await event(viewer.id);
 
     const result = await listFeed({ id: viewer.id, role: 'employee' }, { limit: 50 });
     expect(result.ok).toBe(true);
@@ -168,17 +163,36 @@ describe('activity feed visibility and pagination', () => {
     expect(ids).not.toContain(restrictedEvent.id);
   });
 
+  it('derives the rating value and title by joining the stored rating and media', async () => {
+    const viewer = await makeUser(`derive-${randomUUID().slice(0, 8)}`);
+    const ref = `derive-${randomUUID().slice(0, 8)}`;
+    const mediaId = await makeMedia(ref);
+    await query(
+      `INSERT INTO ratings (user_id, media_id, group_id, rating) VALUES ($1, $2, NULL, 85)`,
+      [viewer.id, mediaId],
+    );
+    await withTransaction((tx) =>
+      recordEvent(tx, { actorId: viewer.id, kind: 'film_rated', mediaId }),
+    );
+
+    const result = await listFeed({ id: viewer.id, role: 'employee' }, { limit: 10 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const item = result.value.items[0];
+    expect(item?.rating).toBe(8.5);
+    expect(item?.title).toBe(`media-${ref}`);
+    expect(item?.href).toBe(`/film/${ref}`);
+    expect(item?.mediaId).toBe(mediaId);
+  });
+
   it('pages without repeating entries and orders newest first', async () => {
     const viewer = await makeUser(`pager-${randomUUID().slice(0, 8)}`);
-    const created: string[] = [];
+    const created: number[] = [];
     for (let index = 0; index < 4; index += 1) {
       const event = await withTransaction((tx) =>
         recordEvent(tx, {
           actorId: viewer.id,
-          kind: 'film_rated',
-          targetType: 'film',
-          targetId: String(index),
-          payload: { title: `paged-${index}`, rating: 5 },
+          kind: 'friendship_accepted',
         }),
       );
       created.push(event.id);
@@ -207,7 +221,7 @@ describe('activity feed visibility and pagination', () => {
 });
 
 describe('real write paths', () => {
-  it('writes a watched record and its event in one transaction', async () => {
+  it('writes a personal rating and its event in one transaction', async () => {
     const actor = await makeUser(`rater-${randomUUID().slice(0, 8)}`);
     const result = await saveWatchedRecord(actor, {
       mediaKind: 'film',
@@ -221,16 +235,16 @@ describe('real write paths', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const records = await query<{ count: string }>(
-      'SELECT count(*)::text AS count FROM watched_records WHERE user_id = $1',
+    const ratings = await query<{ count: number }>(
+      'SELECT count(*)::int AS count FROM ratings WHERE user_id = $1 AND group_id IS NULL',
       [actor.id],
     );
-    expect(Number(records[0]?.count)).toBe(1);
+    expect(Number(ratings[0]?.count)).toBe(1);
     expect(await countEvents(actor.id)).toBe(1);
   });
 
-  it('records no event when the record write fails', async () => {
-    const missingActor: Actor = { id: randomUUID(), role: 'employee' };
+  it('records no event when the rating write fails', async () => {
+    const missingActor: Actor = { id: 9_999_999_999, role: 'employee' };
     await expect(
       saveWatchedRecord(missingActor, {
         mediaKind: 'film',
@@ -246,30 +260,30 @@ describe('real write paths', () => {
   it('accepts a friendship and records the acceptance event', async () => {
     const requester = await makeUser(`req-${randomUUID().slice(0, 8)}`);
     const addressee = await makeUser(`addr-${randomUUID().slice(0, 8)}`);
-    const rows = await query<{ id: string }>(
+    const rows = await query<{ id: number }>(
       `INSERT INTO friendships (requester_id, addressee_id, status)
-       VALUES ($1, $2, 'pending') RETURNING id`,
+       VALUES ($1, $2, 0) RETURNING id`,
       [requester.id, addressee.id],
     );
 
     const result = await acceptFriendship(addressee, { friendshipId: rows[0]!.id });
     expect(result.ok).toBe(true);
 
-    const status = await query<{ status: string }>(
+    const status = await query<{ status: number }>(
       'SELECT status FROM friendships WHERE id = $1',
       [rows[0]!.id],
     );
-    expect(status[0]?.status).toBe('accepted');
+    expect(status[0]?.status).toBe(1);
     expect(await countEvents(addressee.id)).toBe(1);
   });
 
   it('joins an open group and refuses a restricted one', async () => {
     const actor = await makeUser(`joiner-${randomUUID().slice(0, 8)}`);
-    const open = await query<{ id: string }>(
+    const open = await query<{ id: number }>(
       `INSERT INTO groups (name) VALUES ($1) RETURNING id`,
       [`join-open-${randomUUID().slice(0, 8)}`],
     );
-    const closed = await query<{ id: string }>(
+    const closed = await query<{ id: number }>(
       `INSERT INTO groups (name, restricted) VALUES ($1, true) RETURNING id`,
       [`join-closed-${randomUUID().slice(0, 8)}`],
     );

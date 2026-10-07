@@ -10,7 +10,7 @@ export default async function GroupAdminPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const group = findGroup(id);
+  const group = findGroup(Number(id));
   if (!group) {
     notFound();
   }

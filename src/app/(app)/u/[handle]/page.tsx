@@ -1,7 +1,11 @@
 import { notFound } from 'next/navigation';
 
+import { toPublicUserFromProfile } from '@/components/features/movie-tracker/adapters';
 import { ProfileView } from '@/components/features/movie-tracker/ProfileView';
-import { findUser } from '@/components/features/movie-tracker/data';
+import { getActor } from '@/modules/auth/session';
+import { getProfileByHandle } from '@/modules/profiles';
+
+export const dynamic = 'force-dynamic';
 
 export default async function UserProfilePage({
   params,
@@ -9,10 +13,11 @@ export default async function UserProfilePage({
   params: Promise<{ handle: string }>;
 }) {
   const { handle } = await params;
-  const user = findUser(handle);
-  if (!user) {
+  const viewer = await getActor();
+  const result = await getProfileByHandle(viewer, handle);
+  if (!result.ok) {
     notFound();
   }
 
-  return <ProfileView user={user} isOwn={handle === 'me'} />;
+  return <ProfileView user={toPublicUserFromProfile(result.value)} isOwn={result.value.isOwn} />;
 }

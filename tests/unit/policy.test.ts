@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { can, type Actor } from '@/core/auth/policy';
 
-const admin: Actor = { id: 'admin-1', role: 'admin' };
-const employee: Actor = { id: 'emp-1', role: 'employee' };
+const admin: Actor = { id: 1, role: 'admin' };
+const employee: Actor = { id: 2, role: 'employee' };
 
 describe('can', () => {
   it('allows only administrators to view admin and change donations', () => {
@@ -14,10 +14,17 @@ describe('can', () => {
   });
 
   it('allows thread reads for admins and the thread owner only', () => {
-    expect(can(admin, 'thread:read', { ownerId: 'someone-else' })).toBe(true);
+    expect(can(admin, 'thread:read', { ownerId: 99 })).toBe(true);
     expect(can(employee, 'thread:read', { ownerId: employee.id })).toBe(true);
-    expect(can(employee, 'thread:read', { ownerId: 'other' })).toBe(false);
+    expect(can(employee, 'thread:read', { ownerId: 99 })).toBe(false);
     expect(can(employee, 'thread:read')).toBe(false);
+  });
+
+  it('allows any authenticated actor to send and withdraw friend requests', () => {
+    expect(can(admin, 'friend:request')).toBe(true);
+    expect(can(employee, 'friend:request')).toBe(true);
+    expect(can(admin, 'friend:withdraw')).toBe(true);
+    expect(can(employee, 'friend:withdraw')).toBe(true);
   });
 
   it('allows any actor to create a wish', () => {
@@ -26,21 +33,30 @@ describe('can', () => {
   });
 
   it('allows wish edits for admins and the author only', () => {
-    expect(can(admin, 'wish:edit', { authorId: 'other' })).toBe(true);
+    expect(can(admin, 'wish:edit', { authorId: 99 })).toBe(true);
     expect(can(employee, 'wish:edit', { authorId: employee.id })).toBe(true);
-    expect(can(employee, 'wish:edit', { authorId: 'other' })).toBe(false);
+    expect(can(employee, 'wish:edit', { authorId: 99 })).toBe(false);
     expect(can(employee, 'wish:edit')).toBe(false);
   });
 
-  it('allows only administrators to create directory entries', () => {
-    expect(can(admin, 'directory:create')).toBe(true);
-    expect(can(employee, 'directory:create')).toBe(false);
+  it('restricts discussion creation and attachment to group admins', () => {
+    expect(can(employee, 'group:discuss:create', { groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:discuss:create', { groupRole: 'member' })).toBe(false);
+    expect(can(employee, 'group:discuss:create', { groupRole: null })).toBe(false);
+    expect(can(employee, 'group:discuss:create')).toBe(false);
+
+    expect(can(employee, 'group:discuss:attach', { groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:discuss:attach', { groupRole: 'member' })).toBe(false);
   });
 
-  it('allows directory edits for admins and the owner only', () => {
-    expect(can(admin, 'directory:edit', { ownerId: 'other' })).toBe(true);
-    expect(can(employee, 'directory:edit', { ownerId: employee.id })).toBe(true);
-    expect(can(employee, 'directory:edit', { ownerId: 'other' })).toBe(false);
-    expect(can(employee, 'directory:edit')).toBe(false);
+  it('allows group members and admins to discuss and rate', () => {
+    expect(can(employee, 'group:discuss', { groupRole: 'member' })).toBe(true);
+    expect(can(employee, 'group:discuss', { groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:discuss', { groupRole: null })).toBe(false);
+    expect(can(employee, 'group:discuss')).toBe(false);
+
+    expect(can(employee, 'group:rate', { groupRole: 'member' })).toBe(true);
+    expect(can(employee, 'group:rate', { groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:rate', { groupRole: null })).toBe(false);
   });
 });

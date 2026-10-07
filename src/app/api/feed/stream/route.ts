@@ -35,7 +35,9 @@ export async function GET(request: Request): Promise<Response> {
       };
 
       unsubscribe = await subscribeToActivity((eventId) => {
-        void getVisibleEvent(actor.id, eventId).then(sendItem);
+        const parsedId = Number(eventId);
+        if (!Number.isInteger(parsedId)) return;
+        void getVisibleEvent(actor.id, parsedId).then(sendItem);
       });
 
       send(': connected\n\n');

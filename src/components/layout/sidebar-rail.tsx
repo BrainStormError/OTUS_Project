@@ -21,7 +21,7 @@ export function SidebarRail() {
       <div
         className={cn(
           'flex h-14 items-center border-b border-border',
-          collapsed ? 'justify-center' : 'justify-end px-4',
+          collapsed ? 'justify-center' : 'justify-start px-3',
         )}
       >
         <Button

@@ -17,11 +17,11 @@ export function GroupsView({
 }: {
   groups: Group[];
   discoverGroups?: Group[];
-  currentUserId?: string;
+  currentUserId?: number;
 }) {
   const [query, setQuery] = useState('');
   const results = searchGroups(query, groups, discoverGroups);
-  const [joined, setJoined] = useState<string[]>([]);
+  const [joined, setJoined] = useState<number[]>([]);
 
   function isMember(group: Group): boolean {
     if (joined.includes(group.id)) return true;

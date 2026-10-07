@@ -10,13 +10,12 @@ import { MovieCard } from './MovieCard';
 import { movieMatches } from './data';
 import { RecordModal } from './RecordModal';
 import type { RatingPayload } from './RatingForm';
-import { mergeWithSample, useWatchedRecords } from './record-store';
-import { reportRating } from './report-rating';
+import { useWatchedRecords } from './record-store';
 import { SearchField } from './SearchField';
 import { seriesToMovie } from './series';
 import type { FeedEvent } from './feed';
 import { SocialFeed } from './SocialFeed';
-import type { Movie, SearchFilters, Series } from './types';
+import type { Movie, SearchFilters, Series, WatchedRecord } from './types';
 
 type MediaResult =
   | { kind: 'film'; key: string; movie: Movie }
@@ -50,16 +49,17 @@ export function HomeView({
   movies,
   series = [],
   initialFeed = [],
+  initialRecords = [],
 }: {
   movies: Movie[];
   series?: Series[];
   initialFeed?: FeedEvent[];
+  initialRecords?: WatchedRecord[];
 }) {
-  const { records, removed, upsert } = useWatchedRecords();
-  const merged = useMemo(() => mergeWithSample(records, removed), [records, removed]);
+  const { records, upsert } = useWatchedRecords(initialRecords);
   const watchedIds = useMemo(
-    () => new Set(merged.map((record) => record.movie.tmdbId)),
-    [merged],
+    () => new Set(records.map((record) => record.movie.tmdbId)),
+    [records],
   );
 
   const [filters, setFilters] = useState<SearchFilters>({});
@@ -81,19 +81,18 @@ export function HomeView({
 
   const [activeMovie, setActiveMovie] = useState<Movie | null>(null);
   const activeRecord = activeMovie
-    ? merged.find((record) => record.movie.tmdbId === activeMovie.tmdbId) ?? null
+    ? records.find((record) => record.movie.tmdbId === activeMovie.tmdbId) ?? null
     : null;
 
   function saveRecord(movie: Movie, payload: RatingPayload) {
-    const existing = merged.find((record) => record.movie.tmdbId === movie.tmdbId);
+    const existing = records.find((record) => record.movie.tmdbId === movie.tmdbId);
     upsert({
-      id: existing?.id ?? `w-${movie.tmdbId}`,
+      id: existing?.id ?? movie.tmdbId,
       movie,
       rating: payload.rating,
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
-    reportRating(movie, payload);
     setActiveMovie(null);
   }
 

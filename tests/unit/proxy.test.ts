@@ -12,7 +12,7 @@ describe('proxy CSP', () => {
   });
 
   it('sets the nonce and CSP headers on the response', () => {
-    const request = new NextRequest('http://localhost/directory');
+    const request = new NextRequest('http://localhost/films');
     const response = proxy(request);
     const nonce = response.headers.get('x-nonce');
     expect(nonce).toBeTruthy();

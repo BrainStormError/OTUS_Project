@@ -14,3 +14,15 @@ export const registerInput = z.object({
 });
 
 export type RegisterInput = z.infer<typeof registerInput>;
+
+export const privacyInput = z
+  .object({
+    profileHidden: z.boolean().optional(),
+    statsHidden: z.boolean().optional(),
+  })
+  .refine(
+    (value) => value.profileHidden !== undefined || value.statsHidden !== undefined,
+    { message: 'At least one privacy field is required' },
+  );
+
+export type PrivacyInput = z.infer<typeof privacyInput>;

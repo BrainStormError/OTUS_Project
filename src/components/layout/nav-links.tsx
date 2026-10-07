@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Film,
+  Heart,
   Home,
   Settings,
   Tv,
   UserRound,
-  Users,
   UsersRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ const ICONS: Record<SectionKey, LucideIcon> = {
   home: Home,
   films: Film,
   series: Tv,
-  friends: Users,
+  friends: Heart,
   groups: UsersRound,
   me: UserRound,
   settings: Settings,

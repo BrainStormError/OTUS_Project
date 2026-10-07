@@ -13,8 +13,8 @@ export function FriendRequestItem({
   onDecline,
 }: {
   user: Pick<PublicUser, 'id' | 'name' | 'handle'>;
-  onAccept?: (id: string) => void;
-  onDecline?: (id: string) => void;
+  onAccept?: (id: number) => void;
+  onDecline?: (id: number) => void;
 }) {
   return (
     <FriendListItem

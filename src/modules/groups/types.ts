@@ -1,12 +1,12 @@
 export type GroupMemberSummary = {
-  id: string;
+  id: number;
   name: string;
   handle: string;
   role: 'admin' | 'member';
 };
 
 export type GroupSummary = {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
   tags: string[];

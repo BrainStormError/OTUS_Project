@@ -6,24 +6,13 @@ export type ActivityKind =
   | 'post_created'
   | 'comment_created';
 
-export type ActivityTargetType = 'film' | 'series' | 'user' | 'group';
-
-export type ActivityPayload = {
-  title?: string;
-  rating?: number;
-  year?: number;
-  href?: string;
-  [key: string]: unknown;
-};
-
 export type ActivityEvent = {
-  id: string;
-  actorId: string;
+  id: number;
+  actorId: number;
   kind: ActivityKind;
-  groupId: string | null;
-  targetType: string;
-  targetId: string;
-  payload: ActivityPayload;
+  groupId: number | null;
+  mediaId: number | null;
+  discussionId: number | null;
   createdAt: string;
 };
 
@@ -31,11 +20,14 @@ export type FeedItem = ActivityEvent & {
   actorName: string | null;
   actorHandle: string | null;
   groupName: string | null;
+  title: string | null;
+  rating: number | null;
+  href: string | null;
 };
 
 export type ActivityCursor = {
   createdAt: string;
-  id: string;
+  id: number;
 };
 
 export type ListFeedResult = {
@@ -44,10 +36,9 @@ export type ListFeedResult = {
 };
 
 export type NewActivityEvent = {
-  actorId: string;
+  actorId: number;
   kind: ActivityKind;
-  targetType: ActivityTargetType;
-  targetId: string;
-  groupId?: string | null;
-  payload?: ActivityPayload;
+  groupId?: number | null;
+  mediaId?: number | null;
+  discussionId?: number | null;
 };

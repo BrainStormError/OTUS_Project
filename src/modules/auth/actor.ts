@@ -3,7 +3,7 @@ import type { Actor } from '@/core/auth/policy';
 import { findUserById } from './repository';
 
 export async function resolveActor(
-  userId: string | null | undefined,
+  userId: number | null | undefined,
 ): Promise<Actor | null> {
   if (!userId) {
     return null;
@@ -12,5 +12,11 @@ export async function resolveActor(
   if (!user) {
     return null;
   }
-  return { id: user.id, role: user.role, email: user.email };
+  return {
+    id: user.id,
+    role: user.role,
+    email: user.email,
+    name: user.name,
+    handle: user.handle,
+  };
 }
