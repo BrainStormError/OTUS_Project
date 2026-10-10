@@ -40,10 +40,12 @@ rollback() {
   if [ "$DRY_RUN" = "1" ]; then
     echo "[dry-run] docker tag ${PREV_IMAGE} ${APP_IMAGE}"
     echo "[dry-run] docker compose -f ${COMPOSE_FILE} up -d --no-build app"
+    echo "[dry-run] docker image prune -f"
     return 0
   fi
   docker tag "$PREV_IMAGE" "$APP_IMAGE" || true
   docker compose -f "$COMPOSE_FILE" up -d --no-build app || true
+  docker image prune -f || true
 }
 
 trap 'rollback' ERR
@@ -82,5 +84,8 @@ run docker run --rm --network "${COMPOSE_PROJECT}_default" \
 
 echo "== 5/5 up =="
 run docker compose -f "$COMPOSE_FILE" up -d --no-build
+
+# Drop dangling images left by the replaced build to bound host disk usage.
+run docker image prune -f
 
 echo "deploy complete"

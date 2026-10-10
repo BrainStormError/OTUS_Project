@@ -75,6 +75,8 @@ jobs:
           push: false
           tags: learn-watcher-platform-migrate:latest
           cache-from: type=gha
+      - name: Show image sizes
+        run: docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}'
       - name: Publish docker-compose.yml to host
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

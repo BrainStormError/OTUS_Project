@@ -29,7 +29,8 @@ EXPOSE 3000
 CMD ["node", "server.js"]
 ```
 
-Образ миграций (`--target migrator`) содержит `node-pg-migrate` и `scripts/migrate.cjs`.
+Образ миграций (`--target migrator`) содержит только `node-pg-migrate` и `scripts/migrate.cjs`
+(без полного `node_modules`), поэтому он занимает десятки МБ, а не гигабайты.
 
 ## docker-compose (фактический)
 
@@ -99,6 +100,8 @@ push/PR → checks: typecheck, lint, deps, verify:env, unit, integration, audit,
 
 - DuckDNS A-запись `learn-watcher-platform` → IP VPS; открыты порты 80/443; в Google OAuth
   добавлен redirect URI `https://learn-watcher-platform.duckdns.org/api/auth/callback/google`.
+- После успешного деплоя `scripts/deploy.sh` чистит dangling-образы (`docker image prune -f`),
+  чтобы ограниченный диск VPS не забивался старыми сборками.
 
 ## Конфигурация окружения
 
