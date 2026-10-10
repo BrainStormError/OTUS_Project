@@ -54,8 +54,9 @@ services:
 
 У проекта задан `name: learn-watcher-platform`, потому что имя каталога не ASCII; из него
 выводятся имена сети (`learn-watcher-platform_default`) и тома (`learn-watcher-platform_db_data`).
-Смена имени проекта создаёт **пустой том**, поэтому первый деплой обязан включать шаг миграций
-(`scripts/deploy.sh` выполняет `migrate` до `up`).
+Смена имени проекта создаёт **пустой том**, поэтому первый деплой обязан включать шаг миграций:
+`scripts/deploy.sh` сначала поднимает `db` (`docker compose up -d --wait db`, что также создаёт
+сеть `learn-watcher-platform_default`), затем выполняет `migrate`, затем `up`.
 
 ## CI/CD (`.github/workflows/ci-cd.yml`)
 
@@ -63,7 +64,7 @@ services:
 push/PR → checks: typecheck, lint, deps, verify:env, unit, integration, audit, build
        → (master) build: образы app + -migrate локально (load: true), без GHCR
        → (master) deliver: docker save app -migrate | gzip | ssh 'gunzip | docker load'
-       → (master) deploy: save previous → migrate → up, rollback on failure
+       → (master) deploy: save previous → db → migrate → up, rollback on failure
 ```
 
 Обязательные шаги:

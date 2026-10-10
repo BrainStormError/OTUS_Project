@@ -102,7 +102,7 @@ jobs:
               'gunzip | docker load'
 
   deploy:
-    name: Deploy (save previous -> migrate -> up, rollback on failure)
+    name: Deploy (db -> migrate -> up, rollback on failure)
     needs: build
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest

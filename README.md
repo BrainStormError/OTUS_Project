@@ -87,7 +87,7 @@ curl -fsS http://127.0.0.1:3000/api/health   # {"status":"ok"}
    (`docker save | gzip | ssh 'gunzip | docker load'`), без реестра/GHCR.
    Туда же доставляется `docker-compose.yml`.
 2. `deploy` job по SSH выполняет `scripts/deploy.sh` на хосте (из каталога `DEPLOY_DIR`):
-   **save previous → migrate → up** (образы уже загружены на хост).
+   **save previous → db → migrate → up** (образы уже загружены на хост).
 
 Каталог деплоя на VPS задаётся секретом `DEPLOY_DIR` (например `/opt/watcher-platform`);
 CI сам создаёт его и копирует туда `docker-compose.yml`. Хостовый `.env` кладётся в этот
