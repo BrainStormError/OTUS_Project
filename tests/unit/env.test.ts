@@ -10,6 +10,7 @@ const valid = {
   REGISTRATION_TICKET_SECRET: 'b'.repeat(32),
   OAUTH_CLIENT_ID: 'client-id',
   OAUTH_CLIENT_SECRET: 'client-secret',
+  TMDB_ACCESS_TOKEN: 'tmdb-access-token',
   DEMO_LOGIN: '0',
   LOG_LEVEL: 'info',
 };
@@ -28,5 +29,14 @@ describe('parseEnv', () => {
 
   it('throws and names a malformed variable', () => {
     expect(() => parseEnv({ ...valid, APP_ORIGIN: 'not-a-url' })).toThrowError(/APP_ORIGIN/);
+  });
+
+  it('throws and names TMDB_ACCESS_TOKEN when it is missing', () => {
+    const { TMDB_ACCESS_TOKEN: _omitted, ...withoutToken } = valid;
+    expect(() => parseEnv(withoutToken)).toThrowError(/TMDB_ACCESS_TOKEN/);
+  });
+
+  it('helps to parse TMDB_ACCESS_TOKEN when present', () => {
+    expect(parseEnv(valid).TMDB_ACCESS_TOKEN).toBe('tmdb-access-token');
   });
 });

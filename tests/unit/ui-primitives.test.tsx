@@ -10,13 +10,25 @@ import { MovieCard } from '@/components/features/movie-tracker/MovieCard';
 import { PrivacyToggle } from '@/components/features/movie-tracker/PrivacyToggle';
 import { RatingForm } from '@/components/features/movie-tracker/RatingForm';
 import { StatCard } from '@/components/features/movie-tracker/StatCard';
-import { groups } from '@/components/features/movie-tracker/data';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { SkeletonGrid } from '@/components/ui/skeleton';
+import type { Group } from '@/components/features/movie-tracker/types';
+
+const groups: Group[] = [
+  {
+    id: 1,
+    name: 'Киновечера',
+    description: 'Смотрим и обсуждаем по пятницам.',
+    tags: ['пятница'],
+    members: [{ id: 1, name: 'Алексей', handle: 'me', role: 'admin' }],
+    stats: { count: 0, genres: [], years: [] },
+  },
+];
 
 const movie = {
   tmdbId: 1,
+  kind: 'film' as const,
   title: 'Тестовый фильм',
   year: 2020,
   rating: 7.3,

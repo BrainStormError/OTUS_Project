@@ -1,82 +1,59 @@
 'use client';
 
-import { useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/components/ui/utils';
 
-import { FilterChips } from './FilterChips';
-import type { FilterKey, Movie, SearchFilters } from './types';
+import { FilterChips, type ChipBlock } from './FilterChips';
+import type { FilterKey, FilterOption, MediaKind, SearchFilters } from './types';
 
-type MultiFilterKey = 'genre' | 'actor' | 'director' | 'year';
+const KINDS: { value: MediaKind; label: string }[] = [
+  { value: 'film', label: 'Фильмы' },
+  { value: 'series', label: 'Сериалы' },
+];
+
+const selectClass =
+  'flex min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
 export function SearchField({
-  movies,
   filters,
   onFiltersChange,
   onSearch,
   onReset,
+  genres = [],
+  years = [],
+  kind,
+  onKindChange,
   className,
-  hiddenFilters,
-  ariaLabel = 'Поиск фильмов',
+  ariaLabel = 'Поиск',
 }: {
-  movies: Movie[];
   filters: SearchFilters;
   onFiltersChange: (filters: SearchFilters) => void;
   onSearch?: (filters: SearchFilters) => void;
   onReset?: () => void;
+  genres?: FilterOption[];
+  years?: number[];
+  kind?: MediaKind;
+  onKindChange?: (kind: MediaKind) => void;
   className?: string;
-  hiddenFilters?: readonly MultiFilterKey[];
   ariaLabel?: string;
 }) {
-  const genres = useMemo(
-    () =>
-      Array.from(new Set(movies.flatMap((movie) => movie.genres))).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [movies],
-  );
-  const actors = useMemo(
-    () =>
-      Array.from(new Set(movies.flatMap((movie) => movie.actors ?? []))).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [movies],
-  );
-  const directors = useMemo(
-    () =>
-      Array.from(
-        new Set(movies.map((movie) => movie.director).filter((value): value is string => Boolean(value))),
-      ).sort((a, b) => a.localeCompare(b)),
-    [movies],
-  );
-  const years = useMemo(
-    () => Array.from(new Set(movies.map((movie) => movie.year))).sort((a, b) => b - a),
-    [movies],
-  );
-
-  const allFilters: { key: MultiFilterKey; label: string; options: string[] }[] = [
-    { key: 'genre', label: 'Жанр', options: genres },
-    { key: 'actor', label: 'Актёр', options: actors },
-    { key: 'director', label: 'Режиссёр', options: directors },
-    { key: 'year', label: 'Год', options: years.map(String) },
-  ];
-  const multiFilters = hiddenFilters
-    ? allFilters.filter((filter) => !hiddenFilters.includes(filter.key))
-    : allFilters;
-
   function setTitle(value: string) {
     onFiltersChange({ ...filters, title: value || undefined });
   }
 
-  function toggleValue(key: MultiFilterKey, value: string) {
-    const current = filters[key] ?? [];
+  function toggleGenre(value: string) {
+    const current = filters.genre ?? [];
     const next = current.includes(value)
       ? current.filter((item) => item !== value)
       : [...current, value];
-    onFiltersChange({ ...filters, [key]: next.length > 0 ? next : undefined });
+    onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
+  }
+
+  function setYear(value: string) {
+    onFiltersChange({ ...filters, year: value || undefined });
   }
 
   function removeFilter(key: FilterKey, value?: string) {
@@ -84,14 +61,33 @@ export function SearchField({
       onFiltersChange({ ...filters, [key]: undefined });
       return;
     }
-    const current = (filters[key] as string[] | undefined) ?? [];
-    const next = current.filter((item) => item !== value);
-    onFiltersChange({ ...filters, [key]: next.length > 0 ? next : undefined });
+    if (key === 'genre') {
+      const next = (filters.genre ?? []).filter((item) => item !== value);
+      onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
+    }
   }
 
   function resetAll() {
     onFiltersChange({});
     onReset?.();
+  }
+
+  const genreLabel = (value: string) => genres.find((option) => option.value === value)?.label ?? value;
+  const genreSelected = filters.genre ?? [];
+
+  const blocks: ChipBlock[] = [];
+  if (filters.title) {
+    blocks.push({ key: 'title', label: 'Название', values: [{ value: filters.title, label: filters.title }] });
+  }
+  if (genreSelected.length > 0) {
+    blocks.push({
+      key: 'genre',
+      label: 'Жанр',
+      values: genreSelected.map((value) => ({ value, label: genreLabel(value) })),
+    });
+  }
+  if (filters.year) {
+    blocks.push({ key: 'year', label: 'Год', values: [{ value: filters.year, label: filters.year }] });
   }
 
   const optionListClass =
@@ -111,7 +107,24 @@ export function SearchField({
         ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {onKindChange ? (
+        <div role="group" aria-label="Тип" className="flex gap-2">
+          {KINDS.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              size="sm"
+              variant={kind === option.value ? 'default' : 'outline'}
+              aria-pressed={kind === option.value}
+              onClick={() => onKindChange(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="space-y-1 text-sm">
           <span className="text-muted-foreground">Название</span>
           <Input
@@ -120,39 +133,57 @@ export function SearchField({
             placeholder="Например, Начало"
           />
         </label>
-        {multiFilters.map(({ key, label, options }) => {
-          const selected = filters[key] ?? [];
-          return (
-            <details key={key} className="relative text-sm">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-muted-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden">
-                <span>{label}</span>
-                <span className="flex items-center gap-1">
-                  {selected.length > 0 ? (
-                    <span className="rounded-full bg-secondary px-2 text-xs tabular-nums text-secondary-foreground">
-                      {selected.length}
-                    </span>
-                  ) : null}
-                  <ChevronDown aria-hidden="true" className="h-4 w-4" />
+
+        <details className="relative text-sm">
+          <summary
+            className={cn(selectClass, 'cursor-pointer list-none items-center justify-between gap-2 text-muted-foreground [&::-webkit-details-marker]:hidden')}
+          >
+            <span>Жанр</span>
+            <span className="flex items-center gap-1">
+              {genreSelected.length > 0 ? (
+                <span className="rounded-full bg-secondary px-2 text-xs tabular-nums text-secondary-foreground">
+                  {genreSelected.length}
                 </span>
-              </summary>
-              <div role="group" aria-label={label} className={optionListClass}>
-                {options.map((value) => (
-                  <label key={value} className="flex min-h-8 items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(value)}
-                      onChange={() => toggleValue(key, value)}
-                    />
-                    <span>{value}</span>
-                  </label>
-                ))}
-              </div>
-            </details>
-          );
-        })}
+              ) : null}
+              <ChevronDown aria-hidden="true" className="h-4 w-4" />
+            </span>
+          </summary>
+          <div role="group" aria-label="Жанр" className={optionListClass}>
+            {genres.length === 0 ? (
+              <p className="px-1 py-1 text-xs text-muted-foreground">Нет жанров</p>
+            ) : (
+              genres.map((option) => (
+                <label key={option.value} className="flex min-h-8 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={genreSelected.includes(option.value)}
+                    onChange={() => toggleGenre(option.value)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </details>
+
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">Год</span>
+          <select
+            value={filters.year ?? ''}
+            onChange={(event) => setYear(event.target.value)}
+            className={selectClass}
+          >
+            <option value="">Все годы</option>
+            {years.map((year) => (
+              <option key={year} value={String(year)}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <FilterChips filters={filters} onRemove={removeFilter} onReset={resetAll} />
+      <FilterChips blocks={blocks} onRemove={removeFilter} onReset={resetAll} />
     </section>
   );
 }

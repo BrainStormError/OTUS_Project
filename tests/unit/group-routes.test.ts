@@ -169,7 +169,6 @@ describe('POST /api/groups/[id]/ratings', () => {
       post('http://localhost/api/groups/x/ratings', {
         mediaKind: 'film',
         mediaRef: '27205',
-        title: 'Начало',
         rating: 11,
         watchedAt: '2026-08-12',
       }),
@@ -185,7 +184,6 @@ describe('POST /api/groups/[id]/ratings', () => {
       post('http://localhost/api/groups/x/ratings', {
         mediaKind: 'film',
         mediaRef: '27205',
-        title: 'Начало',
         rating: 8,
         watchedAt: '2026-08-12',
       }),

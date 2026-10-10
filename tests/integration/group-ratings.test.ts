@@ -1,12 +1,18 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
 import { insertUser } from '@/modules/auth/repository';
 import { attachDiscussion } from '@/modules/discussions';
 import { listGroupRatings, saveGroupRating } from '@/modules/groups';
+
+import { installTmdbFetch } from './tmdb-stub';
+
+beforeAll(() => {
+  installTmdbFetch(() => ({ title: 'Начало', year: 2010 }));
+});
 
 async function makeUser(prefix: string): Promise<Actor> {
   const row = await insertUser({
@@ -41,9 +47,6 @@ function rating(groupId: number, value: number) {
     groupId,
     mediaKind: 'film' as const,
     mediaRef: '27205',
-    title: 'Начало',
-    year: 2010,
-    genres: ['фантастика'],
     rating: value,
     watchedAt: '2026-08-12',
   };

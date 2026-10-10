@@ -30,6 +30,8 @@ const KIND_NAME: Record<number, ActivityKind> = {
   5: 'comment_created',
 };
 
+const COMMENT_KIND_CODE = KIND_CODE.comment_created;
+
 type EventRow = {
   id: number;
   actor_id: number;
@@ -196,6 +198,7 @@ export async function listFeedEvents(params: {
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE ${VIEWER_VISIBILITY}
+        AND e.kind <> ${COMMENT_KIND_CODE}
         AND ($2::timestamptz IS NULL OR (e.created_at, e.id) < ($2::timestamptz, $3::bigint))
         AND ($4::timestamptz IS NULL OR (e.created_at, e.id) > ($4::timestamptz, $5::bigint))
       ORDER BY e.created_at DESC, e.id DESC
@@ -229,6 +232,7 @@ export async function findVisibleEvent(
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE ${VIEWER_VISIBILITY}
+        AND e.kind <> ${COMMENT_KIND_CODE}
         AND e.id = $2`,
     [viewerId, eventId],
   );
@@ -257,6 +261,7 @@ export async function listGroupFeedEvents(params: {
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE e.group_id = $2
+        AND e.kind <> ${COMMENT_KIND_CODE}
         AND (e.actor_id = $1 OR u.profile_hidden = false)
         AND ($3::timestamptz IS NULL OR (e.created_at, e.id) < ($3::timestamptz, $4::bigint))
       ORDER BY e.created_at DESC, e.id DESC

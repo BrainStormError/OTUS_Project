@@ -24,6 +24,7 @@ export default defineConfig({
       REGISTRATION_TICKET_SECRET: 'test-ticket-secret-0123456789abcdef',
       OAUTH_CLIENT_ID: 'test-client-id',
       OAUTH_CLIENT_SECRET: 'test-client-secret',
+      TMDB_ACCESS_TOKEN: 'test-tmdb-token',
       DEMO_LOGIN: '0',
       LOG_LEVEL: 'info',
     },

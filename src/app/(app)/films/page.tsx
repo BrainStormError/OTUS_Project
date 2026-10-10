@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 
-import { toWatchedRecord } from '@/components/features/movie-tracker/adapters';
+import { toWatchedRecordFromRated } from '@/components/features/movie-tracker/adapters';
 import { MyFilmsView } from '@/components/features/movie-tracker/MyFilmsView';
 import { getActor } from '@/modules/auth/session';
-import { listWatchedRecords } from '@/modules/records';
+import { listCatalog } from '@/modules/catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,10 +13,8 @@ export default async function FilmsPage() {
     redirect('/login');
   }
 
-  const result = await listWatchedRecords(actor);
-  const records = result.ok
-    ? result.value.filter((entry) => entry.mediaKind === 'film').map(toWatchedRecord)
-    : [];
+  const result = await listCatalog(actor.id, 'film');
+  const records = result.ok ? result.value.map(toWatchedRecordFromRated) : [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

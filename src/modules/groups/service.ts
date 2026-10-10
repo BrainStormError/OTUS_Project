@@ -3,6 +3,7 @@ import { withTransaction } from '@/core/db/transaction';
 import { err, ok, type Result } from '@/core/result';
 
 import { recordEvent } from '@/modules/activity';
+import { resolveSaveMetadata } from '@/modules/catalog';
 import {
   hasGroupRating as hasGroupRatingRepository,
   listGroupRatings as listGroupRatingsRepository,
@@ -93,8 +94,13 @@ export async function saveGroupRating(
     return err('FORBIDDEN', 'Оценивать медиа могут только участники группы');
   }
 
+  const metadata = await resolveSaveMetadata(input.mediaKind, input.mediaRef);
+  if (!metadata.ok) {
+    return metadata;
+  }
+
   return withTransaction(async (tx) => {
-    const rating = await saveGroupRatingRepository(tx, actor.id, input.groupId, input);
+    const rating = await saveGroupRatingRepository(tx, actor.id, input.groupId, input, metadata.value);
     await recordEvent(tx, {
       actorId: actor.id,
       kind: input.mediaKind === 'film' ? 'film_rated' : 'series_rated',

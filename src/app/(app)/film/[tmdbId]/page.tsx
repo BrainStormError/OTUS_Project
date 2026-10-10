@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation';
 
 import { toWatchedRecord } from '@/components/features/movie-tracker/adapters';
+import { toMovie } from '@/components/features/movie-tracker/catalog-view';
 import { FilmDetail } from '@/components/features/movie-tracker/FilmDetail';
-import { findMovie } from '@/components/features/movie-tracker/data';
 import { getActor } from '@/modules/auth/session';
+import { resolveDetail } from '@/modules/catalog';
 import { listWatchedRecords } from '@/modules/records';
 
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,8 @@ export default async function FilmPage({
   params: Promise<{ tmdbId: string }>;
 }) {
   const { tmdbId } = await params;
-  const movie = findMovie(Number(tmdbId));
-  if (!movie) {
+  const detail = await resolveDetail('film', tmdbId);
+  if (!detail.ok) {
     notFound();
   }
 
@@ -25,5 +26,10 @@ export default async function FilmPage({
     ? result.value.find((item) => item.mediaKind === 'film' && item.mediaRef === tmdbId)
     : undefined;
 
-  return <FilmDetail movie={movie} initialRecord={entry ? toWatchedRecord(entry) : null} />;
+  return (
+    <FilmDetail
+      movie={toMovie(detail.value)}
+      initialRecord={entry ? toWatchedRecord(entry) : null}
+    />
+  );
 }

@@ -2,6 +2,8 @@ import type { PoolClient } from 'pg';
 
 import { query } from '@/core/db/pool';
 
+import type { SaveMetadata } from '@/modules/catalog';
+
 import type { RatingInput } from './schema';
 import type { GroupRatingMember, GroupRatingSummary, MediaKind, RatingEntry } from './types';
 
@@ -57,22 +59,24 @@ function mapPersonal(row: PersonalRow): RatingEntry {
   };
 }
 
-export async function upsertMedia(tx: PoolClient, input: RatingInput): Promise<number> {
+export async function upsertMedia(tx: PoolClient, metadata: SaveMetadata): Promise<number> {
   const result = await tx.query<{ id: number }>(
-    `INSERT INTO media (kind, external_ref, title, year, genre_ids)
-     VALUES ($1, $2, $3, $4,
-       COALESCE((SELECT array_agg(id ORDER BY id) FROM genres WHERE name = ANY($5::text[])), '{}'::smallint[]))
+    `INSERT INTO media (kind, external_ref, title, year, director, genre_ids)
+     VALUES ($1, $2, $3, $4, $5,
+       COALESCE((SELECT array_agg(id ORDER BY id) FROM genres WHERE id = ANY($6::smallint[])), '{}'::smallint[]))
      ON CONFLICT (kind, external_ref) DO UPDATE SET
        title = EXCLUDED.title,
        year = EXCLUDED.year,
+       director = EXCLUDED.director,
        genre_ids = EXCLUDED.genre_ids
      RETURNING id`,
     [
-      KIND_CODE[input.mediaKind],
-      input.mediaRef,
-      input.title,
-      input.year ?? null,
-      input.genres ?? [],
+      KIND_CODE[metadata.kind],
+      metadata.externalRef,
+      metadata.title,
+      metadata.year ?? null,
+      metadata.director ?? null,
+      metadata.genreIds,
     ],
   );
   const row = result.rows[0];

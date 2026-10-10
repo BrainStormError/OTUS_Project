@@ -730,13 +730,13 @@ type ViewState<T> =
 
 ```tsx
 // src/app/(app)/page.tsx  (RSC)
-import { getHomeFeed } from '@/modules/birthdays/service';
+import { listFeed } from '@/modules/activity/service';
 import { getActor } from '@/modules/auth/session';
 import { DonateDialog } from '@/components/features/donations/DonateDialog';
 
 export default async function HomePage() {
   const actor = await getActor();
-  const feed = await getHomeFeed(actor!, new Date());   // чтение на сервере
+  const feed = await listFeed(actor!, { limit: 20 });   // чтение на сервере
   return <HomeView feed={feed} donateAction={<DonateDialog />} />; // интерактив — остров
 }
 ```

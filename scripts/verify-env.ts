@@ -28,6 +28,7 @@ const dummy: Record<string, string> = {
   REGISTRATION_TICKET_SECRET: 'dummy-ticket-secret-0123456789abcdef',
   OAUTH_CLIENT_ID: 'dummy-client-id',
   OAUTH_CLIENT_SECRET: 'dummy-client-secret',
+  TMDB_ACCESS_TOKEN: 'dummy-tmdb-token',
   DEMO_LOGIN: '0',
   LOG_LEVEL: 'info',
 };

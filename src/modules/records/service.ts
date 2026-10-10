@@ -3,6 +3,7 @@ import { withTransaction } from '@/core/db/transaction';
 import { err, ok, type Result } from '@/core/result';
 
 import { recordEvent } from '@/modules/activity';
+import { resolveSaveMetadata } from '@/modules/catalog';
 import { deletePersonalRating, listPersonalRatings, savePersonalRating } from '@/modules/ratings';
 
 import type { UpsertWatchedRecordInput } from './schema';
@@ -12,8 +13,13 @@ export async function saveWatchedRecord(
   actor: Actor,
   input: UpsertWatchedRecordInput,
 ): Promise<Result<WatchedRecordEntry>> {
+  const metadata = await resolveSaveMetadata(input.mediaKind, input.mediaRef);
+  if (!metadata.ok) {
+    return metadata;
+  }
+
   return withTransaction(async (tx) => {
-    const entry = await savePersonalRating(tx, actor.id, input);
+    const entry = await savePersonalRating(tx, actor.id, input, metadata.value);
     await recordEvent(tx, {
       actorId: actor.id,
       kind: input.mediaKind === 'film' ? 'film_rated' : 'series_rated',

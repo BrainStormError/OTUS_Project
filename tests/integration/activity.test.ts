@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { Client } from 'pg';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
@@ -13,6 +13,12 @@ import { insertUser } from '@/modules/auth/repository';
 import { acceptFriendship } from '@/modules/friendships';
 import { joinGroup } from '@/modules/groups';
 import { saveWatchedRecord } from '@/modules/records';
+
+import { installTmdbFetch } from './tmdb-stub';
+
+beforeAll(() => {
+  installTmdbFetch((ref) => ({ title: ref === '27205' ? 'Начало' : `media-${ref}`, year: 2010 }));
+});
 
 const { databaseUrl } = JSON.parse(
   readFileSync(resolve(process.cwd(), 'tests/integration/.db-url.json'), 'utf8'),
@@ -226,9 +232,6 @@ describe('real write paths', () => {
     const result = await saveWatchedRecord(actor, {
       mediaKind: 'film',
       mediaRef: '27205',
-      title: 'Начало',
-      year: 2010,
-      genres: ['фантастика'],
       rating: 9,
       watchedAt: '2026-08-12',
     });
@@ -249,7 +252,6 @@ describe('real write paths', () => {
       saveWatchedRecord(missingActor, {
         mediaKind: 'film',
         mediaRef: '1',
-        title: 'Broken',
         rating: 5,
         watchedAt: '2026-08-12',
       }),

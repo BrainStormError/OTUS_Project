@@ -8,20 +8,16 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Modal } from '@/components/ui/modal';
 import { cn } from '@/components/ui/utils';
 
-import { movieMatches } from './data';
-import { episodeKey, seasonAverage, seriesAverage, seriesToMovie } from './series';
-import { listSeries } from './series-data';
-import { SeriesModal } from './SeriesModal';
-import { useSeriesRecords } from './series-store';
+import { AddRecordModal } from './AddRecordModal';
+import { genreOptions, movieMatches, yearOptions } from './filters';
+import type { RatingPayload } from './RatingForm';
+import { useWatchedRecords } from './record-store';
+import { RecordModal } from './RecordModal';
 import { SearchField } from './SearchField';
-import type { SearchFilters, Series, SeriesRecord } from './types';
+import type { Movie, SearchFilters, WatchedRecord } from './types';
 
 type SortKey = 'title' | 'rating' | 'watchedAt';
 type SortDirection = 'asc' | 'desc';
-
-function formatAverage(value: number | null): string {
-  return value === null ? '—' : value.toFixed(1);
-}
 
 function SortableHeader({
   label,
@@ -52,106 +48,25 @@ function SortableHeader({
   );
 }
 
-function Episodes({
-  record,
-  season,
-}: {
-  record: SeriesRecord;
-  season: number;
-}) {
-  const meta = record.series.seasons.find((item) => item.number === season);
-  if (!meta) {
-    return null;
-  }
-  return (
-    <ul className="space-y-1" data-testid={`episodes-${season}`}>
-      {meta.episodes.map((episode) => {
-        const stored = record.episodes?.[episodeKey(season, episode.number)];
-        return (
-          <li
-            key={episode.number}
-            className="flex items-center justify-between gap-3 text-sm text-muted-foreground"
-          >
-            <span>
-              Серия {season}.{episode.number}
-              {episode.title ? ` — ${episode.title}` : ''}
-            </span>
-            <span className="tabular-nums">
-              {stored ? stored.rating.toFixed(1) : '—'}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function SeriesExpansion({
-  record,
-  expandedSeason,
-  onToggleSeason,
-}: {
-  record: SeriesRecord;
-  expandedSeason: number | null;
-  onToggleSeason: (season: number) => void;
-}) {
-  const seasons = record.series.seasons;
-
-  if (record.mode === 'whole') {
-    return <p className="text-sm text-muted-foreground">{record.seriesComment ?? 'Нет комментария'}</p>;
-  }
-
-  const single = seasons.length === 1 ? seasons[0] : undefined;
-  if (single) {
-    return <Episodes record={record} season={single.number} />;
-  }
-
-  return (
-    <div className="space-y-2">
-      {seasons.map((season) => {
-        const open = expandedSeason === season.number;
-        return (
-          <div key={season.number}>
-            <button
-              type="button"
-              aria-expanded={open}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleSeason(season.number);
-              }}
-              className="flex w-full items-center justify-between gap-3 rounded-md text-left text-sm font-medium transition-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <span>Сезон {season.number}</span>
-              <span className="text-muted-foreground tabular-nums">
-                {formatAverage(seasonAverage(record, season.number))}
-              </span>
-            </button>
-            {open ? <Episodes record={record} season={season.number} /> : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[] }) {
-  const { records, upsert, remove } = useSeriesRecords(initialRecords);
-  const options = useMemo(() => records.map((record) => seriesToMovie(record.series)), [records]);
+export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord[] }) {
+  const { records, upsert, remove } = useWatchedRecords(initialRecords);
+  const movieOptions = useMemo(() => records.map((record) => record.movie), [records]);
+  const genres = useMemo(() => genreOptions(movieOptions), [movieOptions]);
+  const years = useMemo(() => yearOptions(movieOptions), [movieOptions]);
 
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
-  const [editing, setEditing] = useState<SeriesRecord | null>(null);
-  const [deleting, setDeleting] = useState<SeriesRecord | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<WatchedRecord | null>(null);
+  const [deleting, setDeleting] = useState<WatchedRecord | null>(null);
   const [adding, setAdding] = useState(false);
-  const [addSeries, setAddSeries] = useState<Series | null>(null);
+  const [addSeries, setAddSeries] = useState<Movie | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'watchedAt',
     direction: 'desc',
   });
 
   const filtered = useMemo(
-    () => records.filter((record) => movieMatches(seriesToMovie(record.series), '', filters)),
+    () => records.filter((record) => movieMatches(record.movie, filters)),
     [records, filters],
   );
 
@@ -159,10 +74,10 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
     const direction = sort.direction === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
       if (sort.key === 'title') {
-        return a.series.title.localeCompare(b.series.title) * direction;
+        return a.movie.title.localeCompare(b.movie.title) * direction;
       }
       if (sort.key === 'rating') {
-        return ((seriesAverage(a) ?? -1) - (seriesAverage(b) ?? -1)) * direction;
+        return (a.rating - b.rating) * direction;
       }
       return a.watchedAt.localeCompare(b.watchedAt) * direction;
     });
@@ -176,19 +91,25 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
     );
   }
 
-  function toggleRow(id: string) {
+  function toggleRow(id: number) {
     setExpandedId((current) => (current === id ? null : id));
-    setExpandedSeason(null);
   }
 
-  function saveRecord(record: SeriesRecord) {
-    upsert(record);
+  function saveRecord(movie: Movie, payload: RatingPayload) {
+    const existing = records.find((record) => record.movie.tmdbId === movie.tmdbId);
+    upsert({
+      id: existing?.id ?? movie.tmdbId,
+      movie,
+      rating: payload.rating,
+      comment: payload.comment,
+      watchedAt: payload.watchedAt,
+    });
     setEditing(null);
     setAddSeries(null);
     setAdding(false);
   }
 
-  function deleteRecord(record: SeriesRecord) {
+  function deleteRecord(record: WatchedRecord) {
     remove(record);
     setDeleting(null);
     setExpandedId(null);
@@ -196,7 +117,7 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
 
   return (
     <div className="space-y-4">
-      <SearchField movies={options} filters={filters} onFiltersChange={setFilters} />
+      <SearchField filters={filters} onFiltersChange={setFilters} genres={genres} years={years} />
 
       <div className="flex justify-end">
         <Button type="button" onClick={() => setAdding(true)}>
@@ -256,11 +177,11 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
                         }}
                         className="rounded-md text-left transition-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       >
-                        {record.series.title}
+                        {record.movie.title}
                       </button>
                     </th>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                      {formatAverage(seriesAverage(record))}
+                      {record.rating > 0 ? record.rating.toFixed(1) : '—'}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{record.watchedAt}</td>
                   </tr>
@@ -268,17 +189,9 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
                     <tr>
                       <td id={detailId} colSpan={3} className="px-4 pb-3">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <SeriesExpansion
-                              record={record}
-                              expandedSeason={expandedSeason}
-                              onToggleSeason={(season) =>
-                                setExpandedSeason((current) =>
-                                  current === season ? null : season,
-                                )
-                              }
-                            />
-                          </div>
+                          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                            {record.comment ? record.comment : 'Нет комментария'}
+                          </p>
                           <div className="flex shrink-0 items-center gap-2">
                             <Button
                               type="button"
@@ -316,20 +229,19 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
         </table>
       )}
 
-      <Modal open={adding} onClose={() => setAdding(false)} title="Добавить сериал">
-        {adding ? (
-          <AddSeriesForm
-            onSelect={(series) => {
-              setAddSeries(series);
-              setAdding(false);
-            }}
-            onCancel={() => setAdding(false)}
-          />
-        ) : null}
-      </Modal>
+      <AddRecordModal
+        open={adding}
+        kind="series"
+        watchedRefs={records.map((record) => String(record.movie.tmdbId))}
+        onClose={() => setAdding(false)}
+        onSelect={(movie) => {
+          setAddSeries(movie);
+          setAdding(false);
+        }}
+      />
 
-      <SeriesModal
-        series={editing?.series ?? addSeries}
+      <RecordModal
+        movie={editing?.movie ?? addSeries}
         record={editing}
         onClose={() => {
           setEditing(null);
@@ -340,16 +252,14 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
 
       <Modal open={Boolean(deleting)} onClose={() => setDeleting(null)} title="Удалить сериал?">
         <p className="text-sm text-muted-foreground">
-          Сериал «{deleting?.series.title}» будет удалён из ваших сериалов.
+          Сериал «{deleting?.movie.title}» будет удалён из ваших сериалов.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="destructive"
             onClick={() => {
-              if (deleting) {
-                deleteRecord(deleting);
-              }
+              if (deleting) deleteRecord(deleting);
             }}
           >
             Удалить
@@ -359,63 +269,6 @@ export function MySeriesView({ initialRecords }: { initialRecords: SeriesRecord[
           </Button>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-function AddSeriesForm({
-  onSelect,
-  onCancel,
-}: {
-  onSelect: (series: Series) => void;
-  onCancel: () => void;
-}) {
-  const catalog = useMemo(() => listSeries(), []);
-  const catalogMovies = useMemo(() => catalog.map(seriesToMovie), [catalog]);
-  const [filters, setFilters] = useState<SearchFilters>({});
-  const [committed, setCommitted] = useState<SearchFilters | null>(null);
-
-  const visible = useMemo(() => {
-    if (!committed) {
-      return catalog;
-    }
-    return catalog.filter((series) => movieMatches(seriesToMovie(series), '', committed));
-  }, [catalog, committed]);
-
-  return (
-    <div className="space-y-3">
-      <SearchField
-        movies={catalogMovies}
-        filters={filters}
-        onFiltersChange={setFilters}
-        onSearch={(next) => setCommitted(next)}
-        onReset={() => setCommitted(null)}
-        hiddenFilters={['actor', 'director']}
-        ariaLabel="Поиск сериалов"
-      />
-      {visible.length === 0 ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Ничего не найдено
-        </p>
-      ) : (
-        <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-          {visible.map((series) => (
-            <li key={series.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(series)}
-                className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <span className="truncate font-medium">{series.title}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{series.year}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <Button type="button" variant="outline" onClick={onCancel}>
-        Отмена
-      </Button>
     </div>
   );
 }

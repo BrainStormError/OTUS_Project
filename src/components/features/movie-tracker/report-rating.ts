@@ -5,9 +5,6 @@ import type { Movie } from './types';
 export type RemoteRatingInput = {
   mediaKind: MediaKind;
   mediaRef: string;
-  title: string;
-  year?: number;
-  genres?: string[];
   rating: number;
   comment?: string;
   watchedAt: string;
@@ -38,13 +35,13 @@ export async function deleteRemoteRecord(id: number): Promise<boolean> {
   return response.ok;
 }
 
-export function reportRating(movie: Movie, payload: { rating: number; comment?: string; watchedAt: string }): void {
+export function reportRating(
+  movie: Movie,
+  payload: { rating: number; comment?: string; watchedAt: string },
+): void {
   void saveRemoteRating({
-    mediaKind: 'film',
+    mediaKind: movie.kind,
     mediaRef: String(movie.tmdbId),
-    title: movie.title,
-    year: movie.year,
-    genres: movie.genres,
     rating: payload.rating,
     comment: payload.comment,
     watchedAt: payload.watchedAt,

@@ -4,38 +4,20 @@ import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
-import type { FilterKey, SearchFilters } from './types';
+import type { FilterKey } from './types';
 
-export const FILTER_LABELS: Record<FilterKey, string> = {
-  title: 'Название',
-  genre: 'Жанр',
-  actor: 'Актёр',
-  director: 'Режиссёр',
-  year: 'Год',
-};
-
-type FilterBlock = { key: FilterKey; values: string[] };
+export type ChipValue = { value: string; label: string };
+export type ChipBlock = { key: FilterKey; label: string; values: ChipValue[] };
 
 export function FilterChips({
-  filters,
+  blocks,
   onRemove,
   onReset,
 }: {
-  filters: SearchFilters;
+  blocks: ChipBlock[];
   onRemove: (key: FilterKey, value?: string) => void;
   onReset: () => void;
 }) {
-  const blocks: FilterBlock[] = [];
-  for (const key of Object.keys(FILTER_LABELS) as FilterKey[]) {
-    if (key === 'title') {
-      const value = filters.title;
-      if (value) blocks.push({ key, values: [value] });
-      continue;
-    }
-    const values = filters[key] ?? [];
-    if (values.length > 0) blocks.push({ key, values });
-  }
-
   if (blocks.length === 0) {
     return null;
   }
@@ -54,14 +36,14 @@ export function FilterChips({
           data-testid={`filter-block-${block.key}`}
           className="flex min-h-11 flex-wrap items-center gap-1 rounded-md border border-border bg-secondary px-3 text-sm text-secondary-foreground"
         >
-          <span className="text-xs text-muted-foreground">{FILTER_LABELS[block.key]}:</span>
+          <span className="text-xs text-muted-foreground">{block.label}:</span>
           {block.values.map((value) => (
-            <span key={value} className="inline-flex items-center gap-1">
-              <span>{value}</span>
+            <span key={value.value} className="inline-flex items-center gap-1">
+              <span>{value.label}</span>
               <button
                 type="button"
-                aria-label={`Удалить фильтр ${FILTER_LABELS[block.key]}: ${value}`}
-                onClick={() => onRemove(block.key, block.key === 'title' ? undefined : value)}
+                aria-label={`Удалить фильтр ${block.label}: ${value.label}`}
+                onClick={() => onRemove(block.key, block.key === 'title' ? undefined : value.value)}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-hover hover:bg-background/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 <X aria-hidden="true" className="h-4 w-4" />

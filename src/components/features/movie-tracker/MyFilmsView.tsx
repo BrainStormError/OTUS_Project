@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Modal } from '@/components/ui/modal';
 import { cn } from '@/components/ui/utils';
 
-import { listMovies, movieMatches } from './data';
+import { AddRecordModal } from './AddRecordModal';
+import { genreOptions, movieMatches, yearOptions } from './filters';
 import type { RatingPayload } from './RatingForm';
 import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
@@ -50,6 +51,8 @@ function SortableHeader({
 export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[] }) {
   const { records, upsert, remove } = useWatchedRecords(initialRecords);
   const movieOptions = useMemo(() => records.map((record) => record.movie), [records]);
+  const genres = useMemo(() => genreOptions(movieOptions), [movieOptions]);
+  const years = useMemo(() => yearOptions(movieOptions), [movieOptions]);
 
   const [filters, setFilters] = useState<SearchFilters>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -63,7 +66,7 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
   });
 
   const filtered = useMemo(
-    () => records.filter((record) => movieMatches(record.movie, '', filters)),
+    () => records.filter((record) => movieMatches(record.movie, filters)),
     [records, filters],
   );
 
@@ -110,7 +113,7 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
 
   return (
     <div className="space-y-4">
-      <SearchField movies={movieOptions} filters={filters} onFiltersChange={setFilters} />
+      <SearchField filters={filters} onFiltersChange={setFilters} genres={genres} years={years} />
 
       <div className="flex justify-end">
         <Button type="button" onClick={() => setAdding(true)}>
@@ -136,18 +139,8 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
         >
           <thead>
             <tr className="border-b border-border">
-              <SortableHeader
-                label="Название"
-                sortKey="title"
-                sort={sort}
-                onSort={toggleSort}
-              />
-              <SortableHeader
-                label="Оценка"
-                sortKey="rating"
-                sort={sort}
-                onSort={toggleSort}
-              />
+              <SortableHeader label="Название" sortKey="title" sort={sort} onSort={toggleSort} />
+              <SortableHeader label="Оценка" sortKey="rating" sort={sort} onSort={toggleSort} />
               <SortableHeader
                 label="Дата просмотра"
                 sortKey="watchedAt"
@@ -186,9 +179,7 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">
                       {record.rating > 0 ? record.rating.toFixed(1) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {record.watchedAt}
-                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{record.watchedAt}</td>
                   </tr>
                   {expanded ? (
                     <tr>
@@ -238,17 +229,16 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
         </table>
       )}
 
-      <Modal open={adding} onClose={() => setAdding(false)} title="Добавить фильм">
-        {adding ? (
-          <AddRecordForm
-            onSelect={(movie) => {
-              setAddMovie(movie);
-              setAdding(false);
-            }}
-            onCancel={() => setAdding(false)}
-          />
-        ) : null}
-      </Modal>
+      <AddRecordModal
+        open={adding}
+        kind="film"
+        watchedRefs={records.map((record) => String(record.movie.tmdbId))}
+        onClose={() => setAdding(false)}
+        onSelect={(movie) => {
+          setAddMovie(movie);
+          setAdding(false);
+        }}
+      />
 
       <RecordModal
         movie={editing?.movie ?? addMovie}
@@ -283,58 +273,6 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
           </Button>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-function AddRecordForm({
-  onSelect,
-  onCancel,
-}: {
-  onSelect: (movie: Movie) => void;
-  onCancel: () => void;
-}) {
-  const catalog = useMemo(() => listMovies(), []);
-  const [filters, setFilters] = useState<SearchFilters>({});
-  const [committed, setCommitted] = useState<SearchFilters | null>(null);
-
-  const visible = useMemo(
-    () => (committed ? catalog.filter((movie) => movieMatches(movie, '', committed)) : catalog),
-    [catalog, committed],
-  );
-
-  return (
-    <div className="space-y-3">
-      <SearchField
-        movies={catalog}
-        filters={filters}
-        onFiltersChange={setFilters}
-        onSearch={(next) => setCommitted(next)}
-        onReset={() => setCommitted(null)}
-      />
-      {visible.length === 0 ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Ничего не найдено
-        </p>
-      ) : (
-        <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-          {visible.map((movie) => (
-            <li key={movie.tmdbId}>
-              <button
-                type="button"
-                onClick={() => onSelect(movie)}
-                className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <span className="truncate font-medium">{movie.title}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{movie.year}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <Button type="button" variant="outline" onClick={onCancel}>
-        Отмена
-      </Button>
     </div>
   );
 }

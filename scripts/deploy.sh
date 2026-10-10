@@ -7,11 +7,11 @@
 # Environment:
 #   IMAGE_REF          new app image reference (default: nothing to pull)
 #   MIGRATE_IMAGE_REF  new migrator image reference
-#   APP_IMAGE          local tag for the app image (default: birthday-platform:latest)
-#   PREV_IMAGE         local tag holding the previous image (default: birthday-platform:previous)
-#   MIGRATE_IMAGE      local tag for the migrator image (default: birthday-platform-migrate:latest)
+#   APP_IMAGE          local tag for the app image (default: learn-watcher-platform:latest)
+#   PREV_IMAGE         local tag holding the previous image (default: learn-watcher-platform:previous)
+#   MIGRATE_IMAGE      local tag for the migrator image (default: learn-watcher-platform-migrate:latest)
 #   COMPOSE_FILE       compose file (default: docker-compose.yml)
-#   COMPOSE_PROJECT    compose project name (default: birthday-platform)
+#   COMPOSE_PROJECT    compose project name (default: learn-watcher-platform)
 #   DRY_RUN=1          print commands instead of running them
 #   SIMULATE_FAILURE=1 force a failure to exercise the rollback path
 
@@ -21,11 +21,11 @@ DRY_RUN="${DRY_RUN:-0}"
 SIMULATE_FAILURE="${SIMULATE_FAILURE:-0}"
 IMAGE_REF="${IMAGE_REF:-}"
 MIGRATE_IMAGE_REF="${MIGRATE_IMAGE_REF:-}"
-APP_IMAGE="${APP_IMAGE:-birthday-platform:latest}"
-PREV_IMAGE="${PREV_IMAGE:-birthday-platform:previous}"
-MIGRATE_IMAGE="${MIGRATE_IMAGE:-birthday-platform-migrate:latest}"
+APP_IMAGE="${APP_IMAGE:-learn-watcher-platform:latest}"
+PREV_IMAGE="${PREV_IMAGE:-learn-watcher-platform:previous}"
+MIGRATE_IMAGE="${MIGRATE_IMAGE:-learn-watcher-platform-migrate:latest}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
-COMPOSE_PROJECT="${COMPOSE_PROJECT:-birthday-platform}"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-learn-watcher-platform}"
 
 run() {
   if [ "$DRY_RUN" = "1" ]; then
@@ -65,6 +65,12 @@ echo "== 3/4 migrate =="
 if [ "$SIMULATE_FAILURE" = "1" ]; then
   echo "simulated migration failure"
   false
+fi
+# Load the host .env so `-e DATABASE_URL` has a value over a plain SSH invocation.
+if [ -f ./.env ]; then
+  set -a
+  . ./.env
+  set +a
 fi
 run docker run --rm --network "${COMPOSE_PROJECT}_default" \
   -e DATABASE_URL "$MIGRATE_IMAGE"

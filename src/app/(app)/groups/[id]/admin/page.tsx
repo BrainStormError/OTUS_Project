@@ -1,8 +1,12 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
+import { toGroup } from '@/components/features/movie-tracker/adapters';
 import { AdminMemberPanel } from '@/components/features/movie-tracker/AdminMemberPanel';
-import { findGroup, isGroupAdmin } from '@/components/features/movie-tracker/data';
+import { getActor } from '@/modules/auth/session';
+import { getGroup, getGroupRole } from '@/modules/groups';
+
+export const dynamic = 'force-dynamic';
 
 export default async function GroupAdminPage({
   params,
@@ -10,10 +14,23 @@ export default async function GroupAdminPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const group = findGroup(Number(id));
-  if (!group) {
+  const groupId = Number(id);
+  if (!Number.isInteger(groupId)) {
     notFound();
   }
+
+  const actor = await getActor();
+  if (!actor) {
+    redirect('/login');
+  }
+
+  const result = await getGroup(groupId);
+  if (!result.ok) {
+    notFound();
+  }
+
+  const role = await getGroupRole(groupId, actor.id);
+  const group = toGroup(result.value);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -26,7 +43,7 @@ export default async function GroupAdminPage({
       <h1 className="text-2xl font-semibold tracking-tight">
         Управление группой «{group.name}»
       </h1>
-      <AdminMemberPanel group={group} isAdmin={isGroupAdmin(group)} />
+      <AdminMemberPanel group={group} isAdmin={role === 'admin'} />
     </div>
   );
 }

@@ -211,14 +211,32 @@ describe('GroupRatings', () => {
   });
 
   it('submits a rating for a member through the media picker', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            kind: 'film',
+            externalId: '27205',
+            title: 'Начало',
+            year: 2010,
+            posterUrl: null,
+            externalRating: 8.4,
+            genres: ['Боевик'],
+            genreIds: [28],
+          },
+        ],
+      }),
+    });
     vi.stubGlobal('fetch', fetchMock);
     render(<GroupRatings groupId={1} isMember isAdmin={false} ratings={[]} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Добавить оценку' }));
     const picker = screen.getByRole('dialog');
-    await userEvent.type(within(picker).getByLabelText('Поиск медиа'), 'Начало');
-    await userEvent.click(within(picker).getByRole('button', { name: /Начало/ }));
+    expect(within(picker).queryByRole('button', { name: /^Начало/ })).not.toBeInTheDocument();
+    await userEvent.type(within(picker).getByLabelText('Название'), 'Начало');
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    await userEvent.click(within(picker).getByRole('button', { name: /^Начало/ }));
 
     const form = await screen.findByRole('dialog');
     await userEvent.type(within(form).getByLabelText(/^Оценка \(/), '8');

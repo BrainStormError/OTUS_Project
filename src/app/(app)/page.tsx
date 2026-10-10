@@ -1,11 +1,12 @@
+import type { CatalogSearchResult } from '@/modules/catalog';
+
 import { HomeView } from '@/components/features/movie-tracker/HomeView';
 import { toWatchedRecord } from '@/components/features/movie-tracker/adapters';
-import { listMovies } from '@/components/features/movie-tracker/data';
 import { toFeedEvent, type FeedEvent } from '@/components/features/movie-tracker/feed';
-import { listSeries } from '@/components/features/movie-tracker/series-data';
 import type { WatchedRecord } from '@/components/features/movie-tracker/types';
 import { listFeed } from '@/modules/activity';
 import { getActor } from '@/modules/auth/session';
+import { searchCatalog } from '@/modules/catalog';
 import { listWatchedRecords } from '@/modules/records';
 
 export const dynamic = 'force-dynamic';
@@ -29,12 +30,10 @@ export default async function HomePage() {
     }
   }
 
+  const popular = await searchCatalog({ kind: 'film' });
+  const popularFilms: CatalogSearchResult[] = popular.ok ? popular.value : [];
+
   return (
-    <HomeView
-      movies={listMovies()}
-      series={listSeries()}
-      initialFeed={initialFeed}
-      initialRecords={initialRecords}
-    />
+    <HomeView popularFilms={popularFilms} initialFeed={initialFeed} initialRecords={initialRecords} />
   );
 }

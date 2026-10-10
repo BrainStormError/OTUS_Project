@@ -1,16 +1,14 @@
+import type { RatedTitle } from '@/modules/catalog';
 import type { FriendRequestSummary, SocialUser } from '@/modules/friendships';
 import type { GroupSummary } from '@/modules/groups';
 import type { ProfileRead } from '@/modules/profiles';
 import type { RatingEntry } from '@/modules/ratings';
 
-import { findMovie } from './data';
-import { findSeries } from './series-data';
 import type {
   FriendRequest,
   Group,
   Movie,
   PublicUser,
-  SeriesRecord,
   UserStats,
   WatchedRecord,
 } from './types';
@@ -43,41 +41,43 @@ export function toGroup(group: GroupSummary): Group {
   };
 }
 
-export function toWatchedRecord(entry: RatingEntry): WatchedRecord {
-  const movie: Movie = findMovie(Number(entry.mediaRef)) ?? {
+export function toMovieForEntry(entry: RatingEntry): Movie {
+  return {
     tmdbId: Number(entry.mediaRef) || entry.mediaId,
+    kind: entry.mediaKind,
     title: entry.title,
-    year: entry.year ?? 0,
+    year: entry.year,
     rating: 0,
     genres: entry.genres,
     posterUrl: null,
   };
+}
+
+export function toWatchedRecord(entry: RatingEntry): WatchedRecord {
   return {
     id: entry.id,
-    movie,
+    movie: toMovieForEntry(entry),
     rating: entry.rating,
     comment: entry.comment ?? undefined,
     watchedAt: entry.watchedAt,
   };
 }
 
-export function toSeriesRecord(entry: RatingEntry): SeriesRecord {
-  const series =
-    findSeries(entry.mediaRef) ??
-    {
-      id: entry.mediaRef,
-      title: entry.title,
-      year: entry.year ?? 0,
-      genres: entry.genres,
-      seasons: [],
-      posterUrl: null,
-    };
+export function toWatchedRecordFromRated(entry: RatedTitle): WatchedRecord {
   return {
-    id: String(entry.id),
-    series,
-    mode: 'whole',
-    seriesRating: entry.rating,
-    seriesComment: entry.comment ?? undefined,
+    id: entry.ratingId,
+    movie: {
+      tmdbId: Number(entry.externalRef) || entry.mediaId,
+      kind: entry.kind,
+      title: entry.title,
+      year: entry.year,
+      rating: 0,
+      genres: entry.genres,
+      director: entry.director,
+      posterUrl: null,
+    },
+    rating: entry.rating,
+    comment: entry.comment ?? undefined,
     watchedAt: entry.watchedAt,
   };
 }

@@ -1,13 +1,19 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
-import { listGroupFeed } from '@/modules/activity';
+import { getVisibleEvent, listGroupFeed } from '@/modules/activity';
 import { insertUser } from '@/modules/auth/repository';
 import { addComment, attachDiscussion, createDiscussion } from '@/modules/discussions';
 import { joinGroup, saveGroupRating } from '@/modules/groups';
+
+import { installTmdbFetch } from './tmdb-stub';
+
+beforeAll(() => {
+  installTmdbFetch((ref) => ({ title: `film-${ref}`, year: 2010 }));
+});
 
 async function makeUser(prefix: string): Promise<Actor> {
   const row = await insertUser({
@@ -42,7 +48,6 @@ async function rate(actor: Actor, groupId: number, mediaRef: string, value: numb
     groupId,
     mediaKind: 'film',
     mediaRef,
-    title: `film-${mediaRef}`,
     rating: value,
     watchedAt: '2026-08-12',
   });
@@ -80,13 +85,35 @@ describe('listGroupFeed', () => {
     const kinds = result.value.items.map((item) => item.kind);
     expect(kinds).toContain('group_joined');
     expect(kinds).toContain('post_created');
-    expect(kinds).toContain('comment_created');
+    expect(kinds).not.toContain('comment_created');
     expect(kinds).toContain('film_rated');
     expect(result.value.items.every((item) => item.groupId === groupId)).toBe(true);
 
     const ratingItem = result.value.items.find((item) => item.kind === 'film_rated');
     expect(ratingItem?.title).toBe('film-27205');
     expect(ratingItem?.rating).toBe(8);
+  });
+
+  it('hides recorded comment events from the feed and the stream', async () => {
+    const admin = await makeUser('admin');
+    const member = await makeUser('member');
+    const groupId = await makeGroup(admin, [member]);
+    const created = await createDiscussion(admin, { groupId, title: 'Тема' });
+    if (!created.ok) return;
+    const inserted = await query<{ id: number }>(
+      `INSERT INTO activity_events (actor_id, kind, group_id, discussion_id)
+       VALUES ($1, 5, $2, $3) RETURNING id`,
+      [member.id, groupId, created.value.id],
+    );
+    const eventId = inserted[0]!.id;
+
+    const feed = await listGroupFeed(member, groupId, { limit: 20 });
+    expect(feed.ok).toBe(true);
+    if (!feed.ok) return;
+    expect(feed.value.items.some((item) => item.kind === 'comment_created')).toBe(false);
+    expect(feed.value.items.some((item) => item.id === eventId)).toBe(false);
+
+    expect(await getVisibleEvent(member.id, eventId)).toBeNull();
   });
 
   it('pages without repeating entries', async () => {

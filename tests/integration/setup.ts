@@ -14,5 +14,6 @@ env.SESSION_SECRET = 'test-session-secret-0123456789abcdef';
 env.REGISTRATION_TICKET_SECRET = 'test-ticket-secret-0123456789abcdef';
 env.OAUTH_CLIENT_ID = 'test-client-id';
 env.OAUTH_CLIENT_SECRET = 'test-client-secret';
+env.TMDB_ACCESS_TOKEN = 'test-tmdb-token';
 env.DEMO_LOGIN = '0';
 env.LOG_LEVEL = 'error';

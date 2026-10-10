@@ -43,7 +43,7 @@ services:
       timeout: 5s
       retries: 10
   app:
-    image: birthday-platform:${IMAGE_TAG:-latest}
+    image: learn-watcher-platform:${IMAGE_TAG:-latest}
     depends_on:
       db: { condition: service_healthy }
     ports:
@@ -52,22 +52,52 @@ services:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health || exit 1']
 ```
 
-У проекта задан `name: birthday-platform`, потому что имя каталога не ASCII.
+У проекта задан `name: learn-watcher-platform`, потому что имя каталога не ASCII; из него
+выводятся имена сети (`learn-watcher-platform_default`) и тома (`learn-watcher-platform_db_data`).
+Смена имени проекта создаёт **пустой том**, поэтому первый деплой обязан включать шаг миграций
+(`scripts/deploy.sh` выполняет `migrate` до `up`).
 
 ## CI/CD (`.github/workflows/ci-cd.yml`)
 
 ```
 push/PR → checks: typecheck, lint, deps, verify:env, unit, integration, audit, build
-       → (main) build image: tags sha + latest (+ -migrate)
-       → (main) deploy: save previous → deliver → migrate → up, rollback on failure
+       → (master) build: образы app + -migrate локально (load: true), без GHCR
+       → (master) deliver: docker save app -migrate | gzip | ssh 'gunzip | docker load'
+       → (master) deploy: save previous → migrate → up, rollback on failure
 ```
 
 Обязательные шаги:
 - `checks` — блокируют всё.
-- `build` — образы `app` и `migrate` с тегами `sha` и `latest`.
-- `migrate` — отдельный образ до старта нового контейнера.
-- `deploy` — не трогает `.env` и том; сохраняет `previous` для отката (`scripts/deploy.sh`).
+- `build` — собирает `runner` и `migrator` (`--target migrator`) с `load: true` и
+  доставляет их на хост по SSH; шагов логина/публикации в реестр нет.
+- `deploy` — прогоняет `scripts/deploy.sh` на хосте с пустыми `IMAGE_REF`/`MIGRATE_IMAGE_REF`
+  и локальными тегами `learn-watcher-platform[:latest]` / `learn-watcher-platform-migrate:latest`
+  (образы уже загружены); сохраняет `previous` для отката.
 - `concurrency` — отмена устаревших запусков на ветке; `deploy-production` — без отмены.
+
+## Хостовый деплой (VPS + Caddy)
+
+За пределами репозитория:
+- Каталог деплоя на VPS — из секрета `DEPLOY_DIR` (например `/opt/watcher-platform`);
+  CI создаёт его, доставляет туда `docker-compose.yml` и запускает `scripts/deploy.sh`
+  из этого каталога.
+- Хостовый `.env` (в каталоге `DEPLOY_DIR`) с `APP_ORIGIN=https://learn-watcher-platform.duckdns.org`, `DATABASE_URL`/
+  `POSTGRES_*`, `SESSION_SECRET`, `REGISTRATION_TICKET_SECRET`, Google `OAUTH_CLIENT_ID`/
+  `OAUTH_CLIENT_SECRET` и `TMDB_ACCESS_TOKEN` (**API Read Access Token**, длинный `eyJ...`).
+  `scripts/deploy.sh` подгружает этот `.env` перед миграциями.
+- `APP_ORIGIN` выставляет `Secure`-cookie сессии (см. `auth.ts`).
+- Сайт-блок Caddy для TLS и SSE-ленты (`flush_interval -1` убирает буферизацию ответа):
+
+  ```caddyfile
+  learn-watcher-platform.duckdns.org {
+      reverse_proxy 127.0.0.1:3000 {
+          flush_interval -1
+      }
+  }
+  ```
+
+- DuckDNS A-запись `learn-watcher-platform` → IP VPS; открыты порты 80/443; в Google OAuth
+  добавлен redirect URI `https://learn-watcher-platform.duckdns.org/api/auth/callback/google`.
 
 ## Конфигурация окружения
 
@@ -80,6 +110,7 @@ SESSION_SECRET=
 REGISTRATION_TICKET_SECRET=
 OAUTH_CLIENT_ID=
 OAUTH_CLIENT_SECRET=
+TMDB_ACCESS_TOKEN=
 DEMO_LOGIN=0
 LOG_LEVEL=info
 ```

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
@@ -12,6 +12,12 @@ import {
   listDiscussions,
 } from '@/modules/discussions';
 import { saveGroupRating } from '@/modules/groups';
+
+import { installTmdbFetch } from './tmdb-stub';
+
+beforeAll(() => {
+  installTmdbFetch((ref) => ({ title: ref === '27205' ? 'Начало' : `media-${ref}`, year: 2010 }));
+});
 
 async function makeUser(prefix: string): Promise<Actor> {
   const row = await insertUser({
@@ -104,7 +110,6 @@ describe('media-attached discussions', () => {
       groupId,
       mediaKind: 'film',
       mediaRef: '27205',
-      title: 'Начало',
       rating: 8,
       watchedAt: '2026-08-12',
     });
@@ -171,12 +176,12 @@ describe('addComment', () => {
     expect(rejected).toMatchObject({ ok: false, code: 'FORBIDDEN' });
   });
 
-  it('records a comment_created event', async () => {
+  it('records no event for a comment', async () => {
     const admin = await makeUser('admin');
     const groupId = await makeGroup(admin, 'admin');
     const created = await createDiscussion(admin, { groupId, title: 'Тема' });
     if (!created.ok) return;
     await addComment(admin, { discussionId: created.value.id, body: 'Комментарий' });
-    expect(await countGroupEvents(groupId, 5)).toBe(1);
+    expect(await countGroupEvents(groupId, 5)).toBe(0);
   });
 });

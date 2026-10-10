@@ -1,11 +1,14 @@
+export type MediaKind = 'film' | 'series';
+
 export type Movie = {
   tmdbId: number;
+  kind: MediaKind;
   title: string;
-  year: number;
+  year: number | null;
   rating: number;
   genres: string[];
-  actors?: string[];
-  director?: string;
+  director?: string | null;
+  overview?: string | null;
   posterUrl?: string | null;
 };
 
@@ -63,45 +66,12 @@ export type Group = {
 export type SearchFilters = {
   title?: string;
   genre?: string[];
-  actor?: string[];
-  director?: string[];
-  year?: string[];
+  year?: string;
 };
 
 export type FilterKey = keyof SearchFilters;
 
-export type EpisodeMeta = {
-  number: number;
-  title?: string;
-};
-
-export type SeasonMeta = {
-  number: number;
-  episodes: EpisodeMeta[];
-};
-
-export type Series = {
-  id: string;
-  title: string;
-  year: number;
-  genres: string[];
-  seasons: SeasonMeta[];
-  posterUrl?: string | null;
-};
-
-export type SeriesMode = 'per-episode' | 'whole';
-
-export type EpisodeRating = {
-  rating: number;
-  comment?: string;
-};
-
-export type SeriesRecord = {
-  id: string;
-  series: Series;
-  mode: SeriesMode;
-  seriesRating?: number;
-  seriesComment?: string;
-  episodes?: Record<string, EpisodeRating>;
-  watchedAt: string;
+export type FilterOption = {
+  value: string;
+  label: string;
 };

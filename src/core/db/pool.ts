@@ -6,18 +6,18 @@ import { env } from '@/core/config/env';
 // keys in the compact schema are bigint, so parse them as numbers everywhere.
 types.setTypeParser(20, (value: string) => Number(value));
 
-const globalForPool = globalThis as unknown as { __birthdayPool?: Pool };
+const globalForPool = globalThis as unknown as { __watcherPool?: Pool };
 
 export function getPool(): Pool {
-  if (!globalForPool.__birthdayPool) {
-    globalForPool.__birthdayPool = new Pool({
+  if (!globalForPool.__watcherPool) {
+    globalForPool.__watcherPool = new Pool({
       connectionString: env.DATABASE_URL,
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     });
   }
-  return globalForPool.__birthdayPool;
+  return globalForPool.__watcherPool;
 }
 
 export async function query<T extends Record<string, unknown>>(
@@ -33,8 +33,8 @@ export async function pingDatabase(): Promise<void> {
 }
 
 export async function closePool(): Promise<void> {
-  if (globalForPool.__birthdayPool) {
-    await globalForPool.__birthdayPool.end();
-    globalForPool.__birthdayPool = undefined;
+  if (globalForPool.__watcherPool) {
+    await globalForPool.__watcherPool.end();
+    globalForPool.__watcherPool = undefined;
   }
 }

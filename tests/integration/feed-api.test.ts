@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 
@@ -22,6 +22,12 @@ import { closePool, query } from '@/core/db/pool';
 import { withTransaction } from '@/core/db/transaction';
 import { recordEvent } from '@/modules/activity';
 import { insertUser } from '@/modules/auth/repository';
+
+import { installTmdbFetch } from './tmdb-stub';
+
+beforeAll(() => {
+  installTmdbFetch((ref) => ({ title: ref === '27205' ? 'Начало' : `media-${ref}`, year: 2010 }));
+});
 
 const { databaseUrl } = JSON.parse(
   readFileSync(resolve(process.cwd(), 'tests/integration/.db-url.json'), 'utf8'),
@@ -157,9 +163,6 @@ describe('POST mutation routes', () => {
         {
           mediaKind: 'film',
           mediaRef: '27205',
-          title: 'Начало',
-          year: 2010,
-          genres: ['фантастика'],
           rating: 9,
           watchedAt: '2026-08-12',
         },

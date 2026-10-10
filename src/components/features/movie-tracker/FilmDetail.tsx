@@ -25,6 +25,8 @@ export function FilmDetail({
 
   const watched = Boolean(record);
   const poster = movie.posterUrl ?? null;
+  const isSeries = movie.kind === 'series';
+  const backHref = isSeries ? '/series' : '/';
 
   function handleSave(payload: RatingPayload) {
     setRecord({
@@ -35,11 +37,8 @@ export function FilmDetail({
       watchedAt: payload.watchedAt,
     });
     void saveRemoteRating({
-      mediaKind: 'film',
+      mediaKind: movie.kind,
       mediaRef: String(movie.tmdbId),
-      title: movie.title,
-      year: movie.year,
-      genres: movie.genres,
       rating: payload.rating,
       comment: payload.comment,
       watchedAt: payload.watchedAt,
@@ -56,7 +55,7 @@ export function FilmDetail({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link href="/" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+      <Link href={backHref} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
         ← Назад к поиску
       </Link>
 
@@ -79,9 +78,12 @@ export function FilmDetail({
 
         <div className="space-y-4">
           <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {isSeries ? 'Сериал' : 'Фильм'}
+            </p>
             <h1 className="text-2xl font-semibold tracking-tight">{movie.title}</h1>
             <p className="text-sm text-muted-foreground">
-              {movie.year} · внешний рейтинг{' '}
+              {movie.year ?? '—'} · внешний рейтинг{' '}
               <span className="inline-flex items-center gap-1 font-medium text-foreground">
                 <Star aria-hidden="true" className="h-3.5 w-3.5 text-accent-foreground" />
                 {movie.rating.toFixed(1)}
@@ -97,10 +99,14 @@ export function FilmDetail({
             ))}
           </ul>
 
-          {movie.actors?.length ? (
+          {movie.director ? (
             <p className="text-sm text-muted-foreground">
-              В ролях: {movie.actors.join(', ')}
+              {isSeries ? 'Создатель' : 'Режиссёр'}: {movie.director}
             </p>
+          ) : null}
+
+          {movie.overview ? (
+            <p className="text-sm text-muted-foreground">{movie.overview}</p>
           ) : null}
 
           {record && record.rating > 0 ? (

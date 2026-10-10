@@ -23,6 +23,7 @@ ENV SESSION_SECRET=build-session-secret-000000000000000000
 ENV REGISTRATION_TICKET_SECRET=build-ticket-secret-0000000000000000
 ENV OAUTH_CLIENT_ID=build-client-id
 ENV OAUTH_CLIENT_SECRET=build-client-secret
+ENV TMDB_ACCESS_TOKEN=build-tmdb-token
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

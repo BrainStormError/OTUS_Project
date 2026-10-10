@@ -8,6 +8,7 @@ export const envSchema = z.object({
   REGISTRATION_TICKET_SECRET: z.string().min(32),
   OAUTH_CLIENT_ID: z.string().min(1),
   OAUTH_CLIENT_SECRET: z.string().min(1),
+  TMDB_ACCESS_TOKEN: z.string().min(1),
   DEMO_LOGIN: z.enum(['0', '1']).default('0'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });

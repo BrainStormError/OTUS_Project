@@ -1,5 +1,7 @@
 import type { PoolClient } from 'pg';
 
+import type { SaveMetadata } from '@/modules/catalog';
+
 import {
   deletePersonalRating as deletePersonalRatingRepository,
   hasGroupRating as hasGroupRatingRepository,
@@ -16,8 +18,9 @@ export async function savePersonalRating(
   tx: PoolClient,
   userId: number,
   input: RatingInput,
+  metadata: SaveMetadata,
 ): Promise<RatingEntry> {
-  const mediaId = await upsertMedia(tx, input);
+  const mediaId = await upsertMedia(tx, metadata);
   return upsertPersonalRatingRepository(tx, userId, mediaId, input);
 }
 
@@ -26,8 +29,9 @@ export async function saveGroupRating(
   userId: number,
   groupId: number,
   input: RatingInput,
+  metadata: SaveMetadata,
 ): Promise<GroupRatingMember> {
-  const mediaId = await upsertMedia(tx, input);
+  const mediaId = await upsertMedia(tx, metadata);
   return upsertGroupRatingRepository(tx, userId, groupId, mediaId, input);
 }
 

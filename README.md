@@ -22,6 +22,7 @@ PostgreSQL через `pg` без ORM, `zod`-границы, Auth.js, обяза
 | Валидация | `zod` | 3.25.76 |
 | Аутентификация | Auth.js / NextAuth | 5.0.0-beta.32 |
 | Тесты | Vitest / Testing Library / Testcontainers / Playwright | 5.0.3 / 16.3.3 / 12.2.0 / 1.63.0 |
+| Каталог | TMDB API v3 (bearer-токен, `language=ru-RU`) | — |
 
 Требования: Node.js >= 20.9, Docker (для integration-тестов и e2e), PostgreSQL 16.
 
@@ -72,6 +73,7 @@ curl -fsS http://127.0.0.1:3000/api/health   # {"status":"ok"}
 | `SESSION_SECRET` | да | >= 32 символов, подпись сессии |
 | `REGISTRATION_TICKET_SECRET` | да | >= 32 символов, HMAC регистрационного ticket |
 | `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` | да | OAuth-провайдер (Auth.js) |
+| `TMDB_ACCESS_TOKEN` | да | bearer-токен TMDB API (поиск, детали, жанры) |
 | `DEMO_LOGIN` | нет | `1` включает demo-вход (course-окружение) |
 | `LOG_LEVEL` | нет | `debug` / `info` / `warn` / `error` |
 
@@ -79,26 +81,36 @@ curl -fsS http://127.0.0.1:3000/api/health   # {"status":"ok"}
 
 ## Деплой
 
-1. CI (`.github/workflows/ci-cd.yml`): блокирующие проверки на PR; на `main` — сборка и
-   публикация образов `app` и `migrate` с тегами `sha` и `latest`.
-2. `deploy` job по SSH выполняет `scripts/deploy.sh` на хосте:
-   **save previous → deliver → migrate → up**.
+1. CI (`.github/workflows/ci-cd.yml`): блокирующие проверки на PR; на `master` — сборка
+   образов `app` (`learn-watcher-platform`) и `migrate`
+   (`learn-watcher-platform-migrate`) и доставка их на хост по SSH
+   (`docker save | gzip | ssh 'gunzip | docker load'`), без реестра/GHCR.
+   Туда же доставляется `docker-compose.yml`.
+2. `deploy` job по SSH выполняет `scripts/deploy.sh` на хосте (из каталога `DEPLOY_DIR`):
+   **save previous → migrate → up** (образы уже загружены на хост).
+
+Каталог деплоя на VPS задаётся секретом `DEPLOY_DIR` (например `/opt/watcher-platform`);
+CI сам создаёт его и копирует туда `docker-compose.yml`. Хостовый `.env` кладётся в этот
+каталог вручную (в git не хранится).
 
 ```bash
-IMAGE_REF=ghcr.io/<owner>/<repo>:<sha> \
-MIGRATE_IMAGE_REF=ghcr.io/<owner>/<repo>:<sha>-migrate \
+IMAGE_REF= MIGRATE_IMAGE_REF= \
+APP_IMAGE=learn-watcher-platform:latest \
+MIGRATE_IMAGE=learn-watcher-platform-migrate:latest \
 bash scripts/deploy.sh
 ```
 
 Миграции выполняются отдельным образом (`--target migrator`) до старта нового контейнера.
+Перед запуском миграций `scripts/deploy.sh` подгружает хостовый `.env` (если он есть), чтобы
+`DATABASE_URL` попал в контейнер миграций.
 
 ## Откат
 
-`scripts/deploy.sh` сохраняет предыдущий образ под тегом `birthday-platform:previous`.
+`scripts/deploy.sh` сохраняет предыдущий образ под тегом `learn-watcher-platform:previous`.
 При любом сбое (миграция, `up`) срабатывает `trap` и выполняется откат:
 
 ```
-docker tag birthday-platform:previous birthday-platform:latest
+docker tag learn-watcher-platform:previous learn-watcher-platform:latest
 docker compose up -d --no-build app
 ```
 

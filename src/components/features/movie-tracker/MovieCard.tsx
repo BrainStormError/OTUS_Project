@@ -7,22 +7,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
 
-import type { Movie } from './types';
+import type { MediaKind, Movie } from './types';
 
 export function MovieCard({
   movie,
+  kind,
   watched = false,
   onToggleWatched,
   href,
   className,
 }: {
   movie: Movie;
+  kind?: MediaKind;
   watched?: boolean;
   onToggleWatched?: (next: boolean) => void;
   href?: string;
   className?: string;
 }) {
   const poster = movie.posterUrl ?? null;
+  const mediaKind = kind ?? movie.kind;
+  const detailHref = href ?? `/${mediaKind === 'series' ? 'series' : 'film'}/${movie.tmdbId}`;
+
   return (
     <article
       data-testid="movie-card"
@@ -32,7 +37,7 @@ export function MovieCard({
       )}
     >
       <Link
-        href={href ?? `/film/${movie.tmdbId}`}
+        href={detailHref}
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
@@ -68,10 +73,10 @@ export function MovieCard({
           </span>
         </div>
         <div className="space-y-1 p-3">
-          <h3 className="line-clamp-2 text-sm font-semibold leading-tight">
-            {movie.title}
-          </h3>
-          <p className="text-xs text-muted-foreground">{movie.year}</p>
+          <h3 className="line-clamp-2 text-sm font-semibold leading-tight">{movie.title}</h3>
+          {movie.year !== null ? (
+            <p className="text-xs text-muted-foreground">{movie.year}</p>
+          ) : null}
         </div>
       </Link>
       <div className="flex flex-1 flex-col justify-between gap-3 px-3 pb-3">

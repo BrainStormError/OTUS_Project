@@ -6,10 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SidebarRail } from '@/components/layout/sidebar-rail';
 import { AsyncView } from '@/components/features/AsyncView';
 import { SearchField } from '@/components/features/movie-tracker/SearchField';
-import { listMovies } from '@/components/features/movie-tracker/data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+
+const genres = [
+  { value: 'драма', label: 'Драма' },
+  { value: 'боевик', label: 'Боевик' },
+];
+const years = [2010, 1999];
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/films',
@@ -132,10 +137,11 @@ describe('accessible names and focus', () => {
   it('keeps a logical keyboard order through search', async () => {
     render(
       <SearchField
-        movies={listMovies()}
         filters={{}}
         onFiltersChange={() => undefined}
         onSearch={() => undefined}
+        genres={genres}
+        years={years}
       />,
     );
     await userEvent.tab();

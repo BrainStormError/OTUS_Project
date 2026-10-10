@@ -16,8 +16,6 @@ function actionLabel(event: FeedItem): string {
     }
     case 'post_created':
       return `создал(а) обсуждение «${event.title ?? ''}»`;
-    case 'comment_created':
-      return `оставил(а) комментарий в «${event.title ?? ''}»`;
     case 'group_joined':
       return 'вступил(а) в группу';
     default:

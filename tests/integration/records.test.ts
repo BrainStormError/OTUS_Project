@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool } from '@/core/db/pool';
 import { insertUser } from '@/modules/auth/repository';
 import { deleteWatchedRecord, listWatchedRecords, saveWatchedRecord } from '@/modules/records';
+
+import { installTmdbFetch } from './tmdb-stub';
 
 async function makeUser(prefix: string): Promise<Actor> {
   const row = await insertUser({
@@ -16,17 +18,18 @@ async function makeUser(prefix: string): Promise<Actor> {
   return { id: row.id, role: 'employee' };
 }
 
-function input(ref: string, title: string) {
+function input(ref: string) {
   return {
     mediaKind: 'film' as const,
     mediaRef: ref,
-    title,
-    year: 2010,
-    genres: ['фантастика'],
     rating: 8,
     watchedAt: '2026-08-12',
   };
 }
+
+beforeAll(() => {
+  installTmdbFetch(() => ({ title: 'Начало', year: 2010, director: 'Кристофер Нолан', genreIds: [878] }));
+});
 
 afterAll(async () => {
   await closePool();
@@ -35,7 +38,7 @@ afterAll(async () => {
 describe('listWatchedRecords', () => {
   it('returns the account records with kind, ref, title, rating, and watch date', async () => {
     const actor = await makeUser('owner');
-    await saveWatchedRecord(actor, input(`ref-${randomUUID().slice(0, 8)}`, 'Начало'));
+    await saveWatchedRecord(actor, input(`ref-${randomUUID().slice(0, 8)}`));
 
     const result = await listWatchedRecords(actor);
     expect(result.ok).toBe(true);
@@ -52,7 +55,7 @@ describe('listWatchedRecords', () => {
   it('only returns the signed-in account records', async () => {
     const owner = await makeUser('owner');
     const stranger = await makeUser('stranger');
-    await saveWatchedRecord(owner, input(`ref-${randomUUID().slice(0, 8)}`, 'Начало'));
+    await saveWatchedRecord(owner, input(`ref-${randomUUID().slice(0, 8)}`));
 
     const strangerResult = await listWatchedRecords(stranger);
     expect(strangerResult.ok).toBe(true);
@@ -65,7 +68,7 @@ describe('listWatchedRecords', () => {
 describe('deleteWatchedRecord', () => {
   it('removes the record for its owner', async () => {
     const actor = await makeUser('owner');
-    const saved = await saveWatchedRecord(actor, input(`ref-${randomUUID().slice(0, 8)}`, 'Начало'));
+    const saved = await saveWatchedRecord(actor, input(`ref-${randomUUID().slice(0, 8)}`));
     if (!saved.ok) return;
 
     const deleted = await deleteWatchedRecord(actor, saved.value.id);
@@ -80,7 +83,7 @@ describe('deleteWatchedRecord', () => {
   it('rejects deleting another account record', async () => {
     const owner = await makeUser('owner');
     const stranger = await makeUser('stranger');
-    const saved = await saveWatchedRecord(owner, input(`ref-${randomUUID().slice(0, 8)}`, 'Начало'));
+    const saved = await saveWatchedRecord(owner, input(`ref-${randomUUID().slice(0, 8)}`));
     if (!saved.ok) return;
 
     const deleted = await deleteWatchedRecord(stranger, saved.value.id);

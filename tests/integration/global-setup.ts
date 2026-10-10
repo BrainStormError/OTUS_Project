@@ -9,7 +9,7 @@ const URL_FILE = resolve(process.cwd(), 'tests/integration/.db-url.json');
 
 export default async function setup() {
   const container = await new PostgreSqlContainer('postgres:16-alpine')
-    .withDatabase('birthday_test')
+    .withDatabase('watcher_test')
     .start();
 
   const databaseUrl = container.getConnectionUri();

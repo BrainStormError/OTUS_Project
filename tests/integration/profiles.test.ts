@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool } from '@/core/db/pool';
@@ -9,6 +9,8 @@ import { authorizeDemoUser } from '@/modules/auth/demo';
 import { insertUser, updatePrivacy } from '@/modules/auth/repository';
 import { getOwnProfile, getProfileByHandle } from '@/modules/profiles';
 import { saveWatchedRecord } from '@/modules/records';
+
+import { installTmdbFetch } from './tmdb-stub';
 
 async function makeUser(prefix: string, handle?: string): Promise<Actor> {
   const row = await insertUser({
@@ -24,13 +26,14 @@ async function addRating(actor: Actor, value: number): Promise<void> {
   await saveWatchedRecord(actor, {
     mediaKind: 'film',
     mediaRef: '27205',
-    title: 'Начало',
-    year: 2010,
-    genres: ['фантастика'],
     rating: value,
     watchedAt: '2026-08-12',
   });
 }
+
+beforeAll(() => {
+  installTmdbFetch(() => ({ title: 'Начало', year: 2010 }));
+});
 
 afterAll(async () => {
   await closePool();

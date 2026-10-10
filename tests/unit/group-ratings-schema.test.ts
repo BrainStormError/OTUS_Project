@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { groupRatingInput } from '@/modules/groups';
+import { ratingInput } from '@/modules/ratings';
 
 const base = {
   groupId: 3,
   mediaKind: 'film',
   mediaRef: '27205',
-  title: 'Начало',
   watchedAt: '2026-08-12',
 };
 
@@ -36,5 +36,18 @@ describe('groupRatingInput', () => {
     expect(
       groupRatingInput.safeParse({ ...base, rating: 5, watchedAt: '12.08.2026' }).success,
     ).toBe(false);
+  });
+
+  it('rejects client-supplied metadata on the rating input', () => {
+    const minimal = {
+      mediaKind: 'film',
+      mediaRef: '27205',
+      rating: 5,
+      watchedAt: '2026-08-12',
+    };
+    expect(ratingInput.safeParse(minimal).success).toBe(true);
+    expect(ratingInput.safeParse({ ...minimal, title: 'Начало' }).success).toBe(false);
+    expect(ratingInput.safeParse({ ...minimal, year: 2010 }).success).toBe(false);
+    expect(ratingInput.safeParse({ ...minimal, genres: ['драма'] }).success).toBe(false);
   });
 });

@@ -20,7 +20,8 @@ test('member rates a film, attaches a discussion and sees it across tabs', async
   // Member rates a film through the same media picker UX as My Films.
   await page.getByRole('button', { name: 'Добавить оценку' }).click();
   const picker = page.getByRole('dialog');
-  await picker.getByLabel('Поиск медиа').fill('Паразиты');
+  await picker.getByLabel('Название').fill('Паразиты');
+  await picker.getByRole('button', { name: 'Найти' }).click();
   await picker.getByRole('button', { name: /Паразиты/ }).click();
 
   const ratingForm = page.getByRole('dialog');

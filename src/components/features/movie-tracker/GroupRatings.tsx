@@ -2,31 +2,30 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Fragment, useId, useMemo, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import type { CatalogSearchResult } from '@/modules/catalog';
 import type { GroupRatingSummary } from '@/modules/groups';
 
-import { listMovies, movieMatches } from './data';
+import { deriveCatalogOptions, type CatalogOptions } from './catalog-view';
 import { RatingForm, type RatingPayload } from './RatingForm';
-import { seriesToMovie } from './series';
-import { listSeries } from './series-data';
 import { SearchField } from './SearchField';
-import type { Movie, SearchFilters } from './types';
+import type { MediaKind, SearchFilters } from './types';
 
-type MediaOption = {
-  kind: 'film' | 'series';
-  ref: string;
-  title: string;
-  year: number;
-  genres: string[];
-  movie: Movie;
-};
+type Options = CatalogOptions;
+const EMPTY_OPTIONS: Options = { genres: [], years: [] };
 
-function mediaKey(mediaKind: string, mediaRef: string): string {
+type SearchState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'done'; items: CatalogSearchResult[] };
+
+function ratingKey(mediaKind: string, mediaRef: string): string {
   return `${mediaKind}:${mediaRef}`;
 }
 
@@ -44,44 +43,56 @@ export function GroupRatings({
   const router = useRouter();
   const attachTitleId = useId();
 
-  const catalog = useMemo<MediaOption[]>(
-    () => [
-      ...listMovies().map((movie) => ({
-        kind: 'film' as const,
-        ref: String(movie.tmdbId),
-        title: movie.title,
-        year: movie.year,
-        genres: movie.genres,
-        movie,
-      })),
-      ...listSeries().map((series) => ({
-        kind: 'series' as const,
-        ref: series.id,
-        title: series.title,
-        year: series.year,
-        genres: series.genres,
-        movie: seriesToMovie(series),
-      })),
-    ],
-    [],
-  );
-
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [kind, setKind] = useState<MediaKind>('film');
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [committed, setCommitted] = useState<SearchFilters | null>(null);
-  const [selected, setSelected] = useState<MediaOption | null>(null);
+  const [search, setSearch] = useState<SearchState>({ status: 'idle' });
+  const [optionsByKind, setOptionsByKind] = useState<Record<MediaKind, Options>>({
+    film: EMPTY_OPTIONS,
+    series: EMPTY_OPTIONS,
+  });
+  const [selected, setSelected] = useState<CatalogSearchResult | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [attachTarget, setAttachTarget] = useState<GroupRatingSummary | null>(null);
   const [attachTitle, setAttachTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const visible = useMemo(() => {
-    if (!committed) {
-      return catalog;
+  function changeKind(next: MediaKind) {
+    setKind(next);
+    setFilters({});
+    setSearch({ status: 'idle' });
+    const current = optionsByKind[next];
+    if (current.genres.length === 0 && current.years.length === 0) {
+      void fetch(`/api/search?kind=${next}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { items?: CatalogSearchResult[] } | null) => {
+          if (data?.items) {
+            setOptionsByKind((previous) => ({ ...previous, [next]: deriveCatalogOptions(data.items as CatalogSearchResult[]) }));
+          }
+        })
+        .catch(() => undefined);
     }
-    return catalog.filter((option) => movieMatches(option.movie, '', committed));
-  }, [catalog, committed]);
+  }
+
+  async function runSearch(active: SearchFilters) {
+    setSearch({ status: 'loading' });
+    try {
+      const params = new URLSearchParams({ kind });
+      if (active.title) params.set('q', active.title);
+      if (active.genre?.length) params.set('genre', active.genre.join(','));
+      if (active.year) params.set('year', active.year);
+      const response = await fetch(`/api/search?${params.toString()}`);
+      if (!response.ok) {
+        setSearch({ status: 'error' });
+        return;
+      }
+      const data = (await response.json()) as { items?: CatalogSearchResult[] };
+      setSearch({ status: 'done', items: data.items ?? [] });
+    } catch {
+      setSearch({ status: 'error' });
+    }
+  }
 
   async function saveRating(payload: RatingPayload) {
     if (!selected) return;
@@ -93,10 +104,7 @@ export function GroupRatings({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           mediaKind: selected.kind,
-          mediaRef: selected.ref,
-          title: selected.title,
-          year: selected.year,
-          genres: selected.genres,
+          mediaRef: selected.externalId,
           rating: payload.rating,
           comment: payload.comment,
           watchedAt: payload.watchedAt,
@@ -181,7 +189,7 @@ export function GroupRatings({
           </thead>
           <tbody className="divide-y divide-border">
             {ratings.map((rating) => {
-              const key = mediaKey(rating.mediaKind, rating.mediaRef);
+              const key = ratingKey(rating.mediaKind, rating.mediaRef);
               const expanded = expandedKey === key;
               const detailId = `rating-${key}`;
               return (
@@ -263,32 +271,44 @@ export function GroupRatings({
       <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} title="Выбор медиа">
         <div className="space-y-3">
           <SearchField
-            movies={catalog.map((option) => option.movie)}
             filters={filters}
             onFiltersChange={setFilters}
-            onSearch={(next) => setCommitted(next)}
-            onReset={() => setCommitted(null)}
+            onSearch={runSearch}
+            onReset={() => setSearch({ status: 'idle' })}
+            genres={optionsByKind[kind].genres}
+            years={optionsByKind[kind].years}
+            kind={kind}
+            onKindChange={changeKind}
             ariaLabel="Поиск медиа"
           />
-          <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-            {visible.map((option) => (
-              <li key={mediaKey(option.kind, option.ref)}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(option);
-                    setPickerOpen(false);
-                  }}
-                  className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                >
-                  <span className="truncate font-medium">{option.title}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {option.kind === 'series' ? 'Сериал' : 'Фильм'} · {option.year}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+
+          {search.status === 'done' ? (
+            search.items.length === 0 ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Ничего не найдено
+              </p>
+            ) : (
+              <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+                {search.items.map((item) => (
+                  <li key={`${item.kind}:${item.externalId}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(item);
+                        setPickerOpen(false);
+                      }}
+                      className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    >
+                      <span className="truncate font-medium">{item.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {item.kind === 'series' ? 'Сериал' : 'Фильм'} · {item.year ?? '—'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
         </div>
       </Modal>
 

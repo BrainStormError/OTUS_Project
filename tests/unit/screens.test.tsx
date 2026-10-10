@@ -11,37 +11,120 @@ import { ProfileView } from '@/components/features/movie-tracker/ProfileView';
 import { RecordView } from '@/components/features/movie-tracker/RecordView';
 import { SettingsView } from '@/components/features/movie-tracker/SettingsView';
 import { StatisticsView } from '@/components/features/movie-tracker/StatisticsView';
-import { groups, listMovies, searchGroups } from '@/components/features/movie-tracker/data';
-import { listSeries } from '@/components/features/movie-tracker/series-data';
+import { searchGroups } from '@/components/features/movie-tracker/group-search';
 import type {
   FriendRequest,
+  Group,
+  Movie,
   PublicUser,
-  SeriesRecord,
   UserStats,
   WatchedRecord,
 } from '@/components/features/movie-tracker/types';
+import type { CatalogSearchResult } from '@/modules/catalog';
 
-const movies = listMovies();
-const seriesCatalog = listSeries();
+function film(
+  tmdbId: number,
+  title: string,
+  year: number,
+  genres: string[],
+): Movie {
+  return { tmdbId, kind: 'film', title, year, rating: 8, genres, posterUrl: null };
+}
+
+const movies: Movie[] = [
+  film(27205, 'Начало', 2010, ['фантастика', 'боевик']),
+  film(155, 'Тёмный рыцарь', 2008, ['боевик', 'драма']),
+  film(680, 'Криминальное чтиво', 1994, ['драма', 'криминал']),
+  film(603, 'Матрица', 1999, ['фантастика', 'боевик']),
+  film(13, 'Форрест Гамп', 1994, ['драма', 'романтика']),
+  film(129, 'Унесённые призраками', 2001, ['анимация', 'фэнтези']),
+];
+
+const seriesFixtures: Movie[] = [
+  { tmdbId: 1396, kind: 'series', title: 'Во все тяжкие', year: 2008, rating: 8.9, genres: ['драма', 'криминал'], posterUrl: null },
+  { tmdbId: 87108, kind: 'series', title: 'Чернобыль', year: 2019, rating: 8.7, genres: ['драма', 'история'], posterUrl: null },
+  { tmdbId: 82856, kind: 'series', title: 'Тьма', year: 2017, rating: 8.4, genres: ['фантастика', 'триллер'], posterUrl: null },
+];
+
+function catalogItem(movie: Movie): CatalogSearchResult {
+  return {
+    kind: movie.kind,
+    externalId: String(movie.tmdbId),
+    title: movie.title,
+    year: movie.year,
+    posterUrl: movie.posterUrl ?? null,
+    externalRating: movie.rating,
+    genres: movie.genres,
+    genreIds: movie.genres.map((_, index) => index + 1),
+  };
+}
+
+const filmsCatalog: CatalogSearchResult[] = [
+  ...movies.map(catalogItem),
+  {
+    kind: 'film',
+    externalId: '496243',
+    title: 'Паразиты',
+    year: 2019,
+    posterUrl: null,
+    externalRating: 8.5,
+    genres: ['драма', 'триллер'],
+    genreIds: [3, 6],
+  },
+];
+
+const seriesCatalog: CatalogSearchResult[] = [
+  ...seriesFixtures.map(catalogItem),
+  {
+    kind: 'series',
+    externalId: '69313',
+    title: 'Игра в кальмара',
+    year: 2021,
+    posterUrl: null,
+    externalRating: 7.8,
+    genres: ['триллер', 'драма'],
+    genreIds: [6, 3],
+  },
+];
+
+function mockCatalogFetch(catalog: CatalogSearchResult[]) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method && init.method !== 'GET') {
+      return new Response(JSON.stringify({ id: 1 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    const url = new URL(String(input), 'http://localhost');
+    const kind = url.searchParams.get('kind');
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const year = url.searchParams.get('year');
+    const items = catalog.filter(
+      (item) =>
+        (!kind || item.kind === kind) &&
+        (!q || item.title.toLowerCase().includes(q)) &&
+        (!year || String(item.year) === year),
+    );
+    return new Response(JSON.stringify({ items }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
 const filmRecords: WatchedRecord[] = [
   { id: 1, movie: movies[0]!, rating: 9, comment: 'Отличная структура сна.', watchedAt: '2026-08-12' },
   { id: 2, movie: movies[3]!, rating: 8.5, watchedAt: '2026-08-02' },
   { id: 3, movie: movies[4]!, rating: 7.5, comment: 'Тёплое кино.', watchedAt: '2026-07-21' },
-  { id: 4, movie: movies[6]!, rating: 9.5, watchedAt: '2026-07-05' },
+  { id: 4, movie: movies[5]!, rating: 9.5, watchedAt: '2026-07-05' },
 ];
 
-const seriesRecords: SeriesRecord[] = [
-  {
-    id: 's1',
-    series: seriesCatalog[1]!,
-    mode: 'whole',
-    seriesRating: 9.4,
-    seriesComment: 'Мощно.',
-    watchedAt: '2026-08-10',
-  },
-  { id: 's2', series: seriesCatalog[0]!, mode: 'whole', seriesRating: 9, watchedAt: '2026-07-15' },
-  { id: 's3', series: seriesCatalog[3]!, mode: 'whole', seriesRating: 7, watchedAt: '2026-06-01' },
+const seriesRecords: WatchedRecord[] = [
+  { id: 11, movie: seriesFixtures[1]!, rating: 9.4, comment: 'Мощно.', watchedAt: '2026-08-10' },
+  { id: 12, movie: seriesFixtures[0]!, rating: 9, watchedAt: '2026-07-15' },
+  { id: 13, movie: seriesFixtures[2]!, rating: 7, watchedAt: '2026-06-01' },
 ];
 
 const statsFixture: UserStats = {
@@ -50,39 +133,11 @@ const statsFixture: UserStats = {
   years: [{ year: 2010, count: 1 }],
 };
 
-const maria: PublicUser = {
-  id: 2,
-  handle: 'maria',
-  name: 'Мария',
-  isFriend: true,
-  stats: statsFixture,
-  recent: [],
-};
-const ivan: PublicUser = {
-  id: 3,
-  handle: 'ivan',
-  name: 'Иван',
-  statsHidden: true,
-  stats: statsFixture,
-  recent: [],
-};
-const secret: PublicUser = {
-  id: 4,
-  handle: 'secret',
-  name: 'Скрытый пользователь',
-  profileHidden: true,
-  statsHidden: true,
-  stats: statsFixture,
-  recent: [],
-};
+const maria: PublicUser = { id: 2, handle: 'maria', name: 'Мария', isFriend: true, stats: statsFixture, recent: [] };
+const ivan: PublicUser = { id: 3, handle: 'ivan', name: 'Иван', statsHidden: true, stats: statsFixture, recent: [] };
+const secret: PublicUser = { id: 4, handle: 'secret', name: 'Скрытый пользователь', profileHidden: true, statsHidden: true, stats: statsFixture, recent: [] };
 const nina: PublicUser = { id: 5, handle: 'nina', name: 'Нина', stats: statsFixture, recent: [] };
-const ownProfile: PublicUser = {
-  id: 1,
-  handle: 'me',
-  name: 'Алексей',
-  stats: statsFixture,
-  recent: filmRecords,
-};
+const ownProfile: PublicUser = { id: 1, handle: 'me', name: 'Алексей', stats: statsFixture, recent: filmRecords };
 
 const friendRequests: FriendRequest[] = [
   { id: 1, user: nina },
@@ -91,9 +146,22 @@ const friendRequests: FriendRequest[] = [
 const friends: PublicUser[] = [maria];
 const outgoingRequests: FriendRequest[] = [{ id: 1, user: nina }];
 
+const ownGroups: Group[] = [
+  { id: 1, name: 'Киновечера', description: 'Смотрим и обсуждаем по пятницам.', tags: ['пятница', 'обсуждение', 'компания'], members: [], stats: statsFixture },
+  { id: 2, name: 'Классика', description: 'Фильмы до 1990 года.', tags: ['классика', 'ретро'], members: [], stats: statsFixture },
+];
+const otherGroups: Group[] = [
+  { id: 3, name: 'Документальное кино', description: 'Реальные истории и биографии.', tags: ['документальное', 'биография'], members: [], stats: statsFixture },
+  { id: 4, name: 'Закрытый клуб', description: 'Только по приглашению.', tags: ['закрытый'], members: [], stats: statsFixture, restricted: true },
+];
+
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.setAttribute('data-theme', 'light');
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('My Films and records', () => {
@@ -124,17 +192,11 @@ describe('My Films and records', () => {
 
     const ratingButton = within(list).getByRole('button', { name: /Оценка/ });
     await userEvent.click(ratingButton);
-    expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute(
-      'aria-sort',
-      'ascending',
-    );
+    expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute('aria-sort', 'ascending');
     expect(within(dataRows()[0]!).getByText('Форрест Гамп')).toBeInTheDocument();
 
     await userEvent.click(ratingButton);
-    expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute(
-      'aria-sort',
-      'descending',
-    );
+    expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute('aria-sort', 'descending');
     expect(within(dataRows()[0]!).getByText('Унесённые призраками')).toBeInTheDocument();
   });
 
@@ -161,10 +223,7 @@ describe('My Films and records', () => {
     expect(title).toHaveAttribute('aria-expanded', 'false');
 
     await userEvent.click(within(list).getByText('2026-08-12'));
-    expect(within(list).getByRole('button', { name: 'Начало' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    expect(within(list).getByRole('button', { name: 'Начало' })).toHaveAttribute('aria-expanded', 'true');
     expect(within(list).getByText('Отличная структура сна.')).toBeVisible();
   });
 
@@ -176,7 +235,7 @@ describe('My Films and records', () => {
     expect(within(list).queryByText('Начало')).not.toBeInTheDocument();
   });
 
-  it('scopes genre, actor, director, and year options to watched films', async () => {
+  it('scopes genre and year options to watched films and omits actor/director filters', async () => {
     render(<MyFilmsView initialRecords={filmRecords} />);
 
     await userEvent.click(screen.getByText('Жанр'));
@@ -184,21 +243,21 @@ describe('My Films and records', () => {
     expect(within(genre).getByRole('checkbox', { name: 'фантастика' })).toBeInTheDocument();
     expect(within(genre).queryByRole('checkbox', { name: 'триллер' })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByText('Режиссёр'));
-    const director = screen.getByRole('group', { name: 'Режиссёр' });
-    expect(within(director).getByRole('checkbox', { name: 'Кристофер Нолан' })).toBeInTheDocument();
-    expect(
-      within(director).queryByRole('checkbox', { name: 'Квентин Тарантино' }),
-    ).not.toBeInTheDocument();
-
+    expect(screen.queryByText('Актёр')).not.toBeInTheDocument();
+    expect(screen.queryByText('Режиссёр')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Название').tagName).toBe('INPUT');
   });
 
-  it('adds a record through the modal', async () => {
+  it('adds a record through the film-only modal', async () => {
+    mockCatalogFetch(filmsCatalog);
     render(<MyFilmsView initialRecords={filmRecords} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
-    await userEvent.click(within(picker).getByRole('button', { name: /Паразиты/ }));
+    expect(within(picker).queryByRole('button', { name: /^Паразиты/ })).not.toBeInTheDocument();
+    await userEvent.type(within(picker).getByLabelText('Название'), 'Паразиты');
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    await userEvent.click(await within(picker).findByRole('button', { name: /^Паразиты/ }));
+
     const dialog = await screen.findByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText(/^Оценка \(/), '8');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }));
@@ -206,7 +265,21 @@ describe('My Films and records', () => {
     expect(await within(list).findByText('Паразиты')).toBeInTheDocument();
   });
 
+  it('shows no catalog list before a search and omits already watched films', async () => {
+    mockCatalogFetch(filmsCatalog);
+    render(<MyFilmsView initialRecords={filmRecords} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    const picker = screen.getByRole('dialog');
+    expect(within(picker).queryByRole('listitem')).not.toBeInTheDocument();
+
+    await userEvent.type(within(picker).getByLabelText('Название'), 'Начало');
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    expect(within(picker).queryByRole('button', { name: /^Начало/ })).not.toBeInTheDocument();
+    expect(await within(picker).findByText('Ничего не найдено')).toBeInTheDocument();
+  });
+
   it('edits a record and deletes it only after confirmation', async () => {
+    mockCatalogFetch(filmsCatalog);
     render(<MyFilmsView initialRecords={filmRecords} />);
     const list = screen.getByTestId('my-films');
 
@@ -226,9 +299,7 @@ describe('My Films and records', () => {
     expect(within(list).getByText('Начало')).toBeInTheDocument();
 
     await userEvent.click(within(list).getByRole('button', { name: 'Удалить' }));
-    await userEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Удалить' }),
-    );
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Удалить' }));
     await waitFor(() => expect(within(list).queryByText('Начало')).not.toBeInTheDocument());
   });
 
@@ -247,13 +318,7 @@ describe('My Films and records', () => {
         initialRecords={[
           {
             id: 680,
-            movie: {
-              tmdbId: 680,
-              title: 'Криминальное чтиво',
-              year: 1994,
-              rating: 8.5,
-              genres: ['драма'],
-            },
+            movie: film(680, 'Криминальное чтиво', 1994, ['драма']),
             rating: 8.5,
             comment: 'Классика',
             watchedAt: '2026-09-01',
@@ -279,17 +344,11 @@ describe('My Series', () => {
     expect(within(dataRows()[0]!).getByText('Чернобыль')).toBeInTheDocument();
 
     await userEvent.click(within(list).getByRole('button', { name: /Оценка/ }));
-    expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute(
-      'aria-sort',
-      'ascending',
-    );
+    expect(within(list).getByRole('columnheader', { name: /Оценка/ })).toHaveAttribute('aria-sort', 'ascending');
     expect(within(dataRows()[0]!).getByText('Тьма')).toBeInTheDocument();
 
     await userEvent.click(within(list).getByRole('button', { name: /Название/ }));
-    expect(within(list).getByRole('columnheader', { name: /Название/ })).toHaveAttribute(
-      'aria-sort',
-      'ascending',
-    );
+    expect(within(list).getByRole('columnheader', { name: /Название/ })).toHaveAttribute('aria-sort', 'ascending');
   });
 
   it('expands a whole-series row in place without seasons or episodes', async () => {
@@ -304,13 +363,17 @@ describe('My Series', () => {
   });
 
   it('adds a series through the whole-series rating modal', async () => {
+    mockCatalogFetch(seriesCatalog);
     render(<MySeriesView initialRecords={seriesRecords} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
     expect(within(picker).getByText('Поиск')).toBeInTheDocument();
     expect(within(picker).queryByText('Актёр')).not.toBeInTheDocument();
     expect(within(picker).queryByText('Режиссёр')).not.toBeInTheDocument();
-    await userEvent.click(within(picker).getByRole('button', { name: /Игра в кальмара/ }));
+    expect(within(picker).queryByRole('button', { name: /^Игра в кальмара/ })).not.toBeInTheDocument();
+    await userEvent.type(within(picker).getByLabelText('Название'), 'Игра в кальмара');
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    await userEvent.click(await within(picker).findByRole('button', { name: /^Игра в кальмара/ }));
 
     const dialog = await screen.findByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText(/^Оценка \(/), '8');
@@ -320,23 +383,25 @@ describe('My Series', () => {
   });
 
   it('applies add-modal filters only after Найти', async () => {
+    mockCatalogFetch(seriesCatalog);
     render(<MySeriesView initialRecords={seriesRecords} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
 
-    await userEvent.click(within(picker).getByText('Жанр'));
-    await userEvent.click(within(picker).getByRole('checkbox', { name: 'фантастика' }));
+    await within(picker).findByRole('option', { name: '2021' });
+    await userEvent.selectOptions(within(picker).getByLabelText('Год'), '2021');
 
-    expect(within(picker).getByRole('button', { name: /Во все тяжкие/ })).toBeInTheDocument();
+    expect(within(picker).queryByRole('button', { name: /^Игра в кальмара/ })).not.toBeInTheDocument();
     await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
-    expect(within(picker).queryByRole('button', { name: /Во все тяжкие/ })).not.toBeInTheDocument();
-    expect(within(picker).getByRole('button', { name: /Тьма/ })).toBeInTheDocument();
+    expect(await within(picker).findByRole('button', { name: /^Игра в кальмара/ })).toBeInTheDocument();
+    expect(within(picker).queryByRole('button', { name: /^Во все тяжкие/ })).not.toBeInTheDocument();
   });
 });
 
 describe('Home watched flow', () => {
   it('marks a film watched through the rating modal', async () => {
-    render(<HomeView movies={movies} />);
+    mockCatalogFetch(filmsCatalog);
+    render(<HomeView popularFilms={filmsCatalog} />);
     const card = screen
       .getAllByTestId('movie-card')
       .find((node) => within(node).queryByText('Тёмный рыцарь'));
@@ -355,10 +420,8 @@ describe('Home watched flow', () => {
   it('shows a non-interactive watched indicator on watched cards', async () => {
     render(
       <HomeView
-        movies={movies}
-        initialRecords={[
-          { id: 155, movie: movies[1]!, rating: 8.5, watchedAt: '2026-08-20' },
-        ]}
+        popularFilms={filmsCatalog}
+        initialRecords={[{ id: 155, movie: movies[1]!, rating: 8.5, watchedAt: '2026-08-20' }]}
       />,
     );
     const badges = await screen.findAllByTestId('watched-badge');
@@ -450,17 +513,11 @@ describe('SettingsView', () => {
 
     expect(profileToggle).toHaveAttribute('aria-checked', 'true');
     expect(await screen.findByText('Сохранено')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/me/privacy',
-      expect.objectContaining({ method: 'PATCH' }),
-    );
+    expect(fetchMock).toHaveBeenCalledWith('/api/me/privacy', expect.objectContaining({ method: 'PATCH' }));
   });
 
   it('rolls back and reports failure when saving fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
     render(<SettingsView />);
     const profileToggle = screen.getByRole('switch', { name: 'Скрыть профиль' });
 
@@ -512,14 +569,14 @@ describe('Scoped search in Friends and Groups', () => {
   });
 
   it('searches own groups first and falls back to non-restricted groups', () => {
-    expect(searchGroups('Киновечера', groups).map((group) => group.id)).toEqual([1]);
-    expect(searchGroups('Документ', groups).map((group) => group.id)).toEqual([3]);
-    expect(searchGroups('Закрытый', groups)).toEqual([]);
+    expect(searchGroups('Киновечера', ownGroups, otherGroups).map((group) => group.id)).toEqual([1]);
+    expect(searchGroups('Документ', ownGroups, otherGroups).map((group) => group.id)).toEqual([3]);
+    expect(searchGroups('Закрытый', ownGroups, otherGroups)).toEqual([]);
   });
 
   it('matches groups by tag, falling back to non-restricted groups', () => {
-    expect(searchGroups('ретро', groups).map((group) => group.id)).toEqual([2]);
-    expect(searchGroups('биография', groups).map((group) => group.id)).toEqual([3]);
+    expect(searchGroups('ретро', ownGroups, otherGroups).map((group) => group.id)).toEqual([2]);
+    expect(searchGroups('биография', ownGroups, otherGroups).map((group) => group.id)).toEqual([3]);
   });
 
   it('shows scoped friends in the UI and never leaks hidden profiles', async () => {
@@ -530,15 +587,11 @@ describe('Scoped search in Friends and Groups', () => {
 
     await userEvent.type(box, 'Мария');
     expect(await within(searchRegion).findByRole('link', { name: /Мария/ })).toBeInTheDocument();
-    expect(
-      within(searchRegion).queryByRole('button', { name: /Добавить/ }),
-    ).not.toBeInTheDocument();
+    expect(within(searchRegion).queryByRole('button', { name: /Добавить/ })).not.toBeInTheDocument();
 
     await userEvent.clear(box);
     await userEvent.type(box, 'Нина');
-    expect(
-      await within(searchRegion).findByRole('button', { name: 'Добавить Нина' }),
-    ).toBeInTheDocument();
+    expect(await within(searchRegion).findByRole('button', { name: 'Добавить Нина' })).toBeInTheDocument();
 
     await userEvent.clear(box);
     await userEvent.type(box, 'Скрытый');
@@ -556,13 +609,8 @@ describe('Scoped search in Friends and Groups', () => {
     await userEvent.click(await within(searchRegion).findByRole('button', { name: 'Добавить Нина' }));
 
     expect(await within(searchRegion).findByText('Заявка отправлена')).toBeInTheDocument();
-    expect(
-      within(searchRegion).queryByRole('button', { name: 'Добавить Нина' }),
-    ).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/friendships',
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(within(searchRegion).queryByRole('button', { name: 'Добавить Нина' })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/friendships', expect.objectContaining({ method: 'POST' }));
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/friendships');
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ addresseeId: 5 });
   });
@@ -576,40 +624,25 @@ describe('Scoped search in Friends and Groups', () => {
     await userEvent.type(box, 'Нина');
 
     expect(await within(searchRegion).findByText('Заявка отправлена')).toBeInTheDocument();
-    expect(
-      within(searchRegion).queryByRole('button', { name: /Добавить/ }),
-    ).not.toBeInTheDocument();
+    expect(within(searchRegion).queryByRole('button', { name: /Добавить/ })).not.toBeInTheDocument();
   });
 
   it('renders outgoing requests and withdraws one optimistically', async () => {
-    const fetchMock = vi.fn(() =>
-      Promise.resolve({ ok: true, json: async () => ({ id: 1 }) }),
-    );
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ id: 1 }) }));
     vi.stubGlobal('fetch', fetchMock);
-    render(
-      <FriendsView
-        initialRequests={[]}
-        initialOutgoing={outgoingRequests}
-        initialFriends={friends}
-      />,
-    );
+    render(<FriendsView initialRequests={[]} initialOutgoing={outgoingRequests} initialFriends={friends} />);
     const section = screen.getByRole('region', { name: 'Исходящие заявки' });
     expect(within(section).getByRole('link', { name: /Нина/ })).toBeInTheDocument();
 
-    await userEvent.click(
-      within(section).getByRole('button', { name: 'Отменить заявку для Нина' }),
-    );
+    await userEvent.click(within(section).getByRole('button', { name: 'Отменить заявку для Нина' }));
 
     expect(within(section).queryByRole('link', { name: /Нина/ })).not.toBeInTheDocument();
     expect(within(section).getByText('Исходящих заявок нет')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/friendships/1',
-      expect.objectContaining({ method: 'DELETE' }),
-    );
+    expect(fetchMock).toHaveBeenCalledWith('/api/friendships/1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('shows scoped groups in the UI with fallback and hides restricted groups', async () => {
-    render(<GroupsView groups={groups} />);
+    render(<GroupsView groups={ownGroups} discoverGroups={otherGroups} />);
     const box = screen.getByRole('searchbox', { name: 'Поиск групп' });
 
     await userEvent.type(box, 'Киновечера');
@@ -626,12 +659,9 @@ describe('Scoped search in Friends and Groups', () => {
   });
 
   it('renders the whole group card as a link with tags and no statistics', () => {
-    render(<GroupsView groups={groups} />);
+    render(<GroupsView groups={ownGroups} discoverGroups={otherGroups} />);
     const card = screen.getAllByTestId('group-card')[0]!;
-    expect(within(card).getByRole('link', { name: /Киновечера/ })).toHaveAttribute(
-      'href',
-      '/groups/1',
-    );
+    expect(within(card).getByRole('link', { name: /Киновечера/ })).toHaveAttribute('href', '/groups/1');
     expect(within(card).getByText('пятница')).toBeInTheDocument();
     expect(within(card).queryByText('Фильмов')).not.toBeInTheDocument();
     expect(within(card).queryByText('Средняя оценка')).not.toBeInTheDocument();

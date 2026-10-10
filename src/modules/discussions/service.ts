@@ -94,20 +94,13 @@ export async function addComment(
     return err('FORBIDDEN', 'Комментировать могут только участники группы');
   }
 
-  const post = await withTransaction(async (tx) => {
-    const created = await insertPost(tx, {
+  const post = await withTransaction(async (tx) =>
+    insertPost(tx, {
       discussionId: discussion.id,
       authorId: actor.id,
       body: input.body,
-    });
-    await recordEvent(tx, {
-      actorId: actor.id,
-      kind: 'comment_created',
-      groupId: discussion.groupId,
-      discussionId: discussion.id,
-    });
-    return created;
-  });
+    }),
+  );
   return ok(post);
 }
 

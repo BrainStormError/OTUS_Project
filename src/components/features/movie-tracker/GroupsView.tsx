@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 
 import { GroupCard } from './GroupCard';
-import { searchGroups } from './data';
+import { searchGroups } from './group-search';
 import { joinGroupRemote } from './social-actions';
 import type { Group } from './types';
 

@@ -1,4 +1,4 @@
-name: birthday-platform
+name: learn-watcher-platform
 
 services:
   db:
@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-birthday}
+      POSTGRES_DB: ${POSTGRES_DB:-watcher}
     ports:
       - '127.0.0.1:5433:5432'
     healthcheck:
@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: birthday-platform:${IMAGE_TAG:-latest}
+    image: learn-watcher-platform:${IMAGE_TAG:-latest}
     build:
       context: .
     depends_on:
@@ -27,7 +27,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-birthday}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-watcher}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
       SESSION_SECRET: ${SESSION_SECRET}
       REGISTRATION_TICKET_SECRET: ${REGISTRATION_TICKET_SECRET}
