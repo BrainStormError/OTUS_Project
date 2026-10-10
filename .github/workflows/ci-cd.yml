@@ -83,7 +83,8 @@ jobs:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
         run: |
           install -m 600 /dev/null deploy_key
-          printf '%s' "$DEPLOY_SSH_KEY" > deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
+          ssh-keygen -y -f deploy_key > /dev/null
           ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             "mkdir -p '$DEPLOY_DIR'"
           ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -95,7 +96,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           install -m 600 /dev/null deploy_key
-          printf '%s' "$DEPLOY_SSH_KEY" > deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
           docker save learn-watcher-platform:latest learn-watcher-platform-migrate:latest | gzip | \
             ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
               'gunzip | docker load'
@@ -119,7 +120,7 @@ jobs:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
         run: |
           install -m 600 /dev/null deploy_key
-          printf '%s' "$DEPLOY_SSH_KEY" > deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
           ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd '$DEPLOY_DIR' && IMAGE_REF='' MIGRATE_IMAGE_REF='' APP_IMAGE='learn-watcher-platform:latest' MIGRATE_IMAGE='learn-watcher-platform-migrate:latest' bash -s" \
             < scripts/deploy.sh
