@@ -21,7 +21,7 @@ export function buildCsp(
     "default-src 'self'",
     `script-src ${scriptSrc.join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https://image.tmdb.org",
     "font-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",

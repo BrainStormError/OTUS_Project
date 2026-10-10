@@ -9,6 +9,7 @@ describe('proxy CSP', () => {
     expect(csp).toContain("script-src 'self' 'nonce-abc123' 'strict-dynamic'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("img-src 'self' data: blob: https://image.tmdb.org");
   });
 
   it('sets the nonce and CSP headers on the response', () => {
