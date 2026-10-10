@@ -29,10 +29,12 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-watcher}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      AUTH_URL: ${APP_ORIGIN:-http://localhost:3000}
       SESSION_SECRET: ${SESSION_SECRET}
       REGISTRATION_TICKET_SECRET: ${REGISTRATION_TICKET_SECRET}
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      TMDB_ACCESS_TOKEN: ${TMDB_ACCESS_TOKEN}
       DEMO_LOGIN: ${DEMO_LOGIN:-0}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:

@@ -5,6 +5,7 @@ import Google from 'next-auth/providers/google';
 import { env } from '@/core/config/env';
 
 import { authorizeDemoUser } from './demo';
+import { findUserByEmail, insertUser } from './repository';
 import {
   buildSessionCookieConfig,
   SESSION_MAX_AGE_SECONDS,
@@ -47,6 +48,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...(env.DEMO_LOGIN === '1' ? [demoProvider] : []),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider !== 'google') {
+        return true;
+      }
+      if (!user.email) {
+        return false;
+      }
+      const existing = await findUserByEmail(user.email);
+      if (existing) {
+        user.id = String(existing.id);
+        return true;
+      }
+      const created = await insertUser({
+        email: user.email,
+        name: user.name ?? null,
+        role: 'employee',
+        provider: 'google',
+        providerSubject: account.providerAccountId ?? null,
+      });
+      user.id = String(created.id);
+      return true;
+    },
     jwt({ token, user }) {
       if (user?.id) {
         token.uid = Number(user.id);
