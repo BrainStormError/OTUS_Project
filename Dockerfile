@@ -26,6 +26,8 @@ ENV OAUTH_CLIENT_SECRET=build-client-secret
 ENV TMDB_ACCESS_TOKEN=build-tmdb-token
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# `public/` may be absent/untracked; ensure it exists so the runner COPY succeeds.
+RUN mkdir -p public
 RUN npm run build
 
 FROM node:22-alpine AS runner
