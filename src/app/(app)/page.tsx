@@ -29,18 +29,21 @@ export default async function HomePage() {
   let initialRecords: WatchedRecord[] = [];
   let initialWatchlist: WatchlistItem[] = [];
   if (actor) {
-    const [records, watchlist] = await Promise.all([
+    const [records, filmWatchlist, seriesWatchlist] = await Promise.all([
       listWatchedRecords(actor),
       listWatchlist(actor, 'film'),
+      listWatchlist(actor, 'series'),
     ]);
+    // The home page can search and rate both films and series, so keep every
+    // watched record regardless of kind. Filtering to films here made series
+    // rated from the home page look unrated again after a reload.
     if (records.ok) {
-      initialRecords = records.value
-        .filter((entry) => entry.mediaKind === 'film')
-        .map(toWatchedRecord);
+      initialRecords = records.value.map(toWatchedRecord);
     }
-    if (watchlist.ok) {
-      initialWatchlist = watchlist.value.map(toWatchlistItem);
-    }
+    initialWatchlist = [
+      ...(filmWatchlist.ok ? filmWatchlist.value : []),
+      ...(seriesWatchlist.ok ? seriesWatchlist.value : []),
+    ].map(toWatchlistItem);
   }
 
   return (
