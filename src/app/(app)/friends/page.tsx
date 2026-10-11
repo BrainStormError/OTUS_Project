@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { toFriendRequest, toPublicUser } from '@/components/features/movie-tracker/adapters';
+import { toFriendContact, toFriendRequest } from '@/components/features/movie-tracker/adapters';
 import { FriendsView } from '@/components/features/movie-tracker/FriendsView';
 import { getActor } from '@/modules/auth/session';
 import { getFriends, getIncomingRequests, getOutgoingRequests } from '@/modules/friendships';
@@ -25,7 +25,7 @@ export default async function FriendsPage() {
       <FriendsView
         initialRequests={requests.ok ? requests.value.map(toFriendRequest) : []}
         initialOutgoing={outgoing.ok ? outgoing.value.map(toFriendRequest) : []}
-        initialFriends={friends.ok ? friends.value.map(toPublicUser) : []}
+        initialFriends={friends.ok ? friends.value.map(toFriendContact) : []}
       />
     </div>
   );

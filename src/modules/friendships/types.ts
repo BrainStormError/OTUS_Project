@@ -22,9 +22,20 @@ export type FriendRequestSummary = {
 
 export type RelationshipStatus = 'friend' | 'pending_in' | 'pending_out' | 'none';
 
+export type Relationship = {
+  status: RelationshipStatus;
+  friendshipId: number | null;
+};
+
+export type FriendEntry = {
+  friendshipId: number;
+  user: SocialUser;
+};
+
 export type UserSearchResult = {
   id: number;
   name: string;
   handle: string;
   relationship: RelationshipStatus;
+  friendshipId: number | null;
 };

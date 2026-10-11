@@ -8,7 +8,9 @@ import { insertUser, updatePrivacy } from '@/modules/auth/repository';
 import {
   createFriendRequest,
   declineFriendship,
+  getFriends,
   getOutgoingRequests,
+  removeFriend,
   searchUsers,
   withdrawFriendRequest,
 } from '@/modules/friendships';
@@ -190,6 +192,91 @@ describe('createFriendRequest', () => {
     expect(reversed.value.id).toBe(first.value.id);
     expect(reversed.value.requesterId).toBe(addressee.id);
     expect(reversed.value.status).toBe('pending');
+  });
+});
+
+describe('getFriends', () => {
+  it('returns each friend with the friendship id', async () => {
+    const owner = await insertUserNamed('Фёдор Список');
+    const friend = await insertUserNamed('Фаина Друг');
+    const actor = { id: owner.id, role: 'employee' as const };
+    const friendActor = { id: friend.id, role: 'employee' as const };
+
+    const created = await createFriendRequest(actor, { addresseeId: friend.id });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await acceptFriendshipRow(created.value.id);
+
+    const result = await getFriends(actor);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([
+      { friendshipId: created.value.id, user: { id: friend.id, name: friend.name, handle: friend.handle } },
+    ]);
+    expect(friendActor.id).toBe(friend.id);
+  });
+});
+
+describe('removeFriend', () => {
+  it('deletes an accepted friendship for both parties', async () => {
+    const owner = await insertUserNamed('Гриша Расфренд');
+    const friend = await insertUserNamed('Галя Расфренд');
+    const ownerActor = { id: owner.id, role: 'employee' as const };
+    const friendActor = { id: friend.id, role: 'employee' as const };
+
+    const created = await createFriendRequest(ownerActor, { addresseeId: friend.id });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await acceptFriendshipRow(created.value.id);
+
+    const removed = await removeFriend(ownerActor, { friendshipId: created.value.id });
+    expect(removed.ok).toBe(true);
+
+    const rows = await query('SELECT id FROM friendships WHERE id = $1', [created.value.id]);
+    expect(rows).toHaveLength(0);
+
+    const ownerFriends = await getFriends(ownerActor);
+    expect(ownerFriends.ok && ownerFriends.value).toHaveLength(0);
+    const friendFriends = await getFriends(friendActor);
+    expect(friendFriends.ok && friendFriends.value).toHaveLength(0);
+  });
+
+  it('rejects a non-party with a permission error and keeps the friendship', async () => {
+    const owner = await insertUserNamed('Илья Расфренд');
+    const friend = await insertUserNamed('Инга Расфренд');
+    const stranger = await insertUserNamed('Игнат Чужой');
+    const ownerActor = { id: owner.id, role: 'employee' as const };
+    const strangerActor = { id: stranger.id, role: 'employee' as const };
+
+    const created = await createFriendRequest(ownerActor, { addresseeId: friend.id });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await acceptFriendshipRow(created.value.id);
+
+    const removed = await removeFriend(strangerActor, { friendshipId: created.value.id });
+    expect(removed).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+
+    const rows = await query('SELECT id FROM friendships WHERE id = $1', [created.value.id]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('does not remove pending friendships and reports unknown ids', async () => {
+    const owner = await insertUserNamed('Ким Расфренд');
+    const friend = await insertUserNamed('Кира Расфренд');
+    const ownerActor = { id: owner.id, role: 'employee' as const };
+
+    const created = await createFriendRequest(ownerActor, { addresseeId: friend.id });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const pending = await removeFriend(ownerActor, { friendshipId: created.value.id });
+    expect(pending).toMatchObject({ ok: false, code: 'CONFLICT' });
+
+    const rows = await query('SELECT id FROM friendships WHERE id = $1', [created.value.id]);
+    expect(rows).toHaveLength(1);
+
+    const missing = await removeFriend(ownerActor, { friendshipId: 9_999_999_999 });
+    expect(missing).toMatchObject({ ok: false, code: 'NOT_FOUND' });
   });
 });
 

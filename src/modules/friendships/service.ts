@@ -5,6 +5,7 @@ import { err, ok, type Result } from '@/core/result';
 import { recordEvent } from '@/modules/activity';
 
 import {
+  deleteAcceptedFriendship,
   deletePendingRequest,
   findFriendshipBetween,
   findFriendshipById,
@@ -22,9 +23,10 @@ import type {
   UserSearchInput,
 } from './schema';
 import type {
+  FriendEntry,
   FriendRequestSummary,
   Friendship,
-  SocialUser,
+  Relationship,
   UserSearchResult,
 } from './types';
 
@@ -74,7 +76,7 @@ export async function declineFriendship(
   });
 }
 
-export async function getFriends(actor: Actor): Promise<Result<SocialUser[]>> {
+export async function getFriends(actor: Actor): Promise<Result<FriendEntry[]>> {
   return ok(await listFriends(actor.id));
 }
 
@@ -137,4 +139,42 @@ export async function withdrawFriendRequest(
     return err('CONFLICT', 'Заявка уже обработана');
   }
   return ok(deleted);
+}
+
+export async function removeFriend(
+  actor: Actor,
+  input: FriendshipDecisionInput,
+): Promise<Result<Friendship>> {
+  const friendship = await findFriendshipById(input.friendshipId);
+  if (!friendship) {
+    return err('NOT_FOUND', 'Дружба не найдена');
+  }
+  if (friendship.requesterId !== actor.id && friendship.addresseeId !== actor.id) {
+    return err('FORBIDDEN', 'Нет прав');
+  }
+  if (friendship.status !== 'accepted') {
+    return err('CONFLICT', 'Дружба не принята');
+  }
+  const deleted = await deleteAcceptedFriendship(friendship.id, actor.id);
+  if (!deleted) {
+    return err('CONFLICT', 'Дружба уже удалена');
+  }
+  return ok(deleted);
+}
+
+export async function getRelationship(
+  viewerId: number,
+  otherUserId: number,
+): Promise<Relationship> {
+  const friendship = await findFriendshipBetween(viewerId, otherUserId);
+  if (!friendship || friendship.status === 'declined') {
+    return { status: 'none', friendshipId: null };
+  }
+  if (friendship.status === 'accepted') {
+    return { status: 'friend', friendshipId: friendship.id };
+  }
+  return {
+    status: friendship.requesterId === viewerId ? 'pending_out' : 'pending_in',
+    friendshipId: friendship.id,
+  };
 }

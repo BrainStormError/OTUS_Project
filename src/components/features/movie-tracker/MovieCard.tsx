@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Film, Star } from 'lucide-react';
+import { Bookmark, Check, Film, Star } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,14 +13,18 @@ export function MovieCard({
   movie,
   kind,
   watched = false,
+  planned = false,
   onToggleWatched,
+  onTogglePlanned,
   href,
   className,
 }: {
   movie: Movie;
   kind?: MediaKind;
   watched?: boolean;
+  planned?: boolean;
   onToggleWatched?: (next: boolean) => void;
+  onTogglePlanned?: (next: boolean) => void;
   href?: string;
   className?: string;
 }) {
@@ -87,22 +91,41 @@ export function MovieCard({
             </li>
           ))}
         </ul>
-        <Button
-          type="button"
-          size="sm"
-          variant={watched ? 'secondary' : 'default'}
-          aria-pressed={watched}
-          onClick={() => onToggleWatched?.(!watched)}
-        >
-          {watched ? (
-            <>
-              <Check aria-hidden="true" className="mr-1 h-4 w-4" />
-              Просмотрено
-            </>
-          ) : (
-            'Отметить просмотренным'
-          )}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={watched ? 'secondary' : 'default'}
+            aria-pressed={watched}
+            onClick={() => onToggleWatched?.(!watched)}
+            className="h-auto min-w-0 flex-1 whitespace-normal py-2 text-center"
+          >
+            {watched ? (
+              <>
+                <Check aria-hidden="true" className="mr-1 h-4 w-4" />
+                Просмотрено
+              </>
+            ) : (
+              'Отметить просмотренным'
+            )}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={planned ? 'secondary' : 'outline'}
+            aria-pressed={planned}
+            aria-label="Буду смотреть"
+            disabled={watched}
+            onClick={() => onTogglePlanned?.(!planned)}
+            className="h-auto min-w-0 flex-1 whitespace-normal py-2 text-center"
+          >
+            <Bookmark
+              aria-hidden="true"
+              className={cn('mr-1 h-4 w-4', planned && 'fill-current')}
+            />
+            Буду смотреть
+          </Button>
+        </div>
       </div>
     </article>
   );

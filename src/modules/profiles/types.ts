@@ -1,3 +1,4 @@
+import type { Relationship } from '@/modules/friendships';
 import type { RatingEntry } from '@/modules/ratings';
 
 export type ProfileStats = {
@@ -19,6 +20,7 @@ export type ProfileRead = {
   isOwn: boolean;
   profileRestricted: boolean;
   statsRestricted: boolean;
+  relationship: Relationship | null;
   stats: ProfileStats;
   recent: RatingEntry[];
 };

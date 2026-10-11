@@ -4,7 +4,10 @@ import type { SaveMetadata } from '@/modules/catalog';
 
 import {
   deletePersonalRating as deletePersonalRatingRepository,
+  findMediaIdByRef,
   hasGroupRating as hasGroupRatingRepository,
+  hasGroupRatingTx,
+  hasPersonalRating as hasPersonalRatingRepository,
   listGroupRatings as listGroupRatingsRepository,
   listPersonalRatings as listPersonalRatingsRepository,
   upsertGroupRating as upsertGroupRatingRepository,
@@ -12,7 +15,16 @@ import {
   upsertPersonalRating as upsertPersonalRatingRepository,
 } from './repository';
 import type { RatingInput } from './schema';
-import type { GroupRatingMember, GroupRatingSummary, RatingEntry } from './types';
+import type {
+  GroupRatingMember,
+  GroupRatingSummary,
+  MediaKind,
+  RatingEntry,
+} from './types';
+
+export async function saveMediaMetadata(tx: PoolClient, metadata: SaveMetadata): Promise<number> {
+  return upsertMedia(tx, metadata);
+}
 
 export async function savePersonalRating(
   tx: PoolClient,
@@ -20,7 +32,7 @@ export async function savePersonalRating(
   input: RatingInput,
   metadata: SaveMetadata,
 ): Promise<RatingEntry> {
-  const mediaId = await upsertMedia(tx, metadata);
+  const mediaId = await saveMediaMetadata(tx, metadata);
   return upsertPersonalRatingRepository(tx, userId, mediaId, input);
 }
 
@@ -30,8 +42,12 @@ export async function saveGroupRating(
   groupId: number,
   input: RatingInput,
   metadata: SaveMetadata,
-): Promise<GroupRatingMember> {
+  canStart: boolean,
+): Promise<GroupRatingMember | null> {
   const mediaId = await upsertMedia(tx, metadata);
+  if (!canStart && !(await hasGroupRatingTx(tx, groupId, mediaId))) {
+    return null;
+  }
   return upsertGroupRatingRepository(tx, userId, groupId, mediaId, input);
 }
 
@@ -45,6 +61,22 @@ export async function listGroupRatings(groupId: number): Promise<GroupRatingSumm
 
 export async function hasGroupRating(groupId: number, mediaId: number): Promise<boolean> {
   return hasGroupRatingRepository(groupId, mediaId);
+}
+
+export async function findMediaId(
+  tx: PoolClient,
+  kind: MediaKind,
+  externalRef: string,
+): Promise<number | null> {
+  return findMediaIdByRef(tx, kind, externalRef);
+}
+
+export async function hasPersonalRating(
+  tx: PoolClient,
+  userId: number,
+  mediaId: number,
+): Promise<boolean> {
+  return hasPersonalRatingRepository(tx, userId, mediaId);
 }
 
 export async function deletePersonalRating(

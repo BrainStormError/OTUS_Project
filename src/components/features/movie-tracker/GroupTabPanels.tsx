@@ -92,6 +92,7 @@ export async function RatingsPanel({
       groupId={groupId}
       isMember={isMember}
       isAdmin={isAdmin}
+      currentUserId={actor?.id}
       ratings={ratings}
     />
   );

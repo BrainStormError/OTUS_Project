@@ -50,4 +50,22 @@ describe('groupRatingInput', () => {
     expect(ratingInput.safeParse({ ...minimal, year: 2010 }).success).toBe(false);
     expect(ratingInput.safeParse({ ...minimal, genres: ['драма'] }).success).toBe(false);
   });
+
+  it('accepts the optional personal-save flags', () => {
+    const parsed = groupRatingInput.safeParse({
+      ...base,
+      rating: 8,
+      alsoPersonal: true,
+      confirmOverwrite: false,
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.alsoPersonal).toBe(true);
+    expect(parsed.data?.confirmOverwrite).toBe(false);
+  });
+
+  it('still rejects unknown fields after extending', () => {
+    expect(
+      groupRatingInput.safeParse({ ...base, rating: 8, personal: true }).success,
+    ).toBe(false);
+  });
 });

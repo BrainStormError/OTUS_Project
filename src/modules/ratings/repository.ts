@@ -244,6 +244,47 @@ export async function hasGroupRating(groupId: number, mediaId: number): Promise<
   return rows[0]?.exists === true;
 }
 
+export async function hasGroupRatingTx(
+  tx: PoolClient,
+  groupId: number,
+  mediaId: number,
+): Promise<boolean> {
+  const result = await tx.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM ratings WHERE group_id = $1 AND media_id = $2
+     ) AS exists`,
+    [groupId, mediaId],
+  );
+  return result.rows[0]?.exists === true;
+}
+
+export async function findMediaIdByRef(
+  tx: PoolClient,
+  kind: MediaKind,
+  externalRef: string,
+): Promise<number | null> {
+  const result = await tx.query<{ id: number }>(
+    `SELECT id FROM media WHERE kind = $1 AND external_ref = $2`,
+    [KIND_CODE[kind], externalRef],
+  );
+  return result.rows[0]?.id ?? null;
+}
+
+export async function hasPersonalRating(
+  tx: PoolClient,
+  userId: number,
+  mediaId: number,
+): Promise<boolean> {
+  const result = await tx.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM ratings
+        WHERE user_id = $1 AND media_id = $2 AND group_id IS NULL
+     ) AS exists`,
+    [userId, mediaId],
+  );
+  return result.rows[0]?.exists === true;
+}
+
 export async function listPersonalRatings(userId: number): Promise<RatingEntry[]> {
   const rows = await query<PersonalRow>(
     `SELECT r.id, r.user_id, r.media_id, m.kind AS media_kind, m.external_ref AS media_ref,

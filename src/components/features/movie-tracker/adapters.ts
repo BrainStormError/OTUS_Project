@@ -1,16 +1,19 @@
 import type { RatedTitle } from '@/modules/catalog';
-import type { FriendRequestSummary, SocialUser } from '@/modules/friendships';
+import type { FriendEntry, FriendRequestSummary, SocialUser } from '@/modules/friendships';
 import type { GroupSummary } from '@/modules/groups';
 import type { ProfileRead } from '@/modules/profiles';
 import type { RatingEntry } from '@/modules/ratings';
+import type { WatchlistEntry } from '@/modules/watchlist';
 
 import type {
+  FriendContact,
   FriendRequest,
   Group,
   Movie,
   PublicUser,
   UserStats,
   WatchedRecord,
+  WatchlistItem,
 } from './types';
 
 const EMPTY_STATS: UserStats = { count: 0, genres: [], years: [] };
@@ -29,6 +32,10 @@ export function toFriendRequest(request: FriendRequestSummary): FriendRequest {
   return { id: request.id, user: toPublicUser(request.user) };
 }
 
+export function toFriendContact(entry: FriendEntry): FriendContact {
+  return { friendshipId: entry.friendshipId, user: toPublicUser(entry.user) };
+}
+
 export function toGroup(group: GroupSummary): Group {
   return {
     id: group.id,
@@ -41,7 +48,14 @@ export function toGroup(group: GroupSummary): Group {
   };
 }
 
-export function toMovieForEntry(entry: RatingEntry): Movie {
+export function toMovieForEntry(entry: {
+  mediaRef: string;
+  mediaId: number;
+  mediaKind: 'film' | 'series';
+  title: string;
+  year: number | null;
+  genres: string[];
+}): Movie {
   return {
     tmdbId: Number(entry.mediaRef) || entry.mediaId,
     kind: entry.mediaKind,
@@ -82,6 +96,14 @@ export function toWatchedRecordFromRated(entry: RatedTitle): WatchedRecord {
   };
 }
 
+export function toWatchlistItem(entry: WatchlistEntry): WatchlistItem {
+  return {
+    id: entry.id,
+    movie: toMovieForEntry(entry),
+    addedAt: entry.createdAt.slice(0, 10),
+  };
+}
+
 export function toPublicUserFromProfile(profile: ProfileRead): PublicUser {
   return {
     id: profile.identity.id,
@@ -89,6 +111,8 @@ export function toPublicUserFromProfile(profile: ProfileRead): PublicUser {
     name: profile.identity.name,
     profileHidden: profile.identity.profileHidden,
     statsHidden: profile.identity.statsHidden,
+    relationship: profile.relationship?.status ?? null,
+    friendshipId: profile.relationship?.friendshipId ?? null,
     stats: profile.stats,
     recent: profile.recent.map(toWatchedRecord),
   };

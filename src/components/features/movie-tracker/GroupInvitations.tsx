@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 export type GroupInvitationItem = {
   id: number;
@@ -14,14 +15,26 @@ export type GroupInvitationItem = {
 
 export function GroupInvitations({ invitations }: { invitations: GroupInvitationItem[] }) {
   const [items, setItems] = useState(invitations);
+  const toast = useToast();
 
-  function decide(id: number, decision: 'accept' | 'decline') {
+  async function decide(id: number, decision: 'accept' | 'decline') {
+    const previous = items;
     setItems((prev) => prev.filter((item) => item.id !== id));
-    void fetch(`/api/groups/invitations/${id}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ decision }),
-    }).catch(() => undefined);
+    try {
+      const response = await fetch(`/api/groups/invitations/${id}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      if (response.ok) {
+        toast.success(decision === 'accept' ? 'Приглашение принято' : 'Приглашение отклонено');
+        return;
+      }
+    } catch {
+      // fall through to the rollback below
+    }
+    setItems(previous);
+    toast.error('Не удалось обработать приглашение');
   }
 
   if (items.length === 0) {

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,7 @@ import { GroupRatings } from '@/components/features/movie-tracker/GroupRatings';
 import { GroupTabPanel } from '@/components/features/movie-tracker/GroupTabPanels';
 import { GroupTabSkeleton } from '@/components/features/movie-tracker/GroupTabSkeleton';
 import { GroupTabs } from '@/components/features/movie-tracker/GroupTabs';
+import { writeTimezone } from '@/components/layout/preferences';
 import type { FeedItem } from '@/modules/activity';
 import type { DiscussionSummary, DiscussionDetail } from '@/modules/discussions';
 import type { GroupRatingSummary } from '@/modules/groups';
@@ -16,6 +17,50 @@ const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh }),
 }));
+
+type RatingsResponse = { ok: boolean; status?: number; body?: unknown };
+
+function isRatingsCall(input: unknown): boolean {
+  const url = String(input);
+  return url.includes('/api/groups/') && url.includes('/ratings');
+}
+
+function stubRatingsFetch(responses: RatingsResponse[]) {
+  let index = 0;
+  const mock = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('/api/genres')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+    }
+    const next = responses[Math.min(index, responses.length - 1)] ?? { ok: true };
+    index += 1;
+    return Promise.resolve({
+      ok: next.ok,
+      status: next.status,
+      json: async () => next.body ?? {},
+    });
+  });
+  vi.stubGlobal('fetch', mock);
+  return mock;
+}
+
+function ratingsCalls(mock: ReturnType<typeof vi.fn>): RequestInit[] {
+  return mock.mock.calls
+    .filter(([input]) => isRatingsCall(input))
+    .map(([, init]) => (init ?? {}) as RequestInit);
+}
+
+function ratingsCallCount(mock: ReturnType<typeof vi.fn>): number {
+  return ratingsCalls(mock).length;
+}
+
+function ratingsCall(mock: ReturnType<typeof vi.fn>): RequestInit | undefined {
+  return ratingsCalls(mock)[0];
+}
+
+function ratingsBodies(mock: ReturnType<typeof vi.fn>): string[] {
+  return ratingsCalls(mock).map((init) => String(init.body));
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -218,7 +263,7 @@ describe('GroupRatings', () => {
     expect(table.parentElement?.className).toContain('overflow-x-auto');
   });
 
-  it('submits a rating for a member through the media picker', async () => {
+  it('submits a rating for an administrator through the media picker', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -237,11 +282,10 @@ describe('GroupRatings', () => {
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<GroupRatings groupId={1} isMember isAdmin={false} ratings={[]} />);
+    render(<GroupRatings groupId={1} isMember isAdmin currentUserId={1} ratings={[]} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Добавить оценку' }));
     const picker = screen.getByRole('dialog');
-    expect(within(picker).queryByRole('button', { name: /^Начало/ })).not.toBeInTheDocument();
     await userEvent.type(within(picker).getByLabelText('Название'), 'Начало');
     await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
     await userEvent.click(within(picker).getByRole('button', { name: /^Начало/ }));
@@ -257,9 +301,146 @@ describe('GroupRatings', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not offer the start control to a member', () => {
+    render(<GroupRatings groupId={1} isMember isAdmin={false} currentUserId={2} ratings={[]} />);
+    expect(screen.queryByRole('button', { name: 'Добавить оценку' })).not.toBeInTheDocument();
+  });
+
+  it('offers Оценить without an own rating and Изменить once the member has one', () => {
+    const { rerender } = render(
+      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+    );
+    expect(screen.getByRole('button', { name: 'Оценить' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Изменить' })).not.toBeInTheDocument();
+
+    rerender(
+      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={1} ratings={[rating]} />,
+    );
+    expect(screen.getByRole('button', { name: 'Изменить' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Оценить' })).not.toBeInTheDocument();
+  });
+
+  it('shows К обсуждению beside the rate action when a discussion is attached', () => {
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={1}
+        ratings={[{ ...rating, discussionId: 7 }]}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'К обсуждению' })).toHaveAttribute(
+      'href',
+      '/groups/1?tab=discussions&discussion=7',
+    );
+    expect(screen.getByRole('button', { name: 'Изменить' })).toBeInTheDocument();
+  });
+
+  it('saves a rating from the row action and refreshes the tab', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ userId: 1 }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
+    const form = await screen.findByRole('dialog');
+    await userEvent.type(within(form).getByLabelText(/^Оценка \(/), '7.5');
+    await userEvent.click(within(form).getByRole('button', { name: 'Сохранить' }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/groups/1/ratings',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    vi.unstubAllGlobals();
+  });
+
   it('offers an attach control to admins for a rated media', () => {
     render(<GroupRatings groupId={1} isMember isAdmin ratings={[rating]} />);
     expect(screen.getByRole('button', { name: 'Обсудить' })).toBeInTheDocument();
+  });
+
+  it('offers the add-to-personal checkbox and sends it when set', async () => {
+    const fetchMock = stubRatingsFetch([{ ok: true, body: { userId: 1 } }]);
+    render(
+      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
+    const form = await screen.findByRole('dialog');
+    const checkbox = within(form).getByRole('checkbox', {
+      name: 'также добавить в мои фильмы',
+    });
+    expect(checkbox).not.toBeChecked();
+
+    await userEvent.click(checkbox);
+    await userEvent.type(within(form).getByLabelText(/^Оценка \(/), '7.5');
+    await userEvent.click(within(form).getByRole('button', { name: 'Сохранить' }));
+
+    await waitFor(() => expect(ratingsCall(fetchMock)).toBeDefined());
+    expect(JSON.parse(String(ratingsCall(fetchMock)?.body))).toMatchObject({
+      alsoPersonal: true,
+      mediaRef: '27205',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('asks to confirm before overwriting an existing personal rating', async () => {
+    const fetchMock = stubRatingsFetch([
+      { ok: false, status: 409, body: { error: 'conflict' } },
+      { ok: true, body: { userId: 1 } },
+    ]);
+    render(
+      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
+    const form = await screen.findByRole('dialog');
+    await userEvent.click(within(form).getByRole('checkbox'));
+    await userEvent.type(within(form).getByLabelText(/^Оценка \(/), '7.5');
+    await userEvent.click(within(form).getByRole('button', { name: 'Сохранить' }));
+
+    const confirmDialog = await screen.findByRole('dialog', {
+      name: 'Перезаписать личную оценку?',
+    });
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Перезаписать' }));
+
+    await waitFor(() => expect(ratingsCallCount(fetchMock)).toBe(2));
+    const bodies = ratingsBodies(fetchMock);
+    expect(JSON.parse(String(bodies[1]))).toMatchObject({
+      alsoPersonal: true,
+      confirmOverwrite: true,
+    });
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    vi.unstubAllGlobals();
+  });
+
+  it('clears the checkbox and saves nothing when the overwrite is dismissed', async () => {
+    const fetchMock = stubRatingsFetch([
+      { ok: false, status: 409, body: { error: 'conflict' } },
+    ]);
+    render(
+      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
+    const form = await screen.findByRole('dialog');
+    await userEvent.click(within(form).getByRole('checkbox'));
+    await userEvent.type(within(form).getByLabelText(/^Оценка \(/), '7.5');
+    await userEvent.click(within(form).getByRole('button', { name: 'Сохранить' }));
+
+    const confirmDialog = await screen.findByRole('dialog', {
+      name: 'Перезаписать личную оценку?',
+    });
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Отмена' }));
+
+    await waitFor(() =>
+      expect(
+        within(form).getByRole('checkbox', { name: 'также добавить в мои фильмы' }),
+      ).not.toBeChecked(),
+    );
+    expect(ratingsCallCount(fetchMock)).toBe(1);
+    vi.unstubAllGlobals();
   });
 });
 
@@ -289,6 +470,19 @@ describe('GroupActivity', () => {
 
     rerender(<GroupActivity groupId={1} events={[]} visible={false} />);
     expect(screen.getByTestId('restricted-no-permission')).toBeInTheDocument();
+  });
+
+  it('shows an event moment in the selected timezone and format', async () => {
+    writeTimezone('Europe/Moscow');
+    render(
+      <GroupActivity
+        groupId={1}
+        visible
+        events={[feedItem({ id: 1, createdAt: '2024-01-05T14:07:00.000Z' })]}
+      />,
+    );
+    const list = screen.getByTestId('group-activity');
+    expect(await within(list).findByText('17:07 05.01.24')).toBeInTheDocument();
   });
 });
 

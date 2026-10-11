@@ -6,6 +6,7 @@ import { FilmDetail } from '@/components/features/movie-tracker/FilmDetail';
 import { getActor } from '@/modules/auth/session';
 import { resolveDetail } from '@/modules/catalog';
 import { listWatchedRecords } from '@/modules/records';
+import { listWatchlist } from '@/modules/watchlist';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,10 +27,16 @@ export default async function FilmPage({
     ? result.value.find((item) => item.mediaKind === 'film' && item.mediaRef === tmdbId)
     : undefined;
 
+  const watchlist = actor ? await listWatchlist(actor, 'film') : null;
+  const planned = watchlist?.ok
+    ? watchlist.value.find((item) => item.mediaRef === tmdbId)
+    : undefined;
+
   return (
     <FilmDetail
       movie={toMovie(detail.value)}
       initialRecord={entry ? toWatchedRecord(entry) : null}
+      initialWatchlistId={planned?.id ?? null}
     />
   );
 }

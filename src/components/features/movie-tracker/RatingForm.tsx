@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 
+import { currentDateInTimeZone, useTimeFormat } from '@/components/layout/preferences';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,6 +38,9 @@ export function RatingForm({
   onSubmit,
   onCancel,
   submitLabel = 'Сохранить',
+  alsoPersonal,
+  onAlsoPersonalChange,
+  alsoPersonalLabel = 'также добавить в мои фильмы',
 }: {
   initialRating?: number;
   initialComment?: string;
@@ -44,11 +48,17 @@ export function RatingForm({
   onSubmit?: (payload: RatingPayload) => void;
   onCancel?: () => void;
   submitLabel?: string;
+  alsoPersonal?: boolean;
+  onAlsoPersonalChange?: (value: boolean) => void;
+  alsoPersonalLabel?: string;
 }) {
   const ratingId = useId();
   const commentId = useId();
   const dateId = useId();
   const errorId = useId();
+
+  const { timeZone } = useTimeFormat();
+  const maxDate = currentDateInTimeZone(timeZone);
 
   const [rating, setRating] = useState(
     initialRating === undefined ? '' : String(initialRating),
@@ -63,6 +73,11 @@ export function RatingForm({
     const result = validateRating(rating);
     if (result.error) {
       setError(result.error);
+      setSaved(false);
+      return;
+    }
+    if (watchedAt && watchedAt > maxDate) {
+      setError('Дата просмотра не может быть в будущем');
       setSaved(false);
       return;
     }
@@ -135,11 +150,25 @@ export function RatingForm({
           id={dateId}
           name="watchedAt"
           type="date"
+          max={maxDate}
           value={watchedAt}
           onChange={(event) => setWatchedAt(event.target.value)}
           className="max-w-48"
         />
       </div>
+
+      {onAlsoPersonalChange ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="alsoPersonal"
+            checked={alsoPersonal ?? false}
+            onChange={(event) => onAlsoPersonalChange(event.target.checked)}
+            className="h-4 w-4 accent-[var(--primary)]"
+          />
+          {alsoPersonalLabel}
+        </label>
+      ) : null}
 
       {saved ? (
         <p role="status" className="text-sm text-muted-foreground">

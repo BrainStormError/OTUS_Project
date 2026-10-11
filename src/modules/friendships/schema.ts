@@ -8,6 +8,12 @@ export const friendshipDecisionInput = z.object({
 
 export type FriendshipDecisionInput = z.infer<typeof friendshipDecisionInput>;
 
+export const removeFriendInput = z.object({
+  friendshipId: id,
+});
+
+export type RemoveFriendInput = z.infer<typeof removeFriendInput>;
+
 export const userSearchInput = z.object({
   q: z.string().trim().min(1).max(100),
 });

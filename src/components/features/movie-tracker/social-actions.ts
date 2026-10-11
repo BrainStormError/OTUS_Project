@@ -4,31 +4,36 @@ export type { UserSearchResult };
 
 type Decision = 'accept' | 'decline';
 
-function requestJson(url: string, method: string, body?: unknown): void {
+async function requestJson(url: string, method: string, body?: unknown): Promise<boolean> {
   if (typeof fetch !== 'function') {
-    return;
+    return false;
   }
   try {
-    void fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: body === undefined ? undefined : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
-    }).catch(() => undefined);
+    });
+    return response.ok;
   } catch {
-    // The local view already reflects the optimistic update.
+    return false;
   }
 }
 
-export function decideFriendship(friendshipId: number, decision: Decision): void {
-  requestJson(`/api/friendships/${decision}`, 'POST', { friendshipId });
+export function decideFriendship(friendshipId: number, decision: Decision): Promise<boolean> {
+  return requestJson(`/api/friendships/${decision}`, 'POST', { friendshipId });
 }
 
-export function sendFriendRequest(addresseeId: number): void {
-  requestJson('/api/friendships', 'POST', { addresseeId });
+export function sendFriendRequest(addresseeId: number): Promise<boolean> {
+  return requestJson('/api/friendships', 'POST', { addresseeId });
 }
 
-export function withdrawFriendRequest(friendshipId: number): void {
-  requestJson(`/api/friendships/${friendshipId}`, 'DELETE');
+export function withdrawFriendRequest(friendshipId: number): Promise<boolean> {
+  return requestJson(`/api/friendships/${friendshipId}`, 'DELETE');
+}
+
+export function removeFriend(friendshipId: number): Promise<boolean> {
+  return requestJson('/api/friendships/remove', 'POST', { friendshipId });
 }
 
 export async function searchUsers(
@@ -46,6 +51,6 @@ export async function searchUsers(
   return data.items ?? [];
 }
 
-export function joinGroupRemote(groupId: number): void {
-  requestJson('/api/groups/join', 'POST', { groupId });
+export function joinGroupRemote(groupId: number): Promise<boolean> {
+  return requestJson('/api/groups/join', 'POST', { groupId });
 }

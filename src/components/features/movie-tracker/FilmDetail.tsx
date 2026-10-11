@@ -1,34 +1,42 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Film, Star } from 'lucide-react';
+import { Bookmark, Check, Film, Star } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
+import { useToast } from '@/components/ui/toast';
 
 import { RatingForm, type RatingPayload } from './RatingForm';
 import { deleteRemoteRecord, saveRemoteRating } from './report-rating';
+import { deleteRemoteWatchlist, saveRemoteWatchlist } from './report-watchlist';
 import type { Movie, WatchedRecord } from './types';
 
 export function FilmDetail({
   movie,
   initialRecord = null,
+  initialWatchlistId = null,
 }: {
   movie: Movie;
   initialRecord?: WatchedRecord | null;
+  initialWatchlistId?: number | null;
 }) {
   const [record, setRecord] = useState<WatchedRecord | null>(initialRecord);
+  const [watchlistId, setWatchlistId] = useState<number | null>(initialWatchlistId);
   const [open, setOpen] = useState(false);
+  const toast = useToast();
 
   const watched = Boolean(record);
+  const planned = watchlistId !== null;
   const poster = movie.posterUrl ?? null;
   const isSeries = movie.kind === 'series';
   const backHref = isSeries ? '/series' : '/';
 
-  function handleSave(payload: RatingPayload) {
+  async function handleSave(payload: RatingPayload) {
+    const previous = record;
     setRecord({
       id: record?.id ?? movie.tmdbId,
       movie,
@@ -36,21 +44,83 @@ export function FilmDetail({
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
-    void saveRemoteRating({
-      mediaKind: movie.kind,
-      mediaRef: String(movie.tmdbId),
-      rating: payload.rating,
-      comment: payload.comment,
-      watchedAt: payload.watchedAt,
-    }).catch(() => undefined);
     setOpen(false);
+    setWatchlistId(null);
+    try {
+      const id = await saveRemoteRating({
+        mediaKind: movie.kind,
+        mediaRef: String(movie.tmdbId),
+        rating: payload.rating,
+        comment: payload.comment,
+        watchedAt: payload.watchedAt,
+      });
+      if (id === null) {
+        setRecord(previous);
+        toast.error('Не удалось сохранить запись');
+        return;
+      }
+      toast.success('Запись сохранена');
+    } catch {
+      setRecord(previous);
+      toast.error('Не удалось сохранить запись');
+    }
   }
 
-  function unwatch() {
-    if (record) {
-      void deleteRemoteRecord(record.id).catch(() => undefined);
+  async function togglePlanned() {
+    if (watched) {
+      return;
+    }
+    if (planned && watchlistId !== null) {
+      const previous = watchlistId;
+      setWatchlistId(null);
+      try {
+        const ok = await deleteRemoteWatchlist(previous);
+        if (ok) {
+          toast.success('Удалено из «Буду смотреть»');
+          return;
+        }
+        setWatchlistId(previous);
+        toast.error('Не удалось удалить запись');
+      } catch {
+        setWatchlistId(previous);
+        toast.error('Не удалось удалить запись');
+      }
+      return;
+    }
+    try {
+      const id = await saveRemoteWatchlist({
+        mediaKind: movie.kind,
+        mediaRef: String(movie.tmdbId),
+      });
+      if (id === null) {
+        toast.error('Не удалось добавить в «Буду смотреть»');
+        return;
+      }
+      setWatchlistId(id);
+      toast.success('Добавлено в «Буду смотреть»');
+    } catch {
+      toast.error('Не удалось добавить в «Буду смотреть»');
+    }
+  }
+
+  async function unwatch() {
+    const previous = record;
+    if (!previous) {
+      return;
     }
     setRecord(null);
+    try {
+      const ok = await deleteRemoteRecord(previous.id);
+      if (ok) {
+        toast.success('Запись удалена');
+        return;
+      }
+      setRecord(previous);
+      toast.error('Не удалось удалить запись');
+    } catch {
+      setRecord(previous);
+      toast.error('Не удалось удалить запись');
+    }
   }
 
   return (
@@ -128,6 +198,7 @@ export function FilmDetail({
               variant={watched ? 'secondary' : 'default'}
               aria-pressed={watched}
               onClick={() => (watched ? unwatch() : setOpen(true))}
+              className="min-w-0"
             >
               {watched ? (
                 <>
@@ -138,7 +209,27 @@ export function FilmDetail({
                 'Отметить просмотренным'
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+            <Button
+              type="button"
+              variant={planned ? 'secondary' : 'outline'}
+              aria-pressed={planned}
+              aria-label="Буду смотреть"
+              disabled={watched}
+              onClick={() => void togglePlanned()}
+              className="min-w-0"
+            >
+              <Bookmark
+                aria-hidden="true"
+                className={planned ? 'mr-1 h-4 w-4 fill-current' : 'mr-1 h-4 w-4'}
+              />
+              Буду смотреть
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(true)}
+              className="min-w-0"
+            >
               {record && record.rating > 0 ? 'Изменить оценку' : 'Оценить'}
             </Button>
           </div>

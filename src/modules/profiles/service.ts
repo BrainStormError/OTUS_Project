@@ -2,6 +2,7 @@ import type { Actor } from '@/core/auth/policy';
 import { err, ok, type Result } from '@/core/result';
 
 import { findUserByHandle, findUserById, type UserRow } from '@/modules/auth/users';
+import { getRelationship } from '@/modules/friendships';
 import { listPersonalRatings, type RatingEntry } from '@/modules/ratings';
 
 import type { ProfileRead, ProfileStats } from './types';
@@ -42,6 +43,8 @@ async function buildProfile(user: UserRow, viewerId: number | null): Promise<Pro
   const hidden = profileRestricted || statsRestricted;
   const entries = hidden ? [] : await listPersonalRatings(user.id);
   const now = Date.now();
+  const relationship =
+    viewerId !== null && !isOwn ? await getRelationship(viewerId, user.id) : null;
 
   return {
     identity: {
@@ -54,6 +57,7 @@ async function buildProfile(user: UserRow, viewerId: number | null): Promise<Pro
     isOwn,
     profileRestricted,
     statsRestricted,
+    relationship,
     stats: computeProfileStats(entries),
     recent: profileRestricted ? [] : entries.filter((entry) => withinRecentWindow(entry, now)),
   };

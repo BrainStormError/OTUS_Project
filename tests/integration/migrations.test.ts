@@ -236,6 +236,7 @@ describe('compact domain migrations', () => {
         'group_discussions',
         'discussion_posts',
         'activity_events',
+        'watchlist',
       ]) {
         expect(await tableExists(target.toString(), table), table).toBe(true);
       }
@@ -245,6 +246,7 @@ describe('compact domain migrations', () => {
       }
 
       for (const table of [
+        'watchlist',
         'activity_events',
         'discussion_posts',
         'group_discussions',

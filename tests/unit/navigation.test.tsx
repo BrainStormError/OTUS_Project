@@ -109,6 +109,13 @@ describe('navigation shell', () => {
     expect(brand.className).toContain('text-lg');
   });
 
+  it('shows the account avatar for the signed-in tag in the top bar', () => {
+    render(<TopBar name="Алексей" tag="me" />);
+    const avatar = screen.getByTestId('avatar');
+    expect(avatar).toBeInTheDocument();
+    expect(avatar).toHaveAttribute('aria-hidden', 'true');
+  });
+
   it('renders six reachable tabs with the current one marked on mobile', () => {
     render(<MobileTabBar />);
     expect(screen.getAllByRole('link')).toHaveLength(6);

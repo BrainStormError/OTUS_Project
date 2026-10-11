@@ -72,6 +72,7 @@ describe('listGroupFeed', () => {
     const joiner = await makeUser('joiner');
     const groupId = await makeGroup(admin, [member]);
 
+    await rate(admin, groupId, '27205', 7);
     await rate(member, groupId, '27205', 8);
     const discussion = await createDiscussion(admin, { groupId, title: 'Тема' });
     if (!discussion.ok) return;
@@ -144,6 +145,7 @@ describe('listGroupFeed', () => {
     const admin = await makeUser('admin');
     const member = await makeUser('member');
     const groupId = await makeGroup(admin, [member]);
+    await rate(admin, groupId, '603', 8);
     const rated = await rate(member, groupId, '603', 9);
     expect(rated.ok).toBe(true);
     if (!rated.ok) return;

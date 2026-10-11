@@ -1,65 +1,61 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Modal } from '@/components/ui/modal';
-import { cn } from '@/components/ui/utils';
 
 import { AddRecordModal } from './AddRecordModal';
-import { genreOptions, recordMatches } from './filters';
+import { genreOptions, movieMatches, recordMatches } from './filters';
 import type { RatingPayload } from './RatingForm';
 import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
+import { RecordsTable, type SortKey, type SortState } from './RecordsTable';
 import { SearchField } from './SearchField';
-import type { Movie, SearchFilters, WatchedRecord } from './types';
+import type { Movie, SearchFilters, WatchedRecord, WatchlistItem } from './types';
+import { ViewTabs } from './ViewTabs';
+import { WatchlistTable } from './WatchlistTable';
+import { useWatchlist } from './watchlist-store';
 
-type SortKey = 'title' | 'rating' | 'watchedAt';
-type SortDirection = 'asc' | 'desc';
+const TABS = [
+  { id: 'watched', label: 'Просмотренные' },
+  { id: 'watchlist', label: 'Буду смотреть' },
+] as const;
 
-function SortableHeader({
-  label,
-  sortKey,
-  sort,
-  onSort,
+type TabId = (typeof TABS)[number]['id'];
+
+export function MySeriesView({
+  initialRecords,
+  initialWatchlist = [],
 }: {
-  label: string;
-  sortKey: SortKey;
-  sort: { key: SortKey; direction: SortDirection };
-  onSort: (key: SortKey) => void;
+  initialRecords: WatchedRecord[];
+  initialWatchlist?: WatchlistItem[];
 }) {
-  const active = sort.key === sortKey;
-  const ariaSort = active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none';
-  return (
-    <th scope="col" aria-sort={ariaSort} className="px-4 py-3 font-medium">
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className="inline-flex items-center gap-1 rounded-md text-left transition-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        {label}
-        <span aria-hidden="true" className="text-xs text-muted-foreground">
-          {active ? (sort.direction === 'asc' ? '▲' : '▼') : '↕'}
-        </span>
-      </button>
-    </th>
-  );
-}
-
-export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord[] }) {
   const { records, upsert, remove } = useWatchedRecords(initialRecords);
+  const {
+    items: watchlistItems,
+    remove: removeWatchlistItem,
+    drop: dropWatchlistItem,
+  } = useWatchlist(initialWatchlist);
+
+  const [tab, setTab] = useState<TabId>('watched');
+
   const movieOptions = useMemo(() => records.map((record) => record.movie), [records]);
   const genres = useMemo(() => genreOptions(movieOptions), [movieOptions]);
+  const watchlistMovies = useMemo(() => watchlistItems.map((item) => item.movie), [watchlistItems]);
+  const watchlistGenres = useMemo(() => genreOptions(watchlistMovies), [watchlistMovies]);
 
   const [filters, setFilters] = useState<SearchFilters>({});
+  const [watchlistFilters, setWatchlistFilters] = useState<SearchFilters>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editing, setEditing] = useState<WatchedRecord | null>(null);
   const [deleting, setDeleting] = useState<WatchedRecord | null>(null);
   const [adding, setAdding] = useState(false);
   const [addSeries, setAddSeries] = useState<Movie | null>(null);
-  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
+  const [ratingItem, setRatingItem] = useState<WatchlistItem | null>(null);
+  const [sort, setSort] = useState<SortState>({
     key: 'watchedAt',
     direction: 'desc',
   });
@@ -82,6 +78,11 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
     });
   }, [filtered, sort]);
 
+  const filteredWatchlist = useMemo(
+    () => watchlistItems.filter((item) => movieMatches(item.movie, watchlistFilters)),
+    [watchlistItems, watchlistFilters],
+  );
+
   function toggleSort(key: SortKey) {
     setSort((current) =>
       current.key === key
@@ -103,9 +104,11 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
+    dropWatchlistItem(movie);
     setEditing(null);
     setAddSeries(null);
     setAdding(false);
+    setRatingItem(null);
   }
 
   function deleteRecord(record: WatchedRecord) {
@@ -114,121 +117,83 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
     setExpandedId(null);
   }
 
+  function closeRecordModal() {
+    setEditing(null);
+    setAddSeries(null);
+    setRatingItem(null);
+  }
+
   return (
     <div className="space-y-4">
-      <SearchField
-        filters={filters}
-        onFiltersChange={setFilters}
-        genres={genres}
-        yearLabel="год просмотра"
-      />
+      <ViewTabs tabs={TABS} active={tab} onChange={(id) => setTab(id as TabId)} ariaLabel="Мои сериалы" />
 
-      <div className="flex justify-end">
-        <Button type="button" onClick={() => setAdding(true)}>
-          <Plus aria-hidden="true" className="mr-1 h-4 w-4" />
-          Добавить
-        </Button>
-      </div>
+      {tab === 'watched' ? (
+        <div role="tabpanel" id="panel-watched" aria-labelledby="tab-watched" className="space-y-4">
+          <SearchField
+            filters={filters}
+            onFiltersChange={setFilters}
+            genres={genres}
+            yearLabel="год просмотра"
+          />
 
-      {records.length === 0 ? (
-        <EmptyState
-          title="Вы ещё не отметили ни одного сериала"
-          description="Добавьте сериал, чтобы он появился здесь."
-        />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="Ничего не найдено"
-          description="Измените запрос или сбросьте фильтры."
-        />
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setAdding(true)}>
+              <Plus aria-hidden="true" className="mr-1 h-4 w-4" />
+              Добавить
+            </Button>
+          </div>
+
+          {records.length === 0 ? (
+            <EmptyState
+              title="Вы ещё не отметили ни одного сериала"
+              description="Добавьте сериал, чтобы он появился здесь."
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              title="Ничего не найдено"
+              description="Измените запрос или сбросьте фильтры."
+            />
+          ) : (
+            <RecordsTable
+              testId="my-series"
+              records={sorted}
+              sort={sort}
+              onSort={toggleSort}
+              expandedId={expandedId}
+              onToggle={toggleRow}
+              onEdit={(record) => {
+                setDeleting(null);
+                setEditing(record);
+              }}
+              onDelete={(record) => {
+                setEditing(null);
+                setDeleting(record);
+              }}
+            />
+          )}
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table data-testid="my-series" className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <SortableHeader label="Название" sortKey="title" sort={sort} onSort={toggleSort} />
-              <SortableHeader label="Оценка" sortKey="rating" sort={sort} onSort={toggleSort} />
-              <SortableHeader
-                label="Дата просмотра"
-                sortKey="watchedAt"
-                sort={sort}
-                onSort={toggleSort}
-              />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {sorted.map((record) => {
-              const detailId = `${record.id}-detail`;
-              const expanded = expandedId === record.id;
-              return (
-                <Fragment key={record.id}>
-                  <tr
-                    onClick={() => toggleRow(record.id)}
-                    className={cn(
-                      'cursor-pointer transition-hover hover:bg-secondary',
-                      expanded && 'bg-secondary/60',
-                    )}
-                  >
-                    <th scope="row" className="px-4 py-3 font-medium">
-                      <button
-                        type="button"
-                        aria-expanded={expanded}
-                        aria-controls={detailId}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleRow(record.id);
-                        }}
-                        className="rounded-md text-left transition-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      >
-                        {record.movie.title}
-                      </button>
-                    </th>
-                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                      {record.rating > 0 ? record.rating.toFixed(1) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{record.watchedAt}</td>
-                  </tr>
-                  {expanded ? (
-                    <tr>
-                      <td id={detailId} colSpan={3} className="px-4 pb-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-                            {record.comment ? record.comment : 'Нет комментария'}
-                          </p>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDeleting(null);
-                                setEditing(record);
-                              }}
-                            >
-                              Изменить
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditing(null);
-                                setDeleting(record);
-                              }}
-                            >
-                              Удалить
-                            </Button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </tbody>
-          </table>
+        <div role="tabpanel" id="panel-watchlist" aria-labelledby="tab-watchlist" className="space-y-4">
+          <SearchField filters={watchlistFilters} onFiltersChange={setWatchlistFilters} genres={watchlistGenres} />
+
+          {watchlistItems.length === 0 ? (
+            <EmptyState
+              title="Список «Буду смотреть» пуст"
+              description="Добавьте сериал, чтобы он появился здесь."
+            />
+          ) : filteredWatchlist.length === 0 ? (
+            <EmptyState
+              title="Ничего не найдено"
+              description="Измените запрос или сбросьте фильтры."
+            />
+          ) : (
+            <WatchlistTable
+              testId="my-series-watchlist"
+              items={filteredWatchlist}
+              onRate={(item) => setRatingItem(item)}
+              onRemove={(item) => removeWatchlistItem(item)}
+            />
+          )}
         </div>
       )}
 
@@ -244,12 +209,9 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
       />
 
       <RecordModal
-        movie={editing?.movie ?? addSeries}
+        movie={editing?.movie ?? addSeries ?? ratingItem?.movie ?? null}
         record={editing}
-        onClose={() => {
-          setEditing(null);
-          setAddSeries(null);
-        }}
+        onClose={closeRecordModal}
         onSubmit={saveRecord}
       />
 

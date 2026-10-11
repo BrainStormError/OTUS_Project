@@ -6,18 +6,21 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
 import { cn } from '@/components/ui/utils';
 
+import { FriendActionButton } from './FriendActionButton';
 import { FriendListItem } from './FriendListItem';
 import { FriendRequestItem } from './FriendRequestItem';
 import {
   decideFriendship,
+  removeFriend,
   searchUsers,
   sendFriendRequest,
   withdrawFriendRequest,
 } from './social-actions';
 import type { UserSearchResult } from './social-actions';
-import type { FriendRequest, PublicUser } from './types';
+import type { FriendContact, FriendRequest } from './types';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -29,32 +32,6 @@ const FRIEND_TABS = [
 
 type FriendTabId = (typeof FRIEND_TABS)[number]['id'];
 
-function resultAction(
-  result: UserSearchResult,
-  onAdd: (id: number) => void,
-): React.ReactNode {
-  switch (result.relationship) {
-    case 'friend':
-      return <Badge>Друг</Badge>;
-    case 'pending_out':
-      return <Badge>Заявка отправлена</Badge>;
-    case 'pending_in':
-      return <Badge>Ожидает ответа</Badge>;
-    case 'none':
-      return (
-        <Button
-          size="sm"
-          variant="outline"
-          type="button"
-          onClick={() => onAdd(result.id)}
-          aria-label={`Добавить ${result.name}`}
-        >
-          Добавить
-        </Button>
-      );
-  }
-}
-
 export function FriendsView({
   initialRequests,
   initialOutgoing = [],
@@ -62,16 +39,17 @@ export function FriendsView({
 }: {
   initialRequests: FriendRequest[];
   initialOutgoing?: FriendRequest[];
-  initialFriends: PublicUser[];
+  initialFriends: FriendContact[];
 }) {
   const [active, setActive] = useState<FriendTabId>('search');
   const [requests, setRequests] = useState<FriendRequest[]>(initialRequests);
   const [outgoing, setOutgoing] = useState<FriendRequest[]>(initialOutgoing);
-  const [friends, setFriends] = useState<PublicUser[]>(initialFriends);
+  const [friends, setFriends] = useState<FriendContact[]>(initialFriends);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<{ query: string; items: UserSearchResult[] } | null>(
     null,
   );
+  const toast = useToast();
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -92,24 +70,39 @@ export function FriendsView({
 
   const searchResults = search && search.query === query.trim() ? search.items : null;
 
-  function accept(id: number) {
+  async function accept(id: number) {
     const request = requests.find((item) => item.user.id === id);
     if (!request) return;
-    decideFriendship(request.id, 'accept');
-    setFriends((prev) => [...prev, { ...request.user, isFriend: true }]);
+    const previousRequests = requests;
+    const previousFriends = friends;
+    setFriends((prev) => [...prev, { friendshipId: request.id, user: { ...request.user, isFriend: true } }]);
     setRequests((prev) => prev.filter((item) => item.user.id !== id));
-  }
-
-  function decline(id: number) {
-    const request = requests.find((item) => item.user.id === id);
-    if (request) {
-      decideFriendship(request.id, 'decline');
+    const ok = await decideFriendship(request.id, 'accept');
+    if (ok) {
+      toast.success('Заявка принята');
+      return;
     }
-    setRequests((prev) => prev.filter((item) => item.user.id !== id));
+    setFriends(previousFriends);
+    setRequests(previousRequests);
+    toast.error('Не удалось принять заявку');
   }
 
-  function add(userId: number) {
-    sendFriendRequest(userId);
+  async function decline(id: number) {
+    const request = requests.find((item) => item.user.id === id);
+    if (!request) return;
+    const previousRequests = requests;
+    setRequests((prev) => prev.filter((item) => item.user.id !== id));
+    const ok = await decideFriendship(request.id, 'decline');
+    if (ok) {
+      toast.success('Заявка отклонена');
+      return;
+    }
+    setRequests(previousRequests);
+    toast.error('Не удалось отклонить заявку');
+  }
+
+  async function add(userId: number) {
+    const previousSearch = search;
     setSearch((prev) =>
       prev && prev.query === query.trim()
         ? {
@@ -120,11 +113,51 @@ export function FriendsView({
           }
         : prev,
     );
+    const ok = await sendFriendRequest(userId);
+    if (ok) {
+      toast.success('Заявка отправлена');
+      return;
+    }
+    setSearch(previousSearch);
+    toast.error('Не удалось отправить заявку');
   }
 
-  function withdraw(id: number) {
-    withdrawFriendRequest(id);
+  async function remove(friendshipId: number) {
+    const previousFriends = friends;
+    const previousSearch = search;
+    setFriends((prev) => prev.filter((item) => item.friendshipId !== friendshipId));
+    setSearch((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: prev.items.map((item) =>
+              item.friendshipId === friendshipId
+                ? { ...item, relationship: 'none' as const, friendshipId: null }
+                : item,
+            ),
+          }
+        : prev,
+    );
+    const success = await removeFriend(friendshipId);
+    if (success) {
+      toast.success('Друг удалён');
+      return;
+    }
+    setFriends(previousFriends);
+    setSearch(previousSearch);
+    toast.error('Не удалось удалить друга');
+  }
+
+  async function withdraw(id: number) {
+    const previousOutgoing = outgoing;
     setOutgoing((prev) => prev.filter((item) => item.id !== id));
+    const ok = await withdrawFriendRequest(id);
+    if (ok) {
+      toast.success('Заявка отменена');
+      return;
+    }
+    setOutgoing(previousOutgoing);
+    toast.error('Не удалось отменить заявку');
   }
 
   return (
@@ -184,7 +217,16 @@ export function FriendsView({
                     <FriendListItem
                       key={user.id}
                       user={user}
-                      action={resultAction(user, add)}
+                      action={
+                        <FriendActionButton
+                          userId={user.id}
+                          relationship={user.relationship}
+                          friendshipId={user.friendshipId}
+                          name={user.name}
+                          onAdd={add}
+                          onRemove={remove}
+                        />
+                      }
                     />
                   ))}
                 </ul>
@@ -265,8 +307,20 @@ export function FriendsView({
               />
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border">
-                {friends.map((user) => (
-                  <FriendListItem key={user.id} user={user} />
+                {friends.map(({ friendshipId, user }) => (
+                  <FriendListItem
+                    key={user.id}
+                    user={user}
+                    action={
+                      <FriendActionButton
+                        userId={user.id}
+                        relationship="friend"
+                        friendshipId={friendshipId}
+                        name={user.name}
+                        onRemove={remove}
+                      />
+                    }
+                  />
                 ))}
               </ul>
             )}

@@ -5,12 +5,16 @@ import { err, ok, type Result } from '@/core/result';
 import { recordEvent } from '@/modules/activity';
 import { resolveSaveMetadata } from '@/modules/catalog';
 import {
+  findMediaId,
   hasGroupRating as hasGroupRatingRepository,
+  hasPersonalRating,
   listGroupRatings as listGroupRatingsRepository,
   saveGroupRating as saveGroupRatingRepository,
+  savePersonalRating,
   type GroupRatingMember,
   type GroupRatingSummary,
 } from '@/modules/ratings';
+import { removeWatchlistForMedia } from '@/modules/watchlist';
 
 import {
   countGroupAdmins,
@@ -409,8 +413,38 @@ export async function saveGroupRating(
     return metadata;
   }
 
+  const canStart = can(actor, 'group:rate:start', { groupRole: role });
+  const alsoPersonal = input.alsoPersonal === true;
+  const confirmOverwrite = input.confirmOverwrite === true;
+
   return withTransaction(async (tx) => {
-    const rating = await saveGroupRatingRepository(tx, actor.id, input.groupId, input, metadata.value);
+    if (alsoPersonal && !confirmOverwrite) {
+      const existingMediaId = await findMediaId(tx, input.mediaKind, input.mediaRef);
+      if (
+        existingMediaId !== null &&
+        (await hasPersonalRating(tx, actor.id, existingMediaId))
+      ) {
+        return err('CONFLICT', 'У вас уже есть личная оценка — подтвердите перезапись');
+      }
+    }
+
+    const rating = await saveGroupRatingRepository(
+      tx,
+      actor.id,
+      input.groupId,
+      input,
+      metadata.value,
+      canStart,
+    );
+    if (!rating) {
+      return err('FORBIDDEN', 'Начать оценивание медиа может только администратор группы');
+    }
+
+    if (alsoPersonal) {
+      await savePersonalRating(tx, actor.id, input, metadata.value);
+      await removeWatchlistForMedia(tx, actor.id, rating.mediaId);
+    }
+
     await recordEvent(tx, {
       actorId: actor.id,
       kind: input.mediaKind === 'film' ? 'film_rated' : 'series_rated',

@@ -6,6 +6,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/toast';
 
 import { TagInput } from './TagInput';
 
@@ -21,6 +22,7 @@ export function GroupSettingsForm({
   };
 }) {
   const router = useRouter();
+  const toast = useToast();
   const nameId = useId();
   const descriptionId = useId();
   const [name, setName] = useState(group.name);
@@ -42,12 +44,15 @@ export function GroupSettingsForm({
       });
       if (!response.ok) {
         setStatus('error');
+        toast.error('Не удалось сохранить');
         return;
       }
       setStatus('saved');
+      toast.success('Настройки сохранены');
       router.refresh();
     } catch {
       setStatus('error');
+      toast.error('Не удалось сохранить');
     } finally {
       setPending(false);
     }

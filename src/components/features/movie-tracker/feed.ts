@@ -18,7 +18,7 @@ export type FeedEvent = {
   kind: FeedKind;
   title: string;
   rating: number | null;
-  watchedAt: string;
+  createdAt: string;
   href: string;
   action: string;
 };
@@ -29,7 +29,7 @@ export function toFeedEvent(item: FeedItem, viewerId: number): FeedEvent {
   const cursor = encodeCursor(item.createdAt, item.id);
   const actorName = item.actorName ?? FALLBACK_NAME;
   const groupName = item.groupName ?? '';
-  const watchedAt = item.createdAt.slice(0, 10);
+  const createdAt = item.createdAt;
 
   switch (item.kind) {
     case 'film_rated':
@@ -43,7 +43,7 @@ export function toFeedEvent(item: FeedItem, viewerId: number): FeedEvent {
         kind: isFilm ? 'film' : 'series',
         title: item.title ?? '',
         rating: item.rating,
-        watchedAt,
+        createdAt,
         href: item.href ?? '/',
         action: item.groupId ? 'оценил(а) в группе' : 'оценил(а)',
       };
@@ -57,7 +57,7 @@ export function toFeedEvent(item: FeedItem, viewerId: number): FeedEvent {
         kind: 'friendship',
         title: 'Новая дружба',
         rating: null,
-        watchedAt,
+        createdAt,
         href: item.href ?? '/',
         action: 'теперь в друзьях',
       };
@@ -70,7 +70,7 @@ export function toFeedEvent(item: FeedItem, viewerId: number): FeedEvent {
         kind: 'group',
         title: item.title ?? (groupName || 'Группа'),
         rating: null,
-        watchedAt,
+        createdAt,
         href: item.href ?? '/',
         action: 'вступил(а) в группу',
       };
@@ -83,7 +83,7 @@ export function toFeedEvent(item: FeedItem, viewerId: number): FeedEvent {
         kind: 'film',
         title: item.title ?? 'Активность',
         rating: null,
-        watchedAt,
+        createdAt,
         href: item.href ?? '/',
         action: 'активность',
       };

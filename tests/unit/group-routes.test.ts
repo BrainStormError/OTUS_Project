@@ -161,7 +161,7 @@ describe('POST /api/groups/[id]/ratings', () => {
     expect(response.status).toBe(400);
   });
 
-  it('maps a non-member rating to 403', async () => {
+  it('maps a non-administrator first rating to 403', async () => {
     getActorMock.mockResolvedValue(actor);
     saveGroupRatingMock.mockResolvedValue(err('FORBIDDEN', 'Нет прав'));
     const response = await saveRatingRoute(
@@ -176,6 +176,64 @@ describe('POST /api/groups/[id]/ratings', () => {
     expect(saveGroupRatingMock).toHaveBeenCalledWith(
       actor,
       expect.objectContaining({ groupId, mediaRef: '27205', rating: 8 }),
+    );
+  });
+
+  it('saves a plain rating without the personal flags', async () => {
+    getActorMock.mockResolvedValue(actor);
+    saveGroupRatingMock.mockResolvedValue(ok({ userId: actor.id }));
+    const response = await saveRatingRoute(
+      post('http://localhost/api/groups/3/ratings', {
+        mediaKind: 'film',
+        mediaRef: '27205',
+        rating: 8,
+        watchedAt: '2026-08-12',
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ userId: actor.id });
+    expect(saveGroupRatingMock).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({ groupId, mediaRef: '27205' }),
+    );
+  });
+
+  it('maps a personal-rating conflict to 409 and forwards the flag', async () => {
+    getActorMock.mockResolvedValue(actor);
+    saveGroupRatingMock.mockResolvedValue(err('CONFLICT', 'Подтвердите перезапись'));
+    const response = await saveRatingRoute(
+      post('http://localhost/api/groups/3/ratings', {
+        mediaKind: 'film',
+        mediaRef: '27205',
+        rating: 8,
+        watchedAt: '2026-08-12',
+        alsoPersonal: true,
+      }),
+    );
+    expect(response.status).toBe(409);
+    expect(saveGroupRatingMock).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({ alsoPersonal: true }),
+    );
+  });
+
+  it('forwards a confirmed retry with both flags', async () => {
+    getActorMock.mockResolvedValue(actor);
+    saveGroupRatingMock.mockResolvedValue(ok({ userId: actor.id }));
+    const response = await saveRatingRoute(
+      post('http://localhost/api/groups/3/ratings', {
+        mediaKind: 'film',
+        mediaRef: '27205',
+        rating: 8,
+        watchedAt: '2026-08-12',
+        alsoPersonal: true,
+        confirmOverwrite: true,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(saveGroupRatingMock).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({ alsoPersonal: true, confirmOverwrite: true }),
     );
   });
 });

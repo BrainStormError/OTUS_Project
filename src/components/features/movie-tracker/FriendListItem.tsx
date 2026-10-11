@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { UserRound } from 'lucide-react';
 
+import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/components/ui/utils';
 
 import type { PublicUser } from './types';
@@ -26,12 +26,7 @@ export function FriendListItem({
         href={`/u/${user.handle}`}
         className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <span
-          aria-hidden="true"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
-        >
-          <UserRound className="h-5 w-5" />
-        </span>
+        <Avatar seed={user.handle} size={40} />
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium">{user.name}</span>
           <span className="block truncate text-xs text-muted-foreground">@{user.handle}</span>

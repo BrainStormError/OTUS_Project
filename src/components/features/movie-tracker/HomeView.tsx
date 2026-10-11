@@ -14,7 +14,15 @@ import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
 import { SearchField } from './SearchField';
 import { SocialFeed } from './SocialFeed';
-import type { FilterOption, MediaKind, Movie, SearchFilters, WatchedRecord } from './types';
+import type {
+  FilterOption,
+  MediaKind,
+  Movie,
+  SearchFilters,
+  WatchedRecord,
+  WatchlistItem,
+} from './types';
+import { useWatchlist } from './watchlist-store';
 
 type SearchState =
   | { status: 'idle' }
@@ -26,13 +34,25 @@ export function HomeView({
   popularFilms = [],
   initialFeed = [],
   initialRecords = [],
+  initialWatchlist = [],
 }: {
   popularFilms?: CatalogSearchResult[];
   initialFeed?: FeedEvent[];
   initialRecords?: WatchedRecord[];
+  initialWatchlist?: WatchlistItem[];
 }) {
   const { records, upsert } = useWatchedRecords(initialRecords);
   const watchedIds = useMemo(() => new Set(records.map((record) => mediaKey(record.movie))), [records]);
+  const {
+    items: watchlistItems,
+    add: addToWatchlist,
+    remove: removeFromWatchlist,
+    drop: dropFromWatchlist,
+  } = useWatchlist(initialWatchlist);
+  const plannedIds = useMemo(
+    () => new Set(watchlistItems.map((item) => mediaKey(item.movie))),
+    [watchlistItems],
+  );
 
   const [kind, setKind] = useState<MediaKind>('film');
   const [filters, setFilters] = useState<SearchFilters>({});
@@ -115,7 +135,19 @@ export function HomeView({
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
+    dropFromWatchlist(movie);
     setActiveMovie(null);
+  }
+
+  function togglePlanned(movie: Movie, next: boolean) {
+    if (next) {
+      addToWatchlist(movie);
+      return;
+    }
+    const item = watchlistItems.find((entry) => mediaKey(entry.movie) === mediaKey(movie));
+    if (item) {
+      removeFromWatchlist(item);
+    }
   }
 
   return (
@@ -160,7 +192,9 @@ export function HomeView({
                       key={mediaKey(movie)}
                       movie={movie}
                       watched={watchedIds.has(mediaKey(movie))}
+                      planned={plannedIds.has(mediaKey(movie))}
                       onToggleWatched={() => setActiveMovie(movie)}
+                      onTogglePlanned={(next) => togglePlanned(movie, next)}
                     />
                   );
                 })}

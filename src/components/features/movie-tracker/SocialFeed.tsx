@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Timestamp } from '@/components/ui/timestamp';
 
 import type { FeedEvent, FeedSource } from './feed';
 
@@ -166,7 +167,7 @@ export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[]
                   <span aria-hidden="true">·</span>
                 </>
               ) : null}
-              {event.watchedAt}
+              <Timestamp value={event.createdAt} />
             </span>
           </li>
         ))}

@@ -2,13 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { err, ok } from '@/core/result';
 
-const { getActorMock, searchUsersMock, createFriendRequestMock, withdrawFriendRequestMock } =
-  vi.hoisted(() => ({
-    getActorMock: vi.fn(),
-    searchUsersMock: vi.fn(),
-    createFriendRequestMock: vi.fn(),
-    withdrawFriendRequestMock: vi.fn(),
-  }));
+const {
+  getActorMock,
+  searchUsersMock,
+  createFriendRequestMock,
+  withdrawFriendRequestMock,
+  removeFriendMock,
+} = vi.hoisted(() => ({
+  getActorMock: vi.fn(),
+  searchUsersMock: vi.fn(),
+  createFriendRequestMock: vi.fn(),
+  withdrawFriendRequestMock: vi.fn(),
+  removeFriendMock: vi.fn(),
+}));
 
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 
@@ -20,15 +26,18 @@ vi.mock('@/modules/friendships', async () => {
     userSearchInput: schema.userSearchInput,
     createFriendRequestInput: schema.createFriendRequestInput,
     friendshipDecisionInput: schema.friendshipDecisionInput,
+    removeFriendInput: schema.removeFriendInput,
     searchUsers: searchUsersMock,
     createFriendRequest: createFriendRequestMock,
     withdrawFriendRequest: withdrawFriendRequestMock,
+    removeFriend: removeFriendMock,
   };
 });
 
 import { GET as searchRoute } from '@/app/api/friendships/search/route';
 import { POST as createRoute } from '@/app/api/friendships/route';
 import { DELETE as withdrawRoute } from '@/app/api/friendships/[id]/route';
+import { POST as removeRoute } from '@/app/api/friendships/remove/route';
 
 const actor = { id: 1, role: 'employee' as const };
 const origin = { origin: 'http://localhost:3000' };
@@ -39,6 +48,14 @@ function searchRequest(query: string): Request {
 
 function createRequest(body: unknown): Request {
   return new Request('http://localhost/api/friendships', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...origin },
+    body: JSON.stringify(body),
+  });
+}
+
+function removeRequest(body: unknown): Request {
+  return new Request('http://localhost/api/friendships/remove', {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...origin },
     body: JSON.stringify(body),
@@ -120,8 +137,7 @@ describe('POST /api/friendships', () => {
   });
 });
 
-describe('DELETE /api/friendships/[id]', () => {
-  it('returns 400 for a non-numeric id', async () => {
+describe('DELETE /api/friendships/[id]', () => {  it('returns 400 for a non-numeric id', async () => {
     getActorMock.mockResolvedValue(actor);
     const { request, context } = withdrawRequest('nope');
     const response = await withdrawRoute(request, context);
@@ -155,6 +171,58 @@ describe('DELETE /api/friendships/[id]', () => {
 
     const { request, context } = withdrawRequest('7');
     const response = await withdrawRoute(request, context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: 7 });
+  });
+});
+
+describe('POST /api/friendships/remove', () => {
+  it('returns 401 without a session', async () => {
+    getActorMock.mockResolvedValue(null);
+    const response = await removeRoute(removeRequest({ friendshipId: 7 }));
+    expect(response.status).toBe(401);
+  });
+
+  it('returns 400 for an invalid friendship id', async () => {
+    getActorMock.mockResolvedValue(actor);
+    const response = await removeRoute(removeRequest({ friendshipId: 'nope' }));
+    expect(response.status).toBe(400);
+  });
+
+  it('maps a non-party permission error to 403', async () => {
+    getActorMock.mockResolvedValue(actor);
+    removeFriendMock.mockResolvedValue(err('FORBIDDEN', 'Нет прав'));
+
+    const response = await removeRoute(removeRequest({ friendshipId: 7 }));
+
+    expect(response.status).toBe(403);
+    expect(removeFriendMock).toHaveBeenCalledWith(actor, { friendshipId: 7 });
+  });
+
+  it('maps an unknown friendship to 404', async () => {
+    getActorMock.mockResolvedValue(actor);
+    removeFriendMock.mockResolvedValue(err('NOT_FOUND', 'Дружба не найдена'));
+
+    const response = await removeRoute(removeRequest({ friendshipId: 8 }));
+
+    expect(response.status).toBe(404);
+  });
+
+  it('maps a non-accepted friendship to 409', async () => {
+    getActorMock.mockResolvedValue(actor);
+    removeFriendMock.mockResolvedValue(err('CONFLICT', 'Дружба не принята'));
+
+    const response = await removeRoute(removeRequest({ friendshipId: 9 }));
+
+    expect(response.status).toBe(409);
+  });
+
+  it('removes the friendship for a party', async () => {
+    getActorMock.mockResolvedValue(actor);
+    removeFriendMock.mockResolvedValue(ok({ id: 7 }));
+
+    const response = await removeRoute(removeRequest({ friendshipId: 7 }));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: 7 });

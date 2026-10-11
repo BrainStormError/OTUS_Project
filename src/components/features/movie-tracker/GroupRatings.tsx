@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Fragment, useEffect, useId, useState } from 'react';
 
+import { currentDateInTimeZone, useTimeFormat } from '@/components/layout/preferences';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { useToast } from '@/components/ui/toast';
 import type { CatalogSearchResult } from '@/modules/catalog';
-import type { GroupRatingSummary } from '@/modules/groups';
+import type { GroupRatingMember, GroupRatingSummary } from '@/modules/groups';
 
 import { genreOptionsFromCatalog } from './catalog-view';
 import { RatingForm, type RatingPayload } from './RatingForm';
@@ -22,6 +24,15 @@ type SearchState =
   | { status: 'error' }
   | { status: 'done'; items: CatalogSearchResult[] };
 
+type PendingSave = {
+  media: { kind: MediaKind; ref: string };
+  payload: RatingPayload;
+};
+
+function alsoPersonalLabel(kind: MediaKind): string {
+  return kind === 'series' ? 'также добавить в мои сериалы' : 'также добавить в мои фильмы';
+}
+
 function ratingKey(mediaKind: string, mediaRef: string): string {
   return `${mediaKind}:${mediaRef}`;
 }
@@ -30,15 +41,19 @@ export function GroupRatings({
   groupId,
   isMember,
   isAdmin,
+  currentUserId,
   ratings,
 }: {
   groupId: number;
   isMember: boolean;
   isAdmin: boolean;
+  currentUserId?: number;
   ratings: GroupRatingSummary[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const attachTitleId = useId();
+  const { timeZone } = useTimeFormat();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [kind, setKind] = useState<MediaKind>('film');
@@ -50,10 +65,20 @@ export function GroupRatings({
   });
   const [selected, setSelected] = useState<CatalogSearchResult | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [rateTarget, setRateTarget] = useState<GroupRatingSummary | null>(null);
   const [attachTarget, setAttachTarget] = useState<GroupRatingSummary | null>(null);
   const [attachTitle, setAttachTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [alsoPersonal, setAlsoPersonal] = useState(false);
+  const [overwritePrompt, setOverwritePrompt] = useState(false);
+  const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
+
+  function mineOf(target: GroupRatingSummary): GroupRatingMember | undefined {
+    return currentUserId !== undefined
+      ? target.ratings.find((member) => member.userId === currentUserId)
+      : undefined;
+  }
 
   function loadGenres(next: MediaKind) {
     void fetch(`/api/genres?kind=${next}`)
@@ -99,8 +124,11 @@ export function GroupRatings({
     }
   }
 
-  async function saveRating(payload: RatingPayload) {
-    if (!selected) return;
+  async function saveRating(
+    media: { kind: MediaKind; ref: string },
+    payload: RatingPayload,
+    options?: { alsoPersonal?: boolean; confirmOverwrite?: boolean },
+  ) {
     setPending(true);
     setError(null);
     try {
@@ -108,24 +136,52 @@ export function GroupRatings({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          mediaKind: selected.kind,
-          mediaRef: selected.externalId,
+          mediaKind: media.kind,
+          mediaRef: media.ref,
           rating: payload.rating,
           comment: payload.comment,
           watchedAt: payload.watchedAt,
+          ...(options?.alsoPersonal ? { alsoPersonal: true } : {}),
+          ...(options?.confirmOverwrite ? { confirmOverwrite: true } : {}),
         }),
       });
+      if (response.status === 409) {
+        setPendingSave({ media, payload });
+        setOverwritePrompt(true);
+        return;
+      }
       if (!response.ok) {
         setError('Не удалось сохранить оценку');
+        toast.error('Не удалось сохранить оценку');
         return;
       }
       setSelected(null);
+      setRateTarget(null);
+      setAlsoPersonal(false);
+      setPendingSave(null);
+      toast.success('Оценка сохранена');
       router.refresh();
     } catch {
       setError('Не удалось сохранить оценку');
+      toast.error('Не удалось сохранить оценку');
     } finally {
       setPending(false);
     }
+  }
+
+  async function confirmOverwrite() {
+    if (!pendingSave) return;
+    setOverwritePrompt(false);
+    await saveRating(pendingSave.media, pendingSave.payload, {
+      alsoPersonal: true,
+      confirmOverwrite: true,
+    });
+  }
+
+  function dismissOverwrite() {
+    setOverwritePrompt(false);
+    setAlsoPersonal(false);
+    setPendingSave(null);
   }
 
   async function submitAttach(event: React.FormEvent<HTMLFormElement>) {
@@ -147,13 +203,16 @@ export function GroupRatings({
       );
       if (!response.ok) {
         setError('Не удалось прикрепить обсуждение');
+        toast.error('Не удалось прикрепить обсуждение');
         return;
       }
       setAttachTarget(null);
       setAttachTitle('');
+      toast.success('Обсуждение прикреплено');
       router.refresh();
     } catch {
       setError('Не удалось прикрепить обсуждение');
+      toast.error('Не удалось прикрепить обсуждение');
     } finally {
       setPending(false);
     }
@@ -161,7 +220,7 @@ export function GroupRatings({
 
   return (
     <div className="space-y-4">
-      {isMember ? (
+      {isAdmin ? (
         <div className="flex justify-end">
           <Button type="button" onClick={() => setPickerOpen(true)}>
             Добавить оценку
@@ -172,7 +231,7 @@ export function GroupRatings({
       {ratings.length === 0 ? (
         <EmptyState
           title="В группе пока нет оценок"
-          description="Оцените фильм или сериал, чтобы появилась первая групповая оценка."
+          description="Администратор группы начинает оценивание, добавив первую оценку фильма или сериала."
         />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -189,6 +248,9 @@ export function GroupRatings({
                 Оценка группы
               </th>
               <th scope="col" className="px-4 py-3 font-medium">
+                Действия
+              </th>
+              <th scope="col" className="px-4 py-3 font-medium">
                 Обсуждение
               </th>
             </tr>
@@ -198,6 +260,7 @@ export function GroupRatings({
               const key = ratingKey(rating.mediaKind, rating.mediaRef);
               const expanded = expandedKey === key;
               const detailId = `rating-${key}`;
+              const mine = mineOf(rating);
               return (
                 <Fragment key={key}>
                   <tr
@@ -220,6 +283,24 @@ export function GroupRatings({
                     </th>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">
                       {rating.average.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isMember ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRateTarget(rating);
+                            setAlsoPersonal(false);
+                          }}
+                        >
+                          {mine ? 'Изменить' : 'Оценить'}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {rating.discussionId ? (
@@ -249,7 +330,7 @@ export function GroupRatings({
                   </tr>
                   {expanded ? (
                     <tr>
-                      <td id={detailId} colSpan={3} className="bg-secondary/40 px-4 py-3">
+                      <td id={detailId} colSpan={4} className="bg-secondary/40 px-4 py-3">
                         <ul data-testid="individual-ratings" className="space-y-2">
                           {rating.ratings.map((member) => (
                             <li
@@ -301,6 +382,7 @@ export function GroupRatings({
                       type="button"
                       onClick={() => {
                         setSelected(item);
+                        setAlsoPersonal(false);
                         setPickerOpen(false);
                       }}
                       className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -325,10 +407,51 @@ export function GroupRatings({
       >
         {selected ? (
           <RatingForm
-            initialDate={new Date().toISOString().slice(0, 10)}
+            initialDate={currentDateInTimeZone(timeZone)}
             submitLabel="Сохранить"
-            onSubmit={saveRating}
-            onCancel={() => setSelected(null)}
+            alsoPersonal={alsoPersonal}
+            onAlsoPersonalChange={setAlsoPersonal}
+            alsoPersonalLabel={alsoPersonalLabel(selected.kind)}
+            onSubmit={(payload) =>
+              void saveRating(
+                { kind: selected.kind, ref: selected.externalId },
+                payload,
+                { alsoPersonal },
+              )
+            }
+            onCancel={() => {
+              setSelected(null);
+              setAlsoPersonal(false);
+            }}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(rateTarget)}
+        onClose={() => setRateTarget(null)}
+        title={rateTarget ? `Оценка «${rateTarget.title}»` : 'Оценка'}
+      >
+        {rateTarget ? (
+          <RatingForm
+            initialRating={mineOf(rateTarget)?.rating}
+            initialComment={mineOf(rateTarget)?.comment ?? undefined}
+            initialDate={mineOf(rateTarget)?.watchedAt ?? currentDateInTimeZone(timeZone)}
+            submitLabel="Сохранить"
+            alsoPersonal={alsoPersonal}
+            onAlsoPersonalChange={setAlsoPersonal}
+            alsoPersonalLabel={alsoPersonalLabel(rateTarget.mediaKind)}
+            onSubmit={(payload) =>
+              void saveRating(
+                { kind: rateTarget.mediaKind, ref: rateTarget.mediaRef },
+                payload,
+                { alsoPersonal },
+              )
+            }
+            onCancel={() => {
+              setRateTarget(null);
+              setAlsoPersonal(false);
+            }}
           />
         ) : null}
       </Modal>
@@ -357,6 +480,25 @@ export function GroupRatings({
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={overwritePrompt}
+        onClose={dismissOverwrite}
+        title="Перезаписать личную оценку?"
+      >
+        <p className="text-sm text-muted-foreground">
+          У вас уже есть личная оценка этого медиа. При сохранении она будет заменена
+          значениями из формы.
+        </p>
+        <div className="mt-4 flex items-center gap-2">
+          <Button type="button" disabled={pending} onClick={() => void confirmOverwrite()}>
+            Перезаписать
+          </Button>
+          <Button type="button" variant="outline" onClick={dismissOverwrite}>
+            Отмена
+          </Button>
+        </div>
       </Modal>
 
       {error ? (

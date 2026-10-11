@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/toast';
 
 import { TagInput } from './TagInput';
 
 function CreateGroupForm({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const nameId = useId();
   const descriptionId = useId();
   const [name, setName] = useState('');
@@ -33,14 +35,18 @@ function CreateGroupForm({ onClose }: { onClose: () => void }) {
       });
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? 'Не удалось создать группу');
+        const message = data.error ?? 'Не удалось создать группу';
+        setError(message);
+        toast.error(message);
         return;
       }
       const data = (await response.json()) as { id: number };
+      toast.success('Группа создана');
       onClose();
       router.push(`/groups/${data.id}`);
     } catch {
       setError('Не удалось создать группу');
+      toast.error('Не удалось создать группу');
     } finally {
       setPending(false);
     }

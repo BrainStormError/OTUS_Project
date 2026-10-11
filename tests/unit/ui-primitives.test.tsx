@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { currentDateInTimeZone } from '@/components/layout/preferences';
 import { AdminMemberPanel } from '@/components/features/movie-tracker/AdminMemberPanel';
 import { FriendListItem } from '@/components/features/movie-tracker/FriendListItem';
 import { FriendRequestItem } from '@/components/features/movie-tracker/FriendRequestItem';
@@ -14,6 +15,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { SkeletonGrid } from '@/components/ui/skeleton';
 import type { Group } from '@/components/features/movie-tracker/types';
+import type { GroupInvitation } from '@/modules/groups';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -112,6 +114,66 @@ describe('RatingForm', () => {
     expect(error).toHaveTextContent('от 0 до 10');
     expect(input).toHaveAttribute('aria-describedby', error.id);
   });
+
+  it('caps the watch date control at the current day', () => {
+    render(<RatingForm />);
+    expect(screen.getByLabelText('Дата просмотра')).toHaveAttribute(
+      'max',
+      currentDateInTimeZone(),
+    );
+  });
+
+  it('rejects a future watch date without saving', async () => {
+    const onSubmit = vi.fn();
+    render(<RatingForm onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Оценка (0–10)' }), '8');
+    fireEvent.change(screen.getByLabelText('Дата просмотра'), {
+      target: { value: '2999-01-01' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('не может быть в будущем');
+  });
+
+  it('accepts the current day and earlier watch dates', async () => {
+    const onSubmit = vi.fn();
+    render(<RatingForm onSubmit={onSubmit} />);
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Оценка (0–10)' }), '8');
+    const date = screen.getByLabelText('Дата просмотра');
+
+    fireEvent.change(date, { target: { value: currentDateInTimeZone() } });
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(onSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rating: 8, watchedAt: currentDateInTimeZone() }),
+    );
+
+    fireEvent.change(date, { target: { value: '2000-01-01' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(onSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ watchedAt: '2000-01-01' }),
+    );
+  });
+
+  it('omits the add-to-personal checkbox unless the caller wires it', () => {
+    render(<RatingForm />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('renders a controlled add-to-personal checkbox with the given label', async () => {
+    const onAlsoPersonalChange = vi.fn();
+    render(
+      <RatingForm
+        alsoPersonal={false}
+        onAlsoPersonalChange={onAlsoPersonalChange}
+        alsoPersonalLabel="также добавить в мои сериалы"
+      />,
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: 'также добавить в мои сериалы' });
+    expect(checkbox).not.toBeChecked();
+    await userEvent.click(checkbox);
+    expect(onAlsoPersonalChange).toHaveBeenCalledWith(true);
+  });
 });
 
 describe('statistics and privacy primitives', () => {
@@ -136,6 +198,12 @@ describe('friend, group, and admin primitives', () => {
     render(<FriendListItem user={{ id: 1, name: 'Мария', handle: 'maria' }} action={<button>Действие</button>} />);
     expect(screen.getByRole('link', { name: /Мария/ })).toHaveAttribute('href', '/u/maria');
     expect(screen.getByRole('button', { name: 'Действие' })).toBeInTheDocument();
+  });
+
+  it('shows an avatar in the friend item and drops the placeholder icon', () => {
+    const { container } = render(<FriendListItem user={{ id: 1, name: 'Мария', handle: 'maria' }} />);
+    expect(container.querySelector('.lucide-user-round')).toBeNull();
+    expect(screen.getByTestId('avatar')).toBeInTheDocument();
   });
 
   it('handles accept and decline on a friend request', async () => {
@@ -169,6 +237,25 @@ describe('friend, group, and admin primitives', () => {
     rerender(<AdminMemberPanel group={groups[0]!} isAdmin={false} />);
     expect(screen.queryByTestId('admin-member-panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('restricted-no-permission')).toBeInTheDocument();
+  });
+
+  it('shows an avatar on each member and pending invitation entry', () => {
+    const invitation: GroupInvitation = {
+      id: 3,
+      groupId: 1,
+      groupName: 'Киновечера',
+      inviterId: 1,
+      inviterName: 'Алексей',
+      inviterHandle: 'me',
+      inviteeId: 5,
+      inviteeName: 'Нина',
+      inviteeHandle: 'nina',
+      status: 'pending',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    render(<AdminMemberPanel group={groups[0]!} isAdmin invitations={[invitation]} />);
+    const panel = screen.getByTestId('admin-member-panel');
+    expect(within(panel).getAllByTestId('avatar')).toHaveLength(2);
   });
 
   it('invites a searched user and removes a member', async () => {

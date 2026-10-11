@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RestrictedState } from '@/components/ui/restricted-state';
+import { Timestamp } from '@/components/ui/timestamp';
 import type { FeedItem } from '@/modules/activity';
 
 const FALLBACK_NAME = 'Пользователь';
@@ -68,7 +69,7 @@ export function GroupActivity({
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-            <span>{event.createdAt.slice(0, 10)}</span>
+            <Timestamp value={event.createdAt} />
             {isRating(event) && event.discussionId ? (
               <Button asChild variant="outline" size="sm">
                 <Link href={`/groups/${groupId}?tab=discussions&discussion=${event.discussionId}`}>

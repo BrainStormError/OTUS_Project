@@ -1,9 +1,12 @@
 export {
+  saveMediaMetadata,
   savePersonalRating,
   saveGroupRating,
   listPersonalRatings,
   listGroupRatings,
   hasGroupRating,
+  findMediaId,
+  hasPersonalRating,
   deletePersonalRating,
 } from './service';
 export { ratingInput, mediaKinds } from './schema';

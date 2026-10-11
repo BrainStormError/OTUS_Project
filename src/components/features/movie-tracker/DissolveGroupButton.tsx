@@ -4,9 +4,11 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 export function DissolveGroupButton({ groupId }: { groupId: number }) {
   const router = useRouter();
+  const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -15,11 +17,14 @@ export function DissolveGroupButton({ groupId }: { groupId: number }) {
     try {
       const response = await fetch(`/api/groups/${groupId}`, { method: 'DELETE' });
       if (response.ok) {
+        toast.success('Группа распущена');
         router.push('/groups');
         router.refresh();
+        return;
       }
+      toast.error('Не удалось распустить группу');
     } catch {
-      // The user can retry from the same control.
+      toast.error('Не удалось распустить группу');
     } finally {
       setPending(false);
     }

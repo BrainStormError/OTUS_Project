@@ -2,7 +2,12 @@ import type { PoolClient } from 'pg';
 
 import { query } from '@/core/db/pool';
 
-import type { FriendRequestSummary, Friendship, SocialUser, UserSearchResult } from './types';
+import type {
+  FriendEntry,
+  FriendRequestSummary,
+  Friendship,
+  UserSearchResult,
+} from './types';
 
 const STATUS_CODE: Record<Friendship['status'], number> = {
   pending: 0,
@@ -85,9 +90,14 @@ export async function setFriendshipStatus(
   return row ? mapFriendship(row) : null;
 }
 
-export async function listFriends(userId: number): Promise<SocialUser[]> {
-  const rows = await query<{ id: number; name: string | null; handle: string | null }>(
-    `SELECT u.id, u.name, u.handle
+export async function listFriends(userId: number): Promise<FriendEntry[]> {
+  const rows = await query<{
+    friendship_id: number;
+    id: number;
+    name: string | null;
+    handle: string | null;
+  }>(
+    `SELECT f.id AS friendship_id, u.id, u.name, u.handle
        FROM friendships f
        JOIN users u ON u.id = CASE WHEN f.requester_id = $1 THEN f.addressee_id ELSE f.requester_id END
       WHERE f.status = $2
@@ -97,9 +107,12 @@ export async function listFriends(userId: number): Promise<SocialUser[]> {
     [userId, STATUS_CODE.accepted],
   );
   return rows.map((row) => ({
-    id: row.id,
-    name: row.name ?? 'Пользователь',
-    handle: row.handle ?? String(row.id),
+    friendshipId: row.friendship_id,
+    user: {
+      id: row.id,
+      name: row.name ?? 'Пользователь',
+      handle: row.handle ?? String(row.id),
+    },
   }));
 }
 
@@ -183,6 +196,20 @@ export async function deletePendingRequest(
   return row ? mapFriendship(row) : null;
 }
 
+export async function deleteAcceptedFriendship(
+  id: number,
+  actorId: number,
+): Promise<Friendship | null> {
+  const rows = await query<FriendshipRow>(
+    `DELETE FROM friendships
+      WHERE id = $1 AND status = $2 AND (requester_id = $3 OR addressee_id = $3)
+      RETURNING ${COLUMNS}`,
+    [id, STATUS_CODE.accepted, actorId],
+  );
+  const row = rows[0];
+  return row ? mapFriendship(row) : null;
+}
+
 const SEARCH_LIMIT = 20;
 
 type UserSearchRow = {
@@ -190,6 +217,7 @@ type UserSearchRow = {
   name: string | null;
   handle: string | null;
   relationship: UserSearchResult['relationship'];
+  friendship_id: number | null;
 };
 
 function likePattern(value: string): string {
@@ -202,6 +230,7 @@ function mapSearchRow(row: UserSearchRow): UserSearchResult {
     name: row.name ?? 'Пользователь',
     handle: row.handle ?? String(row.id),
     relationship: row.relationship,
+    friendshipId: row.friendship_id ?? null,
   };
 }
 
@@ -211,7 +240,7 @@ export async function searchUsers(
 ): Promise<UserSearchResult[]> {
   const rows = await query<UserSearchRow>(
     `WITH results AS (
-       SELECT u.id, u.name, u.handle, 'friend'::text AS relationship, 0 AS tier
+       SELECT u.id, u.name, u.handle, 'friend'::text AS relationship, f.id AS friendship_id, 0 AS tier
          FROM friendships f
          JOIN users u
            ON u.id = CASE WHEN f.requester_id = $1 THEN f.addressee_id ELSE f.requester_id END
@@ -226,10 +255,11 @@ export async function searchUsers(
                  WHEN rel.requester_id = $1 THEN 'pending_out'
                  ELSE 'pending_in'
                END::text AS relationship,
+               rel.id AS friendship_id,
                1 AS tier
           FROM users u
           LEFT JOIN LATERAL (
-            SELECT f.requester_id
+            SELECT f.id, f.requester_id
               FROM friendships f
              WHERE f.status = $4
                AND ((f.requester_id = u.id AND f.addressee_id = $1)
@@ -247,7 +277,7 @@ export async function searchUsers(
                   OR (f.requester_id = $1 AND f.addressee_id = u.id))
            )
      )
-     SELECT id, name, handle, relationship
+     SELECT id, name, handle, relationship, friendship_id
        FROM results
       WHERE tier = 0
          OR NOT EXISTS (SELECT 1 FROM results other WHERE other.tier = 0)

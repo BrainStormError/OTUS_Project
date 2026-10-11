@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SocialFeed } from '@/components/features/movie-tracker/SocialFeed';
 import type { FeedEvent } from '@/components/features/movie-tracker/feed';
+import { writeTimezone } from '@/components/layout/preferences';
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -42,7 +43,7 @@ function event(id: number, title: string): FeedEvent {
     kind: 'film',
     title,
     rating: 8.5,
-    watchedAt: '2026-08-24',
+    createdAt: '2026-08-24T00:00:00.000Z',
     href: '/film/155',
     action: 'оценил(а)',
   };
@@ -51,6 +52,7 @@ function event(id: number, title: string): FeedEvent {
 const originalEventSource: unknown = globalThis.EventSource;
 
 beforeEach(() => {
+  window.localStorage.clear();
   FakeEventSource.instances = [];
   (globalThis as unknown as { EventSource: typeof FakeEventSource }).EventSource =
     FakeEventSource;
@@ -99,8 +101,16 @@ describe('SocialFeed live updates', () => {
   });
 });
 
-describe('SocialFeed size control', () => {
-  it('renders every loaded event in a scrollable viewport sized by the selector', async () => {
+describe('SocialFeed timestamps', () => {
+  it('shows the event moment in the selected timezone and format', async () => {
+    writeTimezone('Europe/Moscow');
+    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
+
+    expect(await screen.findByText('03:00 24.08.26')).toBeInTheDocument();
+  });
+});
+
+describe('SocialFeed size control', () => {  it('renders every loaded event in a scrollable viewport sized by the selector', async () => {
     const events = Array.from({ length: 30 }, (_, index) =>
       event(index, `Фильм ${index}`),
     );

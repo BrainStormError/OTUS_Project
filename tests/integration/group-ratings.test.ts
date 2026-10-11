@@ -4,9 +4,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
+import { withTransaction } from '@/core/db/transaction';
 import { insertUser } from '@/modules/auth/repository';
 import { attachDiscussion } from '@/modules/discussions';
 import { listGroupRatings, saveGroupRating } from '@/modules/groups';
+import { hasGroupRatingTx } from '@/modules/ratings/repository';
+import { saveWatchedRecord } from '@/modules/records';
+import { addWatchlist } from '@/modules/watchlist';
 
 import { installTmdbFetch } from './tmdb-stub';
 
@@ -90,6 +94,37 @@ describe('saveGroupRating', () => {
     expect(result).toMatchObject({ ok: false, code: 'FORBIDDEN' });
   });
 
+  it('rejects a member starting a media that has no group rating', async () => {
+    const admin = await makeUser('admin');
+    const member = await makeUser('member');
+    const groupId = await makeGroup(admin, [member]);
+    const result = await saveGroupRating(member, rating(groupId, 8));
+    expect(result).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+
+    const rows = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM ratings WHERE group_id = $1`,
+      [groupId],
+    );
+    expect(Number(rows[0]?.count)).toBe(0);
+  });
+
+  it('accepts a member rating a media already started by an admin', async () => {
+    const admin = await makeUser('admin');
+    const member = await makeUser('member');
+    const groupId = await makeGroup(admin, [member]);
+    await saveGroupRating(admin, rating(groupId, 8));
+
+    const result = await saveGroupRating(member, rating(groupId, 9));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const rows = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM ratings WHERE group_id = $1`,
+      [groupId],
+    );
+    expect(Number(rows[0]?.count)).toBe(2);
+  });
+
   it('updates an existing rating instead of duplicating it', async () => {
     const admin = await makeUser('admin');
     const groupId = await makeGroup(admin);
@@ -102,6 +137,146 @@ describe('saveGroupRating', () => {
     );
     expect(Number(rows[0]?.count)).toBe(1);
     expect(Number(rows[0]?.rating)).toBe(90);
+  });
+});
+
+describe('saveGroupRating with alsoPersonal', () => {
+  it('writes both rows with equal values and clears the watchlist', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+    const added = await addWatchlist(admin, { mediaKind: 'film', mediaRef: '27205' });
+    expect(added.ok).toBe(true);
+
+    const result = await saveGroupRating(admin, {
+      ...rating(groupId, 9),
+      comment: 'Отлично',
+      alsoPersonal: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const mediaId = result.value.mediaId;
+
+    const group = await query<{ rating: number; comment: string | null }>(
+      `SELECT rating, comment FROM ratings WHERE group_id = $1 AND media_id = $2`,
+      [groupId, mediaId],
+    );
+    expect(Number(group[0]?.rating)).toBe(90);
+    expect(group[0]?.comment).toBe('Отлично');
+
+    const personal = await query<{ rating: number; comment: string | null; watched_at: string }>(
+      `SELECT rating, comment, watched_at::text AS watched_at FROM ratings
+        WHERE user_id = $1 AND media_id = $2 AND group_id IS NULL`,
+      [admin.id, mediaId],
+    );
+    expect(Number(personal[0]?.rating)).toBe(90);
+    expect(personal[0]?.comment).toBe('Отлично');
+    expect(personal[0]?.watched_at).toBe('2026-08-12');
+
+    const watch = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM watchlist WHERE user_id = $1 AND media_id = $2`,
+      [admin.id, mediaId],
+    );
+    expect(Number(watch[0]?.count)).toBe(0);
+  });
+
+  it('refuses to overwrite an existing personal rating and writes nothing', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+    const watched = await saveWatchedRecord(admin, {
+      mediaKind: 'film',
+      mediaRef: '27205',
+      rating: 5,
+      watchedAt: '2026-08-01',
+    });
+    expect(watched.ok).toBe(true);
+
+    const result = await saveGroupRating(admin, {
+      ...rating(groupId, 9),
+      alsoPersonal: true,
+    });
+    expect(result).toMatchObject({ ok: false, code: 'CONFLICT' });
+
+    const groupRows = await query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM ratings WHERE group_id = $1`,
+      [groupId],
+    );
+    expect(Number(groupRows[0]?.count)).toBe(0);
+
+    const personalRows = await query<{ count: number; rating: number }>(
+      `SELECT count(*)::int AS count, max(rating) AS rating FROM ratings
+        WHERE user_id = $1 AND group_id IS NULL`,
+      [admin.id],
+    );
+    expect(Number(personalRows[0]?.count)).toBe(1);
+    expect(Number(personalRows[0]?.rating)).toBe(50);
+  });
+
+  it('overwrites an existing personal rating when confirmed', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+    await saveWatchedRecord(admin, {
+      mediaKind: 'film',
+      mediaRef: '27205',
+      rating: 5,
+      watchedAt: '2026-08-01',
+    });
+
+    const result = await saveGroupRating(admin, {
+      ...rating(groupId, 9),
+      alsoPersonal: true,
+      confirmOverwrite: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const personalRows = await query<{ count: number; rating: number }>(
+      `SELECT count(*)::int AS count, max(rating) AS rating FROM ratings
+        WHERE user_id = $1 AND media_id = $2 AND group_id IS NULL`,
+      [admin.id, result.value.mediaId],
+    );
+    expect(Number(personalRows[0]?.count)).toBe(1);
+    expect(Number(personalRows[0]?.rating)).toBe(90);
+  });
+
+  it('leaves the personal rating intact when the group entry is deleted', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+    const saved = await saveGroupRating(admin, {
+      ...rating(groupId, 9),
+      alsoPersonal: true,
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const mediaId = saved.value.mediaId;
+
+    await query(`DELETE FROM ratings WHERE group_id = $1 AND media_id = $2`, [groupId, mediaId]);
+    await query(`DELETE FROM groups WHERE id = $1`, [groupId]);
+
+    const personal = await query<{ count: number; rating: number }>(
+      `SELECT count(*)::int AS count, max(rating) AS rating FROM ratings
+        WHERE user_id = $1 AND media_id = $2 AND group_id IS NULL`,
+      [admin.id, mediaId],
+    );
+    expect(Number(personal[0]?.count)).toBe(1);
+    expect(Number(personal[0]?.rating)).toBe(90);
+  });
+});
+
+describe('hasGroupRatingTx', () => {
+  it('checks group-rating existence on the transaction client', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+
+    const before = await withTransaction((tx) => hasGroupRatingTx(tx, groupId, 424242));
+    expect(before).toBe(false);
+
+    const rated = await saveGroupRating(admin, rating(groupId, 8));
+    if (!rated.ok) return;
+
+    const after = await withTransaction((tx) =>
+      hasGroupRatingTx(tx, groupId, rated.value.mediaId),
+    );
+    expect(after).toBe(true);
   });
 });
 

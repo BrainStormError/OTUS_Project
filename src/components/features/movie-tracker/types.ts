@@ -1,3 +1,5 @@
+import type { RelationshipStatus } from '@/modules/friendships';
+
 export type MediaKind = 'film' | 'series';
 
 export type Movie = {
@@ -20,6 +22,12 @@ export type WatchedRecord = {
   watchedAt: string;
 };
 
+export type WatchlistItem = {
+  id: number;
+  movie: Movie;
+  addedAt: string;
+};
+
 export type GenreCount = { genre: string; count: number };
 export type YearCount = { year: number; count: number };
 
@@ -33,12 +41,18 @@ export type PublicUser = {
   id: number;
   handle: string;
   name: string;
-  avatarUrl?: string | null;
   isFriend?: boolean;
   profileHidden?: boolean;
   statsHidden?: boolean;
+  relationship?: RelationshipStatus | null;
+  friendshipId?: number | null;
   stats: UserStats;
   recent: WatchedRecord[];
+};
+
+export type FriendContact = {
+  friendshipId: number;
+  user: PublicUser;
 };
 
 export type FriendRequest = {

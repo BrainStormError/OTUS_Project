@@ -72,3 +72,41 @@ test('keeps the group shell in place and streams the tab skeleton', async ({ pag
   await expect(heading).toBeVisible();
   await expect(tablist).toBeVisible();
 });
+
+test('changing the timezone and clock format changes a comment moment', async ({ page }) => {
+  await login(page);
+
+  // Pin a zero-offset zone and the 24-hour clock.
+  await page.goto('/settings');
+  await page.getByLabel('Тайм-зона').first().selectOption('Africa/Abidjan');
+  await page.getByRole('radio', { name: '24 часа' }).first().click();
+
+  const discussionUrl = `/groups/${GROUP_ID}?tab=discussions&discussion=1`;
+  await page.goto(discussionUrl);
+  const posts = page.getByTestId('discussion-posts').first();
+  await expect(posts.getByText('Финал гениален, спорить бесполезно.').first()).toBeVisible();
+
+  const firstTime = posts.locator('time').first();
+  const baseline = await firstTime.textContent();
+  expect(baseline).toMatch(/^\d{2}:\d{2} \d{2}\.\d{2}\.\d{2}$/);
+  const baselineHour = Number(baseline?.slice(0, 2));
+
+  // A +14 zone moves the hour by 14 while keeping the same format.
+  await page.goto('/settings');
+  await page.getByLabel('Тайм-зона').first().selectOption('Pacific/Kiritimati');
+  await page.goto(discussionUrl);
+  const shifted = await posts.locator('time').first().textContent();
+  expect(shifted).not.toBe(baseline);
+  const shiftedHour = Number(shifted?.slice(0, 2));
+  expect((shiftedHour - baselineHour + 24) % 24).toBe(14);
+
+  // The 12-hour clock switches the hour to a 1–12 value.
+  await page.goto('/settings');
+  await page.getByRole('radio', { name: '12 часов' }).first().click();
+  await page.goto(discussionUrl);
+  const twelveHour = await posts.locator('time').first().textContent();
+  const parsedHour = Number(/^(\d{1,2}):/.exec(twelveHour ?? '')?.[1]);
+  expect(parsedHour).toBeGreaterThanOrEqual(1);
+  expect(parsedHour).toBeLessThanOrEqual(12);
+  expect(twelveHour).not.toBe(shifted);
+});

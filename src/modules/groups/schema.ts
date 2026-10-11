@@ -29,6 +29,8 @@ export type DissolveGroupInput = z.infer<typeof dissolveGroupInput>;
 
 export const groupRatingInput = ratingInput.extend({
   groupId: id,
+  alsoPersonal: z.boolean().optional(),
+  confirmOverwrite: z.boolean().optional(),
 });
 
 export type GroupRatingInput = z.infer<typeof groupRatingInput>;

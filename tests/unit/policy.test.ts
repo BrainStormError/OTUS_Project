@@ -88,6 +88,13 @@ describe('can', () => {
     expect(can(employee, 'group:rate', { groupRole: null })).toBe(false);
   });
 
+  it('restricts starting a rating to group admins', () => {
+    expect(can(employee, 'group:rate:start', { groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:rate:start', { groupRole: 'member' })).toBe(false);
+    expect(can(employee, 'group:rate:start', { groupRole: null })).toBe(false);
+    expect(can(employee, 'group:rate:start')).toBe(false);
+  });
+
   it('allows only members to leave a group and only admins to delete it', () => {
     expect(can(employee, 'group:leave', { groupRole: 'member' })).toBe(true);
     expect(can(employee, 'group:leave', { groupRole: 'admin' })).toBe(false);

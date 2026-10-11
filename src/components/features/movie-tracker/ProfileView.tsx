@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import { UserRound } from 'lucide-react';
 
+import { Avatar } from '@/components/ui/avatar';
 import { RestrictedState } from '@/components/ui/restricted-state';
 
-import { AddFriendButton } from './AddFriendButton';
+import { FriendActionButton } from './FriendActionButton';
 import { EditableIdentity } from './EditableIdentity';
 import { StatisticsView } from './StatisticsView';
 import type { PublicUser } from './types';
@@ -13,7 +13,11 @@ export function ProfileView({ user, isOwn }: { user: PublicUser; isOwn: boolean 
     return (
       <div className="space-y-3">
         <RestrictedState kind="profile" />
-        <AddFriendButton userId={user.id} />
+        <FriendActionButton
+          userId={user.id}
+          relationship={user.relationship ?? 'none'}
+          friendshipId={user.friendshipId ?? null}
+        />
       </div>
     );
   }
@@ -24,18 +28,17 @@ export function ProfileView({ user, isOwn }: { user: PublicUser; isOwn: boolean 
         <EditableIdentity name={user.name} handle={user.handle} />
       ) : (
         <header className="flex flex-wrap items-center gap-4">
-          <span
-            aria-hidden="true"
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
-          >
-            <UserRound className="h-8 w-8" />
-          </span>
+          <Avatar seed={user.handle} size={64} />
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
             <p className="text-sm text-muted-foreground">@{user.handle}</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <AddFriendButton userId={user.id} />
+            <FriendActionButton
+              userId={user.id}
+              relationship={user.relationship ?? 'none'}
+              friendshipId={user.friendshipId ?? null}
+            />
           </div>
         </header>
       )}

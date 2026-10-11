@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Textarea } from '@/components/ui/textarea';
+import { Timestamp } from '@/components/ui/timestamp';
+import { useToast } from '@/components/ui/toast';
 import type { DiscussionDetail, DiscussionSummary } from '@/modules/discussions';
 
 function authorLabel(name: string | null, handle: string | null): string {
@@ -29,6 +31,7 @@ export function GroupDiscussions({
   activeDiscussion: DiscussionDetail | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const titleId = useId();
   const commentId = useId();
 
@@ -54,13 +57,16 @@ export function GroupDiscussions({
       });
       if (!response.ok) {
         setError('Не удалось создать обсуждение');
+        toast.error('Не удалось создать обсуждение');
         return;
       }
       setTitle('');
       setCreating(false);
+      toast.success('Обсуждение создано');
       router.refresh();
     } catch {
       setError('Не удалось создать обсуждение');
+      toast.error('Не удалось создать обсуждение');
     } finally {
       setPending(false);
     }
@@ -81,12 +87,15 @@ export function GroupDiscussions({
       });
       if (!response.ok) {
         setError('Не удалось отправить комментарий');
+        toast.error('Не удалось отправить комментарий');
         return;
       }
       setComment('');
+      toast.success('Комментарий отправлен');
       router.refresh();
     } catch {
       setError('Не удалось отправить комментарий');
+      toast.error('Не удалось отправить комментарий');
     } finally {
       setPending(false);
     }
@@ -120,7 +129,7 @@ export function GroupDiscussions({
                 </p>
                 <p className="text-sm text-muted-foreground">{post.body}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {post.createdAt.slice(0, 10)}
+                  <Timestamp value={post.createdAt} />
                 </p>
               </li>
             ))}

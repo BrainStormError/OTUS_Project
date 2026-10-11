@@ -25,6 +25,7 @@ export type Action =
   | 'group:leave'
   | 'group:view'
   | 'group:rate'
+  | 'group:rate:start'
   | 'group:discuss'
   | 'group:discuss:create'
   | 'group:discuss:attach'
@@ -68,6 +69,8 @@ export function can(actor: Actor, action: Action, resource?: Resource): boolean 
     case 'group:rate':
     case 'group:discuss':
       return resource?.groupRole === 'admin' || resource?.groupRole === 'member';
+    case 'group:rate:start':
+      return resource?.groupRole === 'admin';
     case 'group:discuss:create':
     case 'group:discuss:attach':
       return resource?.groupRole === 'admin';

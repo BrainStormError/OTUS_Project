@@ -3,11 +3,14 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 import { EditIdentityModal, type IdentityField } from './EditIdentityModal';
+import { HourCycleSelect } from './HourCycleSelect';
 import { IdentitySelect } from './IdentitySelect';
 import { PrivacyToggle, type SaveStatus } from './PrivacyToggle';
 import { ThemeSelect } from './ThemeSelect';
+import { TimezoneSelect } from './TimezoneSelect';
 
 type FlagKey = 'profileHidden' | 'statsHidden';
 type Flags = Record<FlagKey, boolean>;
@@ -34,6 +37,7 @@ export function SettingsView({
   });
   const [status, setStatus] = useState<Record<FlagKey, SaveStatus>>(IDLE_STATUS);
   const [editField, setEditField] = useState<IdentityField | null>(null);
+  const toast = useToast();
 
   async function save(key: FlagKey, next: boolean) {
     const previous = flags;
@@ -55,9 +59,11 @@ export function SettingsView({
         statsHidden: data.statsHidden ?? nextFlags.statsHidden,
       });
       setStatus((current) => ({ ...current, [key]: 'saved' }));
+      toast.success('Настройки приватности сохранены');
     } catch {
       setFlags(previous);
       setStatus((current) => ({ ...current, [key]: 'error' }));
+      toast.error('Не удалось сохранить настройки');
     }
   }
 
@@ -74,6 +80,15 @@ export function SettingsView({
           Что показывать в верхней панели: имя, тег или и то, и другое.
         </p>
         <IdentitySelect />
+      </section>
+
+      <section className="space-y-3" aria-label="Время">
+        <h2 className="text-lg font-medium">Время</h2>
+        <p className="text-sm text-muted-foreground">
+          Тайм-зона и формат часов для всех моментов времени.
+        </p>
+        <TimezoneSelect />
+        <HourCycleSelect />
       </section>
 
       <section className="space-y-3" aria-label="Имя и тэг">

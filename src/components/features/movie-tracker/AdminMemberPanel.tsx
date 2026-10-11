@@ -4,8 +4,10 @@ import { Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { RestrictedState } from '@/components/ui/restricted-state';
+import { useToast } from '@/components/ui/toast';
 import type { GroupInvitation } from '@/modules/groups';
 
 import { searchUsers } from './social-actions';
@@ -14,15 +16,16 @@ import type { Group, GroupMember } from './types';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-function postJson(url: string, method: string, body?: unknown): void {
+async function postJson(url: string, method: string, body?: unknown): Promise<boolean> {
   try {
-    void fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: body === undefined ? undefined : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
-    }).catch(() => undefined);
+    });
+    return response.ok;
   } catch {
-    // The local view already reflects the optimistic update.
+    return false;
   }
 }
 
@@ -44,6 +47,7 @@ export function AdminMemberPanel({
   );
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<{ query: string; items: UserSearchResult[] } | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -68,17 +72,33 @@ export function AdminMemberPanel({
     return <RestrictedState kind="no-permission" />;
   }
 
-  function changeRole(id: number, role: GroupMember['role']) {
+  async function changeRole(id: number, role: GroupMember['role']) {
+    const previous = members;
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, role } : member)));
-    postJson(`/api/groups/${group.id}/members/${id}`, 'PATCH', { role });
+    const ok = await postJson(`/api/groups/${group.id}/members/${id}`, 'PATCH', { role });
+    if (ok) {
+      toast.success('Роль обновлена');
+      return;
+    }
+    setMembers(previous);
+    toast.error('Не удалось изменить роль');
   }
 
-  function removeMember(id: number) {
+  async function removeMember(id: number) {
+    const previous = members;
     setMembers((prev) => prev.filter((member) => member.id !== id));
-    postJson(`/api/groups/${group.id}/members/${id}`, 'DELETE');
+    const ok = await postJson(`/api/groups/${group.id}/members/${id}`, 'DELETE');
+    if (ok) {
+      toast.success('Участник удалён');
+      return;
+    }
+    setMembers(previous);
+    toast.error('Не удалось удалить участника');
   }
 
-  function invite(user: UserSearchResult) {
+  async function invite(user: UserSearchResult) {
+    const previousSent = sent;
+    const previousPending = pending;
     setSent((prev) => new Set(prev).add(user.id));
     setPending((prev) => [
       ...prev,
@@ -96,17 +116,33 @@ export function AdminMemberPanel({
         createdAt: new Date().toISOString(),
       },
     ]);
-    postJson(`/api/groups/${group.id}/invitations`, 'POST', { inviteeId: user.id });
+    const ok = await postJson(`/api/groups/${group.id}/invitations`, 'POST', { inviteeId: user.id });
+    if (ok) {
+      toast.success('Приглашение отправлено');
+      return;
+    }
+    setSent(previousSent);
+    setPending(previousPending);
+    toast.error('Не удалось отправить приглашение');
   }
 
-  function cancelInvitation(invitation: GroupInvitation) {
+  async function cancelInvitation(invitation: GroupInvitation) {
+    const previousPending = pending;
+    const previousSent = sent;
     setPending((prev) => prev.filter((entry) => entry.id !== invitation.id));
     setSent((prev) => {
       const next = new Set(prev);
       next.delete(invitation.inviteeId);
       return next;
     });
-    postJson(`/api/groups/invitations/${invitation.id}`, 'DELETE');
+    const ok = await postJson(`/api/groups/invitations/${invitation.id}`, 'DELETE');
+    if (ok) {
+      toast.success('Приглашение отозвано');
+      return;
+    }
+    setPending(previousPending);
+    setSent(previousSent);
+    toast.error('Не удалось отозвать приглашение');
   }
 
   return (
@@ -172,9 +208,12 @@ export function AdminMemberPanel({
               key={member.id}
               className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-3 py-2"
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{member.name}</p>
-                <p className="truncate text-xs text-muted-foreground">@{member.handle}</p>
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar seed={member.handle} size={40} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{member.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{member.handle}</p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <label className="sr-only" htmlFor={`role-${member.id}`}>
@@ -217,11 +256,14 @@ export function AdminMemberPanel({
                 key={invitation.id}
                 className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-3 py-2"
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{invitation.inviteeName}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    @{invitation.inviteeHandle}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar seed={invitation.inviteeHandle} size={40} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{invitation.inviteeName}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      @{invitation.inviteeHandle}
+                    </p>
+                  </div>
                 </div>
                 <Button
                   type="button"

@@ -35,6 +35,7 @@ describe('toFeedEvent', () => {
       href: '/film/155',
     });
     expect(event.cursor.length).toBeGreaterThan(0);
+    expect(event.createdAt).toBe('2026-08-24T10:00:00.000Z');
   });
 
   it("maps the viewer's own activity to the you source", () => {

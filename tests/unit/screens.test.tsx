@@ -11,8 +11,11 @@ import { ProfileView } from '@/components/features/movie-tracker/ProfileView';
 import { RecordView } from '@/components/features/movie-tracker/RecordView';
 import { SettingsView } from '@/components/features/movie-tracker/SettingsView';
 import { StatisticsView } from '@/components/features/movie-tracker/StatisticsView';
+import { AdminMemberPanel } from '@/components/features/movie-tracker/AdminMemberPanel';
+import { FriendListItem } from '@/components/features/movie-tracker/FriendListItem';
 import { searchGroups } from '@/components/features/movie-tracker/group-search';
 import type {
+  FriendContact,
   FriendRequest,
   Group,
   Movie,
@@ -167,7 +170,7 @@ const friendRequests: FriendRequest[] = [
   { id: 1, user: nina },
   { id: 2, user: ivan },
 ];
-const friends: PublicUser[] = [maria];
+const friends: FriendContact[] = [{ friendshipId: 11, user: maria }];
 const outgoingRequests: FriendRequest[] = [{ id: 1, user: nina }];
 
 const ownGroups: Group[] = [
@@ -541,12 +544,41 @@ describe('ProfileView', () => {
     expect(screen.getByRole('button', { name: 'Добавить в друзья' })).toBeInTheDocument();
   });
 
+  it('offers no add action to a friend and offers it to a non-friend', () => {
+    const friend: PublicUser = { ...maria, relationship: 'friend', friendshipId: 11 };
+    const { rerender } = render(<ProfileView user={friend} isOwn={false} />);
+    expect(screen.getByRole('button', { name: 'Убрать из друзей' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Добавить в друзья' })).not.toBeInTheDocument();
+
+    const stranger: PublicUser = { ...maria, relationship: 'none', friendshipId: null };
+    rerender(<ProfileView user={stranger} isOwn={false} />);
+    expect(screen.getByRole('button', { name: 'Добавить в друзья' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Убрать из друзей' })).not.toBeInTheDocument();
+  });
+
+  it('carries the relationship action into the restricted profile branch', () => {
+    const hiddenFriend: PublicUser = { ...secret, relationship: 'friend', friendshipId: 4 };
+    render(<ProfileView user={hiddenFriend} isOwn={false} />);
+    expect(screen.getByTestId('restricted-profile')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Убрать из друзей' })).toBeInTheDocument();
+  });
+
   it('restricts statistics for a non-permitted viewer while the owner still sees values', () => {
     const { rerender } = render(<ProfileView user={ivan} isOwn={false} />);
     expect(screen.getByTestId('restricted-statistics')).toBeInTheDocument();
 
     rerender(<ProfileView user={ivan} isOwn />);
     expect(screen.getByTestId('statistics')).toBeInTheDocument();
+  });
+
+  it('replaces the placeholder icon with an avatar on own and other profiles', () => {
+    const own = render(<ProfileView user={ownProfile} isOwn />);
+    expect(own.container.querySelector('.lucide-user-round')).toBeNull();
+    expect(own.container.querySelector('[data-testid="avatar"]')).not.toBeNull();
+
+    const other = render(<ProfileView user={maria} isOwn={false} />);
+    expect(other.container.querySelector('.lucide-user-round')).toBeNull();
+    expect(other.container.querySelector('[data-testid="avatar"]')).not.toBeNull();
   });
 });
 
@@ -570,6 +602,10 @@ describe('StatisticsView', () => {
 
 describe('FriendsView', () => {
   it('shows the pending count and updates the list on accept', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) })),
+    );
     render(<FriendsView initialRequests={friendRequests} initialFriends={friends} />);
     expect(screen.getByLabelText('Ожидающих заявок: 2')).toHaveTextContent('2');
 
@@ -631,6 +667,22 @@ describe('SettingsView', () => {
     expect(window.localStorage.getItem('identity-display')).toBe('both');
   });
 
+  it('reflects and changes the timezone and hour-cycle controls', async () => {
+    render(<SettingsView />);
+    const zone = screen.getByLabelText('Тайм-зона');
+    expect(zone).toHaveValue('');
+
+    await userEvent.selectOptions(zone, 'Europe/Moscow');
+    expect(zone).toHaveValue('Europe/Moscow');
+    expect(window.localStorage.getItem('timezone')).toBe('Europe/Moscow');
+
+    const twelve = screen.getByRole('radio', { name: '12 часов' });
+    expect(twelve).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(twelve);
+    expect(twelve).toHaveAttribute('aria-checked', 'true');
+    expect(window.localStorage.getItem('hour-cycle')).toBe('12');
+  });
+
   it('offers identity edit actions that open the matching modal', () => {
     render(<SettingsView name="Алексей" handle="alex" />);
     expect(screen.getByRole('button', { name: 'Изменить имя' })).toBeInTheDocument();
@@ -656,7 +708,7 @@ describe('Scoped search in Friends and Groups', () => {
           handle: user.handle,
           relationship:
             overrides[user.id] ??
-            (friends.some((friend) => friend.id === user.id) ? 'friend' : 'none'),
+            (friends.some((friend) => friend.user.id === user.id) ? 'friend' : 'none'),
         }));
       return Promise.resolve({ ok: true, json: async () => ({ items }) });
     });
@@ -775,5 +827,37 @@ describe('Scoped search in Friends and Groups', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Создать группу' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(within(screen.getByRole('dialog')).getByLabelText('Название')).toBeInTheDocument();
+  });
+});
+
+describe('Avatar across identity surfaces', () => {
+  function avatarFill(container: HTMLElement): string | null {
+    return container
+      .querySelector('[data-testid="avatar"] rect')
+      ?.getAttribute('fill') ?? null;
+  }
+
+  it('renders the same avatar for the same handle and changes it with the tag', () => {
+    const handle = 'shared-handle';
+    const user: PublicUser = { id: 9, handle, name: 'Саша', stats: statsFixture, recent: [] };
+    const group: Group = {
+      id: 5,
+      name: 'Киновечера',
+      tags: [],
+      members: [{ id: 9, name: 'Саша', handle, role: 'admin' }],
+      stats: statsFixture,
+    };
+
+    const profile = render(<ProfileView user={user} isOwn={false} />);
+    const friend = render(<FriendListItem user={user} />);
+    const panel = render(<AdminMemberPanel group={group} isAdmin />);
+
+    const fill = avatarFill(profile.container);
+    expect(fill).toBeTruthy();
+    expect(avatarFill(friend.container)).toBe(fill);
+    expect(avatarFill(panel.container)).toBe(fill);
+
+    const renamed = render(<FriendListItem user={{ ...user, handle: 'renamed-handle' }} />);
+    expect(avatarFill(renamed.container)).not.toBe(fill);
   });
 });

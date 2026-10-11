@@ -1,9 +1,10 @@
 'use client';
 
-import { Pencil, UserRound } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 
 import { EditIdentityModal, type IdentityField } from './EditIdentityModal';
 
@@ -12,12 +13,7 @@ export function EditableIdentity({ name, handle }: { name: string; handle: strin
 
   return (
     <header className="flex flex-wrap items-center gap-4">
-      <span
-        aria-hidden="true"
-        className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
-      >
-        <UserRound className="h-8 w-8" />
-      </span>
+      <Avatar seed={handle} size={64} />
       <div className="space-y-1">
         <div className="flex items-center gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">{name}</h1>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { ChevronDown } from 'lucide-react';
 
+import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/components/ui/utils';
 
 import { useIdentityDisplay } from './preferences';
@@ -19,6 +20,7 @@ export function AccountMenu({ name, tag }: { name: string; tag: string }) {
         aria-label="Меню аккаунта"
         className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden"
       >
+        <Avatar seed={tag} size={32} />
         <span className="flex min-w-0 flex-col items-start leading-tight">
           {showName ? (
             <span className="max-w-40 truncate font-medium text-foreground">{name}</span>

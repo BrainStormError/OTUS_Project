@@ -5,6 +5,7 @@ import { err, ok, type Result } from '@/core/result';
 import { recordEvent } from '@/modules/activity';
 import { resolveSaveMetadata } from '@/modules/catalog';
 import { deletePersonalRating, listPersonalRatings, savePersonalRating } from '@/modules/ratings';
+import { removeWatchlistForMedia } from '@/modules/watchlist';
 
 import type { UpsertWatchedRecordInput } from './schema';
 import type { WatchedRecordEntry } from './types';
@@ -20,6 +21,7 @@ export async function saveWatchedRecord(
 
   return withTransaction(async (tx) => {
     const entry = await savePersonalRating(tx, actor.id, input, metadata.value);
+    await removeWatchlistForMedia(tx, actor.id, entry.mediaId);
     await recordEvent(tx, {
       actorId: actor.id,
       kind: input.mediaKind === 'film' ? 'film_rated' : 'series_rated',
