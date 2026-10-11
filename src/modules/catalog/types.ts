@@ -1,5 +1,10 @@
 export type CatalogMediaKind = 'film' | 'series';
 
+export type Genre = {
+  id: number;
+  name: string;
+};
+
 export type CatalogSearchResult = {
   kind: CatalogMediaKind;
   externalId: string;

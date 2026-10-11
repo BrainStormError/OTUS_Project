@@ -32,7 +32,7 @@ export function MovieCard({
     <article
       data-testid="movie-card"
       className={cn(
-        'flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm transition-hover hover:shadow-md',
+        'flex flex-col overflow-hidden rounded-lg border border-border bg-card elevation-card transition-hover hover:elevation-raised',
         className,
       )}
     >

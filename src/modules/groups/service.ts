@@ -30,7 +30,13 @@ export async function getDiscoverableGroups(actor: Actor): Promise<Result<GroupS
   return ok(await listDiscoverableGroups(actor.id));
 }
 
-export async function getGroup(groupId: number): Promise<Result<GroupSummary>> {
+export async function getGroup(
+  actor: Actor | null,
+  groupId: number,
+): Promise<Result<GroupSummary>> {
+  if (!(await canViewGroup(actor, groupId))) {
+    return err('NOT_FOUND', 'Группа не найдена');
+  }
   const group = await findGroupById(groupId);
   if (!group) {
     return err('NOT_FOUND', 'Группа не найдена');
@@ -43,6 +49,21 @@ export async function getGroupRole(
   userId: number,
 ): Promise<'admin' | 'member' | null> {
   return getGroupRoleRepository(groupId, userId);
+}
+
+export async function canViewGroup(
+  actor: Actor | null,
+  groupId: number,
+): Promise<boolean> {
+  if (!actor) {
+    return false;
+  }
+  const group = await findGroupById(groupId);
+  if (!group) {
+    return false;
+  }
+  const role = await getGroupRoleRepository(groupId, actor.id);
+  return can(actor, 'group:view', { groupRole: role, restricted: group.restricted });
 }
 
 export async function hasGroupRating(groupId: number, mediaId: number): Promise<boolean> {
@@ -112,7 +133,11 @@ export async function saveGroupRating(
 }
 
 export async function listGroupRatings(
+  actor: Actor | null,
   groupId: number,
 ): Promise<Result<GroupRatingSummary[]>> {
+  if (!(await canViewGroup(actor, groupId))) {
+    return err('NOT_FOUND', 'Группа не найдена');
+  }
   return ok(await listGroupRatingsRepository(groupId));
 }

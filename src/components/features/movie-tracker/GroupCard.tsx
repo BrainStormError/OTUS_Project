@@ -19,7 +19,7 @@ export function GroupCard({
   return (
     <Card
       data-testid="group-card"
-      className={cn('p-0 transition-hover hover:shadow-md', className)}
+      className={cn('p-0 transition-hover hover:elevation-raised', className)}
     >
       <Link
         href={`/groups/${group.id}`}

@@ -49,7 +49,9 @@ describe('MySeriesView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
 
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    const url = String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '');
-    expect(url).toContain('kind=series');
+    const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((call) =>
+      String(call[0] ?? ''),
+    );
+    expect(urls.some((url) => url.includes('kind=series'))).toBe(true);
   });
 });

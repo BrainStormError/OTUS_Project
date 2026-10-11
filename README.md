@@ -69,12 +69,12 @@ curl -fsS http://127.0.0.1:3000/api/health   # {"status":"ok"}
 | --- | --- | --- |
 | `NODE_ENV` | нет | `development` / `test` / `production` |
 | `DATABASE_URL` | да | строка подключения PostgreSQL |
-| `APP_ORIGIN` | да | публичный origin (без пути); из него выводится `Secure` cookie |
+| `APP_ORIGIN` | да | публичный origin (без пути); из него выводятся канонический origin auth (`AUTH_URL`) и `Secure` cookie |
 | `SESSION_SECRET` | да | >= 32 символов, подпись сессии |
 | `REGISTRATION_TICKET_SECRET` | да | >= 32 символов, HMAC регистрационного ticket |
 | `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` | да | OAuth-провайдер (Auth.js) |
 | `TMDB_ACCESS_TOKEN` | да | bearer-токен TMDB API (поиск, детали, жанры) |
-| `DEMO_LOGIN` | нет | `1` включает demo-вход (course-окружение) |
+| `DEMO_LOGIN` | нет | `1` включает demo-вход; действует только вне `production` |
 | `LOG_LEVEL` | нет | `debug` / `info` / `warn` / `error` |
 
 При неполной конфигурации приложение **не стартует** и не обслуживает запросы.
@@ -92,6 +92,13 @@ curl -fsS http://127.0.0.1:3000/api/health   # {"status":"ok"}
 Каталог деплоя на VPS задаётся секретом `DEPLOY_DIR` (например `/opt/watcher-platform`);
 CI сам создаёт его и копирует туда `docker-compose.yml`. Хостовый `.env` кладётся в этот
 каталог вручную (в git не хранится).
+
+> **Обратный прокси.** Auth.js строит callback/redirect строго из канонического origin:
+> приложение выставляет `AUTH_URL` из `APP_ORIGIN`, поэтому spoofed `Host` не влияет на
+> redirect. Прокси обязан **перезаписывать** `Host` и `X-Forwarded-*` (особенно
+> `X-Forwarded-For`, из которого берётся IP клиента для rate-limit), а не добавлять их к
+> клиентским значениям. Держите `AUTH_URL` равным `APP_ORIGIN` (в `docker-compose.yml` он
+> уже выводится из `APP_ORIGIN`).
 
 ```bash
 IMAGE_REF= MIGRATE_IMAGE_REF= \
@@ -134,7 +141,11 @@ DRY_RUN=1 SIMULATE_FAILURE=1 bash scripts/deploy.sh
 - CSP с per-request nonce (`src/proxy.ts`), HSTS/`nosniff`/`Referrer-Policy` (`next.config.js`).
 - Cookie сессии `HttpOnly` + `Secure` + `SameSite=Lax` с ограниченным TTL.
 - Проверка `Origin`/`Sec-Fetch-Site` на мутациях, rate-limit и лимиты длин.
+- Лимит тела запроса применяется потоково (байты, без полного буферизования).
 - Единая точка авторизации `core/auth/policy.ts::can(...)`; роль берётся из БД.
+- Чтение закрытых групп (`group:view`) только для участников/администраторов; наружу — 404.
+- Идентичность входа привязана к `subject` провайдера; demo-вход запрещён в production и не
+  выдаёт привилегии по email; вход/неудача пишутся в audit-лог без секретов.
 - `npm run audit` проверяет production-дерево (`--omit=dev`); оно чистое. Оставшиеся
   advisories находятся только в dev-toolchain (например, `braces` через `eslint-config-next`,
   апстрим-фикса нет) — см. `docs/adr/0005-production-scoped-audit-gate.md`.

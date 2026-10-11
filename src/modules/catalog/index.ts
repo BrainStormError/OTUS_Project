@@ -3,6 +3,7 @@ export {
   resolveDetail,
   resolveSaveMetadata,
   listCatalog,
+  listGenres,
   resetCatalogCache,
 } from './service';
 export { catalogKinds, catalogSearchQuery, catalogDetailQuery } from './schema';
@@ -23,4 +24,5 @@ export type {
   CatalogSearchInput,
   SaveMetadata,
   RatedTitle,
+  Genre,
 } from './types';

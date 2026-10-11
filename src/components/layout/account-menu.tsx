@@ -36,7 +36,7 @@ export function AccountMenu({ name, tag }: { name: string; tag: string }) {
         </span>
         <ChevronDown aria-hidden="true" className="h-4 w-4" />
       </summary>
-      <div className="absolute right-0 z-20 mt-2 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+      <div className="animate-slide absolute right-0 z-20 mt-2 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground elevation-raised">
         <Link
           href="/me"
           className="block min-h-11 rounded-sm px-3 py-3 text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

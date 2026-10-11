@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
-import { deriveCatalogOptions, toMovie, type CatalogOptions } from './catalog-view';
+import { deriveCatalogOptions, genreOptionsFromCatalog, toMovie, type CatalogOptions } from './catalog-view';
 import { SearchField } from './SearchField';
 import type { MediaKind, Movie, SearchFilters } from './types';
 
@@ -34,12 +34,16 @@ export function AddRecordModal({
   useEffect(() => {
     if (!open) return;
     let active = true;
-    void fetch(`/api/search?kind=${kind}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { items?: CatalogSearchResult[] } | null) => {
-        if (active && data?.items) {
-          setOptions(deriveCatalogOptions(data.items));
-        }
+    void Promise.all([
+      fetch('/api/genres').then((response) => (response.ok ? response.json() : null)),
+      fetch(`/api/search?kind=${kind}`).then((response) => (response.ok ? response.json() : null)),
+    ])
+      .then(([genreData, searchData]) => {
+        if (!active) return;
+        setOptions({
+          genres: genreData?.items ? genreOptionsFromCatalog(genreData.items) : [],
+          years: searchData?.items ? deriveCatalogOptions(searchData.items).years : [],
+        });
       })
       .catch(() => undefined);
     return () => {
@@ -52,6 +56,7 @@ export function AddRecordModal({
     try {
       const params = new URLSearchParams({ kind });
       if (active.title) params.set('q', active.title);
+      if (active.genre?.length) params.set('genre', active.genre.join(','));
       if (active.year) params.set('year', active.year);
       const response = await fetch(`/api/search?${params.toString()}`);
       if (!response.ok) {
@@ -60,12 +65,6 @@ export function AddRecordModal({
       }
       const data = (await response.json()) as { items?: CatalogSearchResult[] };
       let items = data.items ?? [];
-      if (active.genre?.length) {
-        const selected = new Set(active.genre.map((value) => value.toLowerCase()));
-        items = items.filter((item) =>
-          item.genres.some((genre) => selected.has(genre.toLowerCase())),
-        );
-      }
       const watched = new Set(watchedRefs);
       items = items.filter(
         (item) => !watched.has(item.externalId) && !watched.has(`${kind}:${item.externalId}`),
@@ -87,6 +86,7 @@ export function AddRecordModal({
       open={open}
       onClose={close}
       title={kind === 'series' ? 'Добавить сериал' : 'Добавить фильм'}
+      size="wide"
     >
       <div className="space-y-3">
         <SearchField

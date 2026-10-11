@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export function LoginForm({ demoEnabled }: { demoEnabled: boolean }) {
   const router = useRouter();
@@ -38,14 +39,13 @@ export function LoginForm({ demoEnabled }: { demoEnabled: boolean }) {
             <label className="text-sm font-medium" htmlFor="email">
               Email
             </label>
-            <input
+            <Input
               id="email"
               name="email"
               type="email"
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               placeholder="employee@demo.local"
             />
           </div>

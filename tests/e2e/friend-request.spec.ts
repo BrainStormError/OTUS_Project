@@ -32,7 +32,9 @@ test('user A searches user B, sends a request, B accepts, both see friendship', 
   await login(page, emailB);
 
   await page.goto('/friends');
+  await page.getByRole('tab', { name: /Заявки/ }).click();
   await page.getByRole('button', { name: `Принять заявку от ${emailA}` }).click();
+  await page.getByRole('tab', { name: /Друзья/ }).click();
   const friendsB = page.getByRole('region', { name: 'Мои друзья' });
   await expect(friendsB.getByRole('link', { name: new RegExp(emailA) })).toBeVisible();
 
@@ -40,6 +42,7 @@ test('user A searches user B, sends a request, B accepts, both see friendship', 
   await login(page, emailA);
 
   await page.goto('/friends');
+  await page.getByRole('tab', { name: /Друзья/ }).click();
   const friendsA = page.getByRole('region', { name: 'Мои друзья' });
   await expect(friendsA.getByRole('link', { name: new RegExp(emailB) })).toBeVisible();
 });

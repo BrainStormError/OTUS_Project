@@ -1,18 +1,43 @@
 import { toFeedEvent } from '@/components/features/movie-tracker/feed';
 import { subscribeToActivity } from '@/core/db/activity-channel';
+import { getSharedRateLimiter } from '@/core/http/rate-limit';
 import { json } from '@/core/http/responses';
+import { acquireStreamSlot, releaseStreamSlot } from '@/core/http/stream-guard';
 import { getVisibleEvent, listFeed, MAX_FEED_LIMIT } from '@/modules/activity';
 import { getActor } from '@/modules/auth/session';
 
 export const dynamic = 'force-dynamic';
 
 const HEARTBEAT_MS = 25_000;
+const CONNECT_LIMIT = 10;
+const CONNECT_WINDOW_MS = 60_000;
 
 export async function GET(request: Request): Promise<Response> {
   const actor = await getActor();
   if (!actor) {
     return json({ error: 'Требуется вход' }, 401);
   }
+
+  const allowed = await getSharedRateLimiter().consume(
+    `feed.stream.connect:${actor.id}`,
+    CONNECT_LIMIT,
+    CONNECT_WINDOW_MS,
+  );
+  if (!allowed) {
+    return json({ error: 'Слишком много подключений' }, 429);
+  }
+
+  if (!acquireStreamSlot(actor.id)) {
+    return json({ error: 'Слишком много потоков' }, 429);
+  }
+
+  const identity = actor.id;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    releaseStreamSlot(identity);
+  };
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
@@ -34,6 +59,17 @@ export async function GET(request: Request): Promise<Response> {
         send(`event: activity\nid: ${event.cursor}\ndata: ${JSON.stringify(event)}\n\n`);
       };
 
+      request.signal.addEventListener('abort', () => {
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe?.();
+        release();
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+      });
+
       unsubscribe = await subscribeToActivity((eventId) => {
         const parsedId = Number(eventId);
         if (!Number.isInteger(parsedId)) return;
@@ -53,20 +89,11 @@ export async function GET(request: Request): Promise<Response> {
       }
 
       heartbeat = setInterval(() => send(': heartbeat\n\n'), HEARTBEAT_MS);
-
-      request.signal.addEventListener('abort', () => {
-        if (heartbeat) clearInterval(heartbeat);
-        unsubscribe?.();
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
-      });
     },
     cancel() {
       if (heartbeat) clearInterval(heartbeat);
       unsubscribe?.();
+      release();
     },
   });
 

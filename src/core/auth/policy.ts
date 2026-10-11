@@ -17,6 +17,7 @@ export type Action =
   | 'thread:read'
   | 'friend:request'
   | 'friend:withdraw'
+  | 'group:view'
   | 'group:rate'
   | 'group:discuss'
   | 'group:discuss:create'
@@ -27,6 +28,7 @@ export type Resource = {
   ownerId?: number;
   authorId?: number;
   groupRole?: GroupRole | null;
+  restricted?: boolean;
 };
 
 export function can(actor: Actor, action: Action, resource?: Resource): boolean {
@@ -43,6 +45,12 @@ export function can(actor: Actor, action: Action, resource?: Resource): boolean 
       return true;
     case 'wish:edit':
       return actor.role === 'admin' || resource?.authorId === actor.id;
+    case 'group:view':
+      return (
+        resource?.restricted !== true ||
+        resource?.groupRole === 'admin' ||
+        resource?.groupRole === 'member'
+      );
     case 'group:rate':
     case 'group:discuss':
       return resource?.groupRole === 'admin' || resource?.groupRole === 'member';

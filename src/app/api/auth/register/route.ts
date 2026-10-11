@@ -1,3 +1,5 @@
+import { getClientIp } from '@/core/http/client-ip';
+import { getSharedRateLimiter } from '@/core/http/rate-limit';
 import { withRoute } from '@/core/http/with-route';
 import { err, ok } from '@/core/result';
 import { getActor } from '@/modules/auth/session';
@@ -10,6 +12,8 @@ export const POST = withRoute(
     operation: 'auth.register',
     schema: registerInput,
     resolveActor: getActor,
+    rateLimiter: getSharedRateLimiter(),
+    rateLimit: { limit: 10, windowMs: 60_000, key: (request) => getClientIp(request) },
   },
   async (input, { actor }) => {
     if (actor.email && actor.email.toLowerCase() !== input.email.toLowerCase()) {

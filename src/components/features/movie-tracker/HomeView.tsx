@@ -1,11 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
-import { deriveCatalogOptions, mediaKey, toMovie, type CatalogOptions } from './catalog-view';
+import {
+  deriveCatalogOptions,
+  genreOptionsFromCatalog,
+  mediaKey,
+  toMovie,
+} from './catalog-view';
 import type { FeedEvent } from './feed';
 import { MovieCard } from './MovieCard';
 import type { RatingPayload } from './RatingForm';
@@ -13,10 +18,7 @@ import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
 import { SearchField } from './SearchField';
 import { SocialFeed } from './SocialFeed';
-import type { MediaKind, Movie, SearchFilters, WatchedRecord } from './types';
-
-type Options = CatalogOptions;
-const EMPTY_OPTIONS: Options = { genres: [], years: [] };
+import type { FilterOption, MediaKind, Movie, SearchFilters, WatchedRecord } from './types';
 
 type SearchState =
   | { status: 'idle' }
@@ -39,9 +41,10 @@ export function HomeView({
   const [kind, setKind] = useState<MediaKind>('film');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [search, setSearch] = useState<SearchState>({ status: 'idle' });
-  const [optionsByKind, setOptionsByKind] = useState<Record<MediaKind, Options>>(() => ({
-    film: deriveCatalogOptions(popularFilms),
-    series: EMPTY_OPTIONS,
+  const [genres, setGenres] = useState<FilterOption[]>([]);
+  const [yearsByKind, setYearsByKind] = useState<Record<MediaKind, number[]>>(() => ({
+    film: deriveCatalogOptions(popularFilms).years,
+    series: [],
   }));
 
   const [activeMovie, setActiveMovie] = useState<Movie | null>(null);
@@ -49,17 +52,34 @@ export function HomeView({
     ? records.find((record) => mediaKey(record.movie) === mediaKey(activeMovie)) ?? null
     : null;
 
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/genres')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { items?: { id: number; name: string }[] } | null) => {
+        if (active && data?.items) {
+          setGenres(genreOptionsFromCatalog(data.items));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function changeKind(next: MediaKind) {
     setKind(next);
     setFilters({});
     setSearch({ status: 'idle' });
-    const current = optionsByKind[next];
-    if (current.genres.length === 0 && current.years.length === 0) {
+    if (yearsByKind[next].length === 0) {
       void fetch(`/api/search?kind=${next}`)
         .then((response) => (response.ok ? response.json() : null))
         .then((data: { items?: CatalogSearchResult[] } | null) => {
           if (data?.items) {
-            setOptionsByKind((previous) => ({ ...previous, [next]: deriveCatalogOptions(data.items as CatalogSearchResult[]) }));
+            setYearsByKind((previous) => ({
+              ...previous,
+              [next]: deriveCatalogOptions(data.items as CatalogSearchResult[]).years,
+            }));
           }
         })
         .catch(() => undefined);
@@ -97,7 +117,7 @@ export function HomeView({
     setActiveMovie(null);
   }
 
-  const activeOptions = optionsByKind[kind];
+  const activeOptions = { genres, years: yearsByKind[kind] };
 
   return (
     <div className="space-y-8">

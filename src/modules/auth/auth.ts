@@ -2,14 +2,20 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 
-import { env } from '@/core/config/env';
+import { ensureAuthUrl, env } from '@/core/config/env';
 
-import { authorizeDemoUser } from './demo';
-import { findUserByEmail, insertUser } from './repository';
+import { auditAuth } from './audit';
+import { authorizeDemoUser, isDemoLoginEnabled } from './demo';
+import { resolveGoogleUser } from './identity';
 import {
   buildSessionCookieConfig,
   SESSION_MAX_AGE_SECONDS,
 } from './session-cookie';
+
+// Pin Auth.js to the canonical origin before initialization. This replaces the
+// implicit `trustHost` host-header detection: every request URL is rewritten to
+// APP_ORIGIN, so OAuth callbacks and redirects never follow a spoofed Host.
+ensureAuthUrl();
 
 function isSecureOrigin(): boolean {
   return env.APP_ORIGIN.startsWith('https://');
@@ -29,7 +35,6 @@ const demoProvider = Credentials({
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: env.SESSION_SECRET,
-  trustHost: true,
   session: {
     strategy: 'jwt',
     maxAge: SESSION_MAX_AGE_SECONDS,
@@ -45,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: env.OAUTH_CLIENT_ID,
       clientSecret: env.OAUTH_CLIENT_SECRET,
     }),
-    ...(env.DEMO_LOGIN === '1' ? [demoProvider] : []),
+    ...(isDemoLoginEnabled(env.NODE_ENV, env.DEMO_LOGIN) ? [demoProvider] : []),
   ],
   callbacks: {
     async signIn({ user, account }) {
@@ -53,21 +58,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true;
       }
       if (!user.email) {
+        auditAuth('auth.signin.failed', { provider: 'google' });
         return false;
       }
-      const existing = await findUserByEmail(user.email);
-      if (existing) {
-        user.id = String(existing.id);
-        return true;
-      }
-      const created = await insertUser({
+
+      const resolved = await resolveGoogleUser({
         email: user.email,
         name: user.name ?? null,
-        role: 'employee',
-        provider: 'google',
-        providerSubject: account.providerAccountId ?? null,
+        subject: account.providerAccountId ?? '',
       });
-      user.id = String(created.id);
+      if (!resolved) {
+        auditAuth('auth.signin.failed', { provider: 'google' });
+        return false;
+      }
+
+      auditAuth('auth.signin.success', { provider: 'google', userId: resolved.id });
+      user.id = String(resolved.id);
       return true;
     },
     jwt({ token, user }) {

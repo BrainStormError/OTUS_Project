@@ -14,7 +14,7 @@ export function SidebarRail() {
   return (
     <aside
       className={cn(
-        'hidden shrink-0 border-r border-border bg-brand text-brand-foreground md:block',
+        'transition-panel hidden shrink-0 border-r border-border bg-shell text-shell-foreground md:block',
         collapsed ? 'w-24' : 'w-60',
       )}
     >

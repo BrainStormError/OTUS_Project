@@ -20,7 +20,8 @@
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m src/core/db/migrations",
     "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m src/core/db/migrations",
     "db:new": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create -m src/core/db/migrations -j sql",
-    "db:seed": "node --env-file-if-exists=.env node_modules/tsx/dist/cli.mjs scripts/seed-dev.ts"
+    "db:seed": "node --env-file-if-exists=.env node_modules/tsx/dist/cli.mjs scripts/seed-dev.ts",
+    "db:sync-genres": "node --env-file-if-exists=.env scripts/sync-genres.cjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "1.3.3",

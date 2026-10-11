@@ -3,6 +3,7 @@ export {
   getDiscoverableGroups,
   getGroup,
   getGroupRole,
+  canViewGroup,
   hasGroupRating,
   joinGroup,
   saveGroupRating,

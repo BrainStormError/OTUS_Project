@@ -45,3 +45,5 @@ yarn-error.log*
 
 # integration test runtime
 /tests/integration/.db-url.json
+DARK_DESIGN.md
+LIGHT_DESIGN.md

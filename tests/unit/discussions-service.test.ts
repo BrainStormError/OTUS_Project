@@ -9,6 +9,7 @@ const { getGroupRoleMock, hasGroupRatingMock, findDiscussionByIdMock } = vi.hois
 vi.mock('@/modules/groups', () => ({
   getGroupRole: getGroupRoleMock,
   hasGroupRating: hasGroupRatingMock,
+  canViewGroup: vi.fn(),
 }));
 
 vi.mock('@/modules/discussions/repository', () => ({

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Deploy with rollback. Runs on the target host (invoked by CI, or locally).
 #
-# Steps: save previous -> deliver -> db -> migrate -> up, with rollback to the
-# previous image on any failure.
+# Steps: save previous -> deliver -> db -> migrate -> sync genres -> up, with
+# rollback to the previous image on any failure. The genre sync is best-effort:
+# it warns and continues instead of failing the deploy.
 #
 # Environment:
 #   IMAGE_REF          new app image reference (default: nothing to pull)
@@ -50,10 +51,10 @@ rollback() {
 
 trap 'rollback' ERR
 
-echo "== 1/5 save previous =="
+echo "== 1/6 save previous =="
 run docker tag "$APP_IMAGE" "$PREV_IMAGE" || true
 
-echo "== 2/5 deliver =="
+echo "== 2/6 deliver =="
 if [ -n "$IMAGE_REF" ]; then
   run docker pull "$IMAGE_REF" || true
   run docker tag "$IMAGE_REF" "$APP_IMAGE" || true
@@ -63,12 +64,12 @@ if [ -n "$MIGRATE_IMAGE_REF" ]; then
   run docker tag "$MIGRATE_IMAGE_REF" "$MIGRATE_IMAGE" || true
 fi
 
-echo "== 3/5 db =="
+echo "== 3/6 db =="
 # Bring up the database first: this also creates the compose network the
 # migrator attaches to, and waits for the DB healthcheck.
 run docker compose -f "$COMPOSE_FILE" up -d --wait db
 
-echo "== 4/5 migrate =="
+echo "== 4/6 migrate =="
 if [ "$SIMULATE_FAILURE" = "1" ]; then
   echo "simulated migration failure"
   false
@@ -82,7 +83,14 @@ fi
 run docker run --rm --network "${COMPOSE_PROJECT}_default" \
   -e DATABASE_URL "$MIGRATE_IMAGE"
 
-echo "== 5/5 up =="
+echo "== 5/6 sync genres =="
+# Best-effort: a TMDB outage must not roll back an otherwise good release, so a
+# non-zero exit warns and continues with the previously stored catalog.
+run docker run --rm --network "${COMPOSE_PROJECT}_default" \
+  -e DATABASE_URL -e TMDB_ACCESS_TOKEN "$MIGRATE_IMAGE" \
+  node scripts/sync-genres.cjs || echo "warning: genre sync skipped"
+
+echo "== 6/6 up =="
 run docker compose -f "$COMPOSE_FILE" up -d --no-build
 
 # Drop dangling images left by the replaced build to bound host disk usage.

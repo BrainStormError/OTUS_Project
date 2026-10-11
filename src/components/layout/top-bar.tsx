@@ -11,7 +11,7 @@ export function TopBar({ name, tag }: { name: string; tag: string }) {
         aria-label="Смотровик — на главную"
         className="absolute left-1/2 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-md px-2 text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <Clapperboard aria-hidden="true" className="h-5 w-5 text-accent-foreground" />
+        <Clapperboard aria-hidden="true" className="h-5 w-5 text-brand-mark" />
         <span>Смотровик</span>
       </Link>
       <div className="ml-auto flex items-center gap-3">

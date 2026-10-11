@@ -64,7 +64,7 @@ describe('createDiscussion', () => {
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
 
-    const list = await listDiscussions(groupId);
+    const list = await listDiscussions(admin, groupId);
     expect(list.ok).toBe(true);
     if (!list.ok) return;
     expect(list.value.map((item) => item.title)).toEqual(['Вторая тема', 'Первая тема']);
@@ -163,7 +163,7 @@ describe('addComment', () => {
     expect(firstComment.ok).toBe(true);
     expect(secondComment.ok).toBe(true);
 
-    const detail = await getDiscussion(created.value.id);
+    const detail = await getDiscussion(member, created.value.id, groupId);
     expect(detail.ok).toBe(true);
     if (!detail.ok) return;
     expect(detail.value.posts.map((post) => post.body)).toEqual(['Первый', 'Второй']);

@@ -3,11 +3,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# The migrator only needs node-pg-migrate (see scripts/migrate.cjs); install just
-# it so the migration image stays small instead of shipping the whole node_modules.
+# The migrator only needs node-pg-migrate and pg (see scripts/migrate.cjs and
+# scripts/sync-genres.cjs); install just them so the migration image stays small
+# instead of shipping the whole node_modules.
 FROM node:22-alpine AS migrator-deps
 WORKDIR /app
-RUN npm install --no-save node-pg-migrate@7.6.1
+RUN npm install --no-save node-pg-migrate@7.6.1 pg@8.23.1
 
 FROM node:22-alpine AS migrator
 WORKDIR /app
@@ -16,6 +17,7 @@ COPY --from=migrator-deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src/core/db/migrations ./src/core/db/migrations
 COPY scripts/migrate.cjs ./scripts/migrate.cjs
+COPY scripts/sync-genres.cjs ./scripts/sync-genres.cjs
 USER node
 CMD ["node", "scripts/migrate.cjs"]
 

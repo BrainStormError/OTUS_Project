@@ -96,14 +96,30 @@ function mockCatalogFetch(catalog: CatalogSearchResult[]) {
       });
     }
     const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/genres') {
+      const byId = new Map<number, string>();
+      for (const item of catalog) {
+        item.genreIds.forEach((id, index) => {
+          if (!byId.has(id)) byId.set(id, item.genres[index] ?? String(id));
+        });
+      }
+      const items = Array.from(byId, ([id, name]) => ({ id, name }));
+      return new Response(JSON.stringify({ items }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     const kind = url.searchParams.get('kind');
     const q = (url.searchParams.get('q') ?? '').toLowerCase();
     const year = url.searchParams.get('year');
+    const genre = url.searchParams.get('genre');
+    const genreIds = genre ? genre.split(',').map((value) => Number(value)) : [];
     const items = catalog.filter(
       (item) =>
         (!kind || item.kind === kind) &&
         (!q || item.title.toLowerCase().includes(q)) &&
-        (!year || String(item.year) === year),
+        (!year || String(item.year) === year) &&
+        (genreIds.length === 0 || item.genreIds.some((id) => genreIds.includes(id))),
     );
     return new Response(JSON.stringify({ items }), {
       status: 200,
@@ -278,6 +294,33 @@ describe('My Films and records', () => {
     expect(await within(picker).findByText('Ничего не найдено')).toBeInTheDocument();
   });
 
+  it('filters the add-modal catalog by the selected genre id', async () => {
+    mockCatalogFetch(filmsCatalog);
+    render(<MyFilmsView initialRecords={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    const picker = screen.getByRole('dialog');
+    await userEvent.click(within(picker).getByText('Жанр'));
+    const group = screen.getByRole('group', { name: 'Жанр' });
+    await userEvent.click(within(group).getByRole('checkbox', { name: 'триллер' }));
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    expect(await within(picker).findByRole('button', { name: /^Паразиты/ })).toBeInTheDocument();
+  });
+
+  it('keeps the full catalog genres after a search changes the result set', async () => {
+    mockCatalogFetch(filmsCatalog);
+    render(<MyFilmsView initialRecords={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    const picker = screen.getByRole('dialog');
+    await userEvent.type(within(picker).getByLabelText('Название'), 'Паразиты');
+    await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
+    await within(picker).findByRole('button', { name: /^Паразиты/ });
+
+    await userEvent.click(within(picker).getByText('Жанр'));
+    const group = screen.getByRole('group', { name: 'Жанр' });
+    expect(within(group).getByRole('checkbox', { name: 'фантастика' })).toBeInTheDocument();
+    expect(within(group).getByRole('checkbox', { name: 'боевик' })).toBeInTheDocument();
+  });
+
   it('edits a record and deletes it only after confirmation', async () => {
     mockCatalogFetch(filmsCatalog);
     render(<MyFilmsView initialRecords={filmRecords} />);
@@ -388,8 +431,8 @@ describe('My Series', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
 
-    await within(picker).findByRole('option', { name: '2021' });
-    await userEvent.selectOptions(within(picker).getByLabelText('Год'), '2021');
+    await within(picker).findByLabelText('Год');
+    await userEvent.type(within(picker).getByLabelText('Год'), '2021');
 
     expect(within(picker).queryByRole('button', { name: /^Игра в кальмара/ })).not.toBeInTheDocument();
     await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
@@ -485,9 +528,11 @@ describe('FriendsView', () => {
     render(<FriendsView initialRequests={friendRequests} initialFriends={friends} />);
     expect(screen.getByLabelText('Ожидающих заявок: 2')).toHaveTextContent('2');
 
+    await userEvent.click(screen.getByRole('tab', { name: /Заявки/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Принять заявку от Нина' }));
 
     expect(screen.getByLabelText('Ожидающих заявок: 1')).toHaveTextContent('1');
+    await userEvent.click(screen.getByRole('tab', { name: /Друзья/ }));
     const friendsSection = screen.getByRole('region', { name: 'Мои друзья' });
     expect(within(friendsSection).getByRole('link', { name: /Нина/ })).toBeInTheDocument();
   });
@@ -631,6 +676,7 @@ describe('Scoped search in Friends and Groups', () => {
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ id: 1 }) }));
     vi.stubGlobal('fetch', fetchMock);
     render(<FriendsView initialRequests={[]} initialOutgoing={outgoingRequests} initialFriends={friends} />);
+    await userEvent.click(screen.getByRole('tab', { name: /Заявки/ }));
     const section = screen.getByRole('region', { name: 'Исходящие заявки' });
     expect(within(section).getByRole('link', { name: /Нина/ })).toBeInTheDocument();
 

@@ -108,7 +108,7 @@ export async function searchRaw(
     sort_by: 'popularity.desc',
     include_adult: 'false',
     page: '1',
-    with_genres: params.genreIds?.length ? params.genreIds.join(',') : undefined,
+    with_genres: params.genreIds?.length ? params.genreIds.join('|') : undefined,
     [yearParamFor(kind)]: params.year ? String(params.year) : undefined,
   });
   return result.ok ? ok(result.value.results ?? []) : result;

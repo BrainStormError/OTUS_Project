@@ -60,13 +60,15 @@ const feedEvents: FeedEvent[] = [
   },
 ];
 
-function mockSearch(items: CatalogSearchResult[] = []) {
-  const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-    new Response(JSON.stringify({ items }), {
+function mockSearch(items: CatalogSearchResult[] = [], genres: { id: number; name: string }[] = []) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const body = url.includes('/api/genres') ? { items: genres } : { items };
+    return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
-    }),
-  );
+    });
+  });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
@@ -134,8 +136,7 @@ describe('SearchField filters', () => {
     const genre = await openFilter('Жанр');
     expect(within(genre).getByRole('checkbox', { name: 'Драма' })).toBeInTheDocument();
 
-    expect(screen.getByLabelText('Год').tagName).toBe('SELECT');
-    expect(screen.getByRole('option', { name: '2010' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Год').tagName).toBe('INPUT');
     expect(screen.queryByText('Актёр')).not.toBeInTheDocument();
     expect(screen.queryByText('Режиссёр')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Название').tagName).toBe('INPUT');
@@ -163,9 +164,8 @@ describe('SearchField filters', () => {
         years={years}
       />,
     );
-    await userEvent.click(
-      within(screen.getByRole('group', { name: 'Жанр' })).getByRole('checkbox', { name: 'Триллер' }),
-    );
+    const next = await openFilter('Жанр');
+    await userEvent.click(within(next).getByRole('checkbox', { name: 'Триллер' }));
     expect(onFiltersChange).toHaveBeenLastCalledWith({ genre: ['драма', 'триллер'] });
 
     rerender(
@@ -176,10 +176,60 @@ describe('SearchField filters', () => {
         years={years}
       />,
     );
-    await userEvent.click(
-      within(screen.getByRole('group', { name: 'Жанр' })).getByRole('checkbox', { name: 'Драма' }),
-    );
+    const last = await openFilter('Жанр');
+    await userEvent.click(within(last).getByRole('checkbox', { name: 'Драма' }));
     expect(onFiltersChange).toHaveBeenLastCalledWith({ genre: ['триллер'] });
+  });
+
+  it('removes the year chip through its control while the other filters stay', async () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <SearchField
+        filters={{ genre: ['драма'], year: '2010' }}
+        onFiltersChange={onFiltersChange}
+        genres={genres}
+        years={years}
+      />,
+    );
+    const chips = screen.getByTestId('filter-chips');
+    await userEvent.click(
+      within(chips).getByRole('button', { name: 'Удалить фильтр Год: 2010' }),
+    );
+    expect(onFiltersChange).toHaveBeenCalledWith({ genre: ['драма'] });
+  });
+
+  it('selects the current year on the first step from the empty state', async () => {
+    const onFiltersChange = vi.fn();
+    const currentYear = new Date().getFullYear();
+    render(
+      <SearchField filters={{}} onFiltersChange={onFiltersChange} genres={genres} years={years} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Увеличить год' }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ year: String(currentYear) });
+  });
+
+  it('decrements from the empty state to the current year', async () => {
+    const onFiltersChange = vi.fn();
+    const currentYear = new Date().getFullYear();
+    render(
+      <SearchField filters={{}} onFiltersChange={onFiltersChange} genres={genres} years={years} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Уменьшить год' }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ year: String(currentYear) });
+  });
+
+  it('accepts a year outside the available data', async () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <SearchField
+        filters={{ year: '2050' }}
+        onFiltersChange={onFiltersChange}
+        genres={genres}
+        years={years}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Увеличить год' }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ year: '2051' });
   });
 });
 
@@ -234,5 +284,15 @@ describe('HomeView', () => {
     render(<HomeView popularFilms={popularFilms} />);
     await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
     expect(await screen.findByText('Ничего не найдено')).toBeInTheDocument();
+  });
+
+  it('offers the full stored genre catalog, not only genres in the popular results', async () => {
+    mockSearch([], [
+      { id: 28, name: 'Боевик' },
+      { id: 878, name: 'Фантастика' },
+    ]);
+    render(<HomeView popularFilms={popularFilms} />);
+    const genre = await openFilter('Жанр');
+    expect(await within(genre).findByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
   });
 });

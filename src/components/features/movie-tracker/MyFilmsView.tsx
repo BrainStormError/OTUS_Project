@@ -133,10 +133,8 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
           description="Измените запрос или сбросьте фильтры."
         />
       ) : (
-        <table
-          data-testid="my-films"
-          className="w-full border-collapse overflow-hidden rounded-lg border border-border text-left text-sm"
-        >
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table data-testid="my-films" className="w-full border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-border">
               <SortableHeader label="Название" sortKey="title" sort={sort} onSort={toggleSort} />
@@ -226,7 +224,8 @@ export function MyFilmsView({ initialRecords }: { initialRecords: WatchedRecord[
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
 
       <AddRecordModal

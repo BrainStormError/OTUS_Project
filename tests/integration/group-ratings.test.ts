@@ -114,7 +114,7 @@ describe('listGroupRatings', () => {
     await saveGroupRating(admin, rating(groupId, 8));
     await saveGroupRating(member, rating(groupId, 9));
 
-    const result = await listGroupRatings(groupId);
+    const result = await listGroupRatings(admin, groupId);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toHaveLength(1);
@@ -132,7 +132,7 @@ describe('listGroupRatings', () => {
     await saveGroupRating(member, rating(groupId, 9));
     await saveGroupRating(admin, rating(groupId, 10));
 
-    const result = await listGroupRatings(groupId);
+    const result = await listGroupRatings(admin, groupId);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value[0]?.average).toBe(9.5);

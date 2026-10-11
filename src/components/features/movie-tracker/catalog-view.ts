@@ -4,6 +4,10 @@ import type { FilterOption, Movie } from './types';
 
 export type CatalogOptions = { genres: FilterOption[]; years: number[] };
 
+export function genreOptionsFromCatalog(genres: { id: number; name: string }[]): FilterOption[] {
+  return genres.map((genre) => ({ value: String(genre.id), label: genre.name }));
+}
+
 export function deriveCatalogOptions(items: CatalogSearchResult[]): CatalogOptions {
   const genreMap = new Map<string, string>();
   const yearSet = new Set<number>();

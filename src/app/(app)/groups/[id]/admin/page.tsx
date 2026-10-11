@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { toGroup } from '@/components/features/movie-tracker/adapters';
 import { AdminMemberPanel } from '@/components/features/movie-tracker/AdminMemberPanel';
 import { getActor } from '@/modules/auth/session';
-import { getGroup, getGroupRole } from '@/modules/groups';
+import { canViewGroup, getGroup, getGroupRole } from '@/modules/groups';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,11 @@ export default async function GroupAdminPage({
     redirect('/login');
   }
 
-  const result = await getGroup(groupId);
+  if (!(await canViewGroup(actor, groupId))) {
+    notFound();
+  }
+
+  const result = await getGroup(actor, groupId);
   if (!result.ok) {
     notFound();
   }

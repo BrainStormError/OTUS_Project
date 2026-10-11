@@ -2,29 +2,45 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
+/* Light theme — Calendly: cool near-white canvas, navy ink, single blue action. */
 :root {
-  --background: #f3e9da;
-  --foreground: #2b2b2b;
-  --card: #ffffff;
-  --card-foreground: #2b2b2b;
+  --background: #f8f9fb; /* Cloud canvas */
+  --foreground: #0b3558; /* Ink Navy text */
+  --card: #ffffff; /* Paper surfaces */
+  --card-foreground: #0b3558;
   --popover: #ffffff;
-  --popover-foreground: #2b2b2b;
-  --primary: #4a1f2b;
+  --popover-foreground: #0b3558;
+  --primary: #006bff; /* Signal Blue primary action */
   --primary-foreground: #ffffff;
-  --secondary: #d6eaf8;
-  --secondary-foreground: #2b2b2b;
-  --muted: #d6eaf8;
-  --muted-foreground: #6b6259;
-  --accent: #d6eaf8;
-  --accent-foreground: #3d6a8f;
-  --destructive: #8a3a3a;
+  --secondary: #f0f3f8; /* Pebble raised surface */
+  --secondary-foreground: #0b3558;
+  --muted: #f0f3f8; /* Pebble */
+  --muted-foreground: #476788; /* Slate Gray muted text */
+  --accent: #f0f3f8; /* Pebble */
+  --accent-foreground: #004eba; /* Deep Cobalt */
+  --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: #e6dac8;
-  --input: #e6dac8;
-  --ring: #3d6a8f;
-  --brand: #f3e9da;
-  --brand-foreground: #4a1f2b;
-  --radius: 0.75rem;
+  --border: #d4e0ed; /* Hairline */
+  --input: #f0f3f8; /* Pebble input well */
+  --ring: #006bff; /* Signal Blue focus ring */
+  --brand: #ffffff; /* Paper rail */
+  --brand-foreground: #0b3558;
+  --brand-mark: #ff6363; /* Coral Pulse — brand mark only */
+  --shell: #006bff; /* Signal Blue shell surface */
+  --shell-foreground: #ffffff;
+  --shell-active: #ffffff; /* Paper active surface */
+  --shell-active-foreground: #0b3558;
+
+  --radius-control: 8px;
+  --radius-card: 16px;
+
+  --elevation-card:
+    0 4px 5px rgba(71, 103, 136, 0.04), 0 8px 15px rgba(71, 103, 136, 0.03),
+    0 30px 50px rgba(71, 103, 136, 0.08);
+  --elevation-raised:
+    0 8px 15px rgba(71, 103, 136, 0.06), 0 15px 30px rgba(71, 103, 136, 0.1);
+
+  --font-app: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
 
   --dur-fast: 150ms;
   --dur: 200ms;
@@ -32,28 +48,43 @@
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
 }
 
+/* Dark theme — Raycast: void canvas, hairline borders, neutral action, coral brand mark. */
 [data-theme='dark'] {
-  --background: #121212;
-  --foreground: #edeae6;
-  --card: #2b2b2b;
-  --card-foreground: #edeae6;
-  --popover: #2b2b2b;
-  --popover-foreground: #edeae6;
-  --primary: #a3455c;
-  --primary-foreground: #ffffff;
-  --secondary: #333333;
-  --secondary-foreground: #edeae6;
-  --muted: #333333;
-  --muted-foreground: #a9a29b;
-  --accent: #333333;
-  --accent-foreground: #d89aa6;
-  --destructive: #e0958e;
-  --destructive-foreground: #2b2b2b;
-  --border: #3d3a3b;
-  --input: #3d3a3b;
-  --ring: #d89aa6;
-  --brand: #4a1f2b;
-  --brand-foreground: #edeae6;
+  --background: #040506; /* Void Black canvas */
+  --foreground: #ffffff; /* Pure White text */
+  --card: #07080a; /* Ink surfaces */
+  --card-foreground: #ffffff;
+  --popover: #07080a;
+  --popover-foreground: #ffffff;
+  --primary: #e6e6e6; /* Mist primary action */
+  --primary-foreground: #454647; /* Iron label */
+  --secondary: #111214; /* Obsidian raised surface */
+  --secondary-foreground: #e6e6e6;
+  --muted: #111214; /* Obsidian */
+  --muted-foreground: #9c9c9d; /* Ash muted text */
+  --accent: #111214; /* Obsidian recessed */
+  --accent-foreground: #e6e6e6; /* Mist */
+  --destructive: #ff6363;
+  --destructive-foreground: #040506;
+  --border: #363739; /* hairline */
+  --input: #111214; /* Obsidian input well */
+  --ring: #e6e6e6; /* Mist focus ring */
+  --brand: #07080a; /* Ink rail */
+  --brand-foreground: #ffffff;
+  --brand-mark: #ff6363; /* Coral Pulse — brand mark only */
+  --shell: #ff6363; /* Coral Pulse shell surface */
+  --shell-foreground: #040506;
+  --shell-active: #07080a; /* Ink active surface */
+  --shell-active-foreground: #ffffff;
+
+  --elevation-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.2);
+  --elevation-raised:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.28);
+
+  --font-app: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme inline {
@@ -78,9 +109,24 @@
   --color-ring: var(--ring);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --color-brand-mark: var(--brand-mark);
+  --color-shell: var(--shell);
+  --color-shell-foreground: var(--shell-foreground);
+  --color-shell-active: var(--shell-active);
+  --color-shell-active-foreground: var(--shell-active-foreground);
+  --font-sans: var(--font-app);
+  --font-mono: var(--font-mono-web), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: var(--radius-card);
+  --radius-md: var(--radius-control);
+  --radius-sm: 4px;
+}
+
+@utility elevation-card {
+  box-shadow: var(--elevation-card);
+}
+
+@utility elevation-raised {
+  box-shadow: var(--elevation-raised);
 }
 
 @keyframes fade-in {
@@ -134,6 +180,10 @@
       box-shadow var(--dur) var(--ease),
       opacity var(--dur) var(--ease);
   }
+
+  .transition-panel {
+    transition: width var(--dur) var(--ease);
+  }
 }
 
 @layer base {
@@ -144,6 +194,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-app);
     font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 }

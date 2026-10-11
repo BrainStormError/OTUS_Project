@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
 import { insertUser } from '@/modules/auth/repository';
-import { listCatalog } from '@/modules/catalog';
+import { listCatalog, listGenres } from '@/modules/catalog';
 import { saveWatchedRecord } from '@/modules/records';
 
 import { installTmdbFetch } from './tmdb-stub';
@@ -34,6 +34,17 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await closePool();
+});
+
+describe('genre catalog', () => {
+  it('lists the stored genres with id and name from the seeded table', async () => {
+    const result = await listGenres();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = new Map(result.value.map((genre) => [genre.id, genre.name]));
+    expect(byId.get(18)).toBe('Драма');
+    expect(byId.get(878)).toBe('Фантастика');
+  });
 });
 
 describe('catalog read', () => {

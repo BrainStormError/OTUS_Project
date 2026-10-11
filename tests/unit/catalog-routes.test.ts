@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { err, ok } from '@/core/result';
 
-const { getActorMock, searchMock, detailMock } = vi.hoisted(() => ({
+const { getActorMock, searchMock, detailMock, genresMock } = vi.hoisted(() => ({
   getActorMock: vi.fn(),
   searchMock: vi.fn(),
   detailMock: vi.fn(),
+  genresMock: vi.fn(),
 }));
 
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
@@ -17,12 +18,14 @@ vi.mock('@/modules/catalog', async () => {
   return {
     searchCatalog: searchMock,
     resolveDetail: detailMock,
+    listGenres: genresMock,
     catalogSearchQuery: schema.catalogSearchQuery,
     catalogDetailQuery: schema.catalogDetailQuery,
   };
 });
 
 import { GET as detailRoute } from '@/app/api/catalog/detail/route';
+import { GET as genresRoute } from '@/app/api/genres/route';
 import { GET as searchRoute } from '@/app/api/search/route';
 
 const actor = { id: 1, role: 'employee' as const };
@@ -74,6 +77,31 @@ describe('GET /api/search', () => {
       genreIds: [878],
       year: 2010,
     });
+  });
+});
+
+describe('GET /api/genres', () => {
+  it('returns 401 without a session', async () => {
+    getActorMock.mockResolvedValue(null);
+    const response = await genresRoute(
+      new Request('http://localhost/api/genres', { headers: origin }),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it('returns the stored genres', async () => {
+    getActorMock.mockResolvedValue(actor);
+    const items = [
+      { id: 18, name: 'Драма' },
+      { id: 878, name: 'Фантастика' },
+    ];
+    genresMock.mockResolvedValue(ok(items));
+
+    const response = await genresRoute(
+      new Request('http://localhost/api/genres', { headers: origin }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ items });
   });
 });
 

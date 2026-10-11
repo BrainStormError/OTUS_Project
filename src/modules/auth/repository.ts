@@ -68,6 +68,29 @@ export async function findUserByEmail(email: string): Promise<UserRow | null> {
   return row ? mapUser(row) : null;
 }
 
+export async function findUserByProviderSubject(
+  provider: string,
+  subject: string,
+): Promise<UserRow | null> {
+  const rows = await query<UserDbRow>(
+    `SELECT ${COLUMNS} FROM users WHERE provider = $1 AND provider_subject = $2`,
+    [provider, subject],
+  );
+  const row = rows[0];
+  return row ? mapUser(row) : null;
+}
+
+export async function bindProviderSubject(
+  userId: number,
+  provider: string,
+  subject: string,
+): Promise<void> {
+  await query(
+    `UPDATE users SET provider = $2, provider_subject = $3, updated_at = now() WHERE id = $1`,
+    [userId, provider, subject],
+  );
+}
+
 export async function findUserByHandle(handle: string): Promise<UserRow | null> {
   const rows = await query<UserDbRow>(`SELECT ${COLUMNS} FROM users WHERE handle = $1`, [handle]);
   const row = rows[0];
@@ -119,16 +142,28 @@ export async function updatePrivacy(
   return row ? mapUser(row) : null;
 }
 
-export async function findOrCreateDemoUser(email: string, name?: string): Promise<UserRow> {
-  const existing = await findUserByEmail(email);
+// Resolves only accounts the demo path itself provisioned (provider `demo`,
+// subject = email). An email already taken by another provider is refused
+// rather than impersonated, and new demo accounts always get the
+// least-privilege role. Role is never derived from the email text.
+export async function findOrCreateDemoUser(
+  email: string,
+  name?: string,
+): Promise<UserRow | null> {
+  const existing = await findUserByProviderSubject('demo', email);
   if (existing) {
     return existing;
   }
-  const role = email.toLowerCase().startsWith('admin') ? 'admin' : 'employee';
+
+  const clash = await findUserByEmail(email);
+  if (clash) {
+    return null;
+  }
+
   return insertUser({
     email,
     name: name ?? email,
-    role,
+    role: 'employee',
     provider: 'demo',
     providerSubject: email,
   });

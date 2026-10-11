@@ -49,6 +49,20 @@ describe('can', () => {
     expect(can(employee, 'group:discuss:attach', { groupRole: 'member' })).toBe(false);
   });
 
+  it('allows any actor to view an open group', () => {
+    expect(can(admin, 'group:view', { restricted: false })).toBe(true);
+    expect(can(employee, 'group:view', { restricted: false })).toBe(true);
+    expect(can(employee, 'group:view', { restricted: false, groupRole: null })).toBe(true);
+  });
+
+  it('restricts a restricted group view to its admins and members', () => {
+    expect(can(employee, 'group:view', { restricted: true, groupRole: 'member' })).toBe(true);
+    expect(can(employee, 'group:view', { restricted: true, groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:view', { restricted: true, groupRole: null })).toBe(false);
+    expect(can(employee, 'group:view', { restricted: true })).toBe(false);
+    expect(can(admin, 'group:view', { restricted: true, groupRole: null })).toBe(false);
+  });
+
   it('allows group members and admins to discuss and rate', () => {
     expect(can(employee, 'group:discuss', { groupRole: 'member' })).toBe(true);
     expect(can(employee, 'group:discuss', { groupRole: 'admin' })).toBe(true);

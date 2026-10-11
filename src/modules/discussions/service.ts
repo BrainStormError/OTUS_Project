@@ -3,7 +3,7 @@ import { withTransaction } from '@/core/db/transaction';
 import { err, ok, type Result } from '@/core/result';
 
 import { recordEvent } from '@/modules/activity';
-import { getGroupRole, hasGroupRating } from '@/modules/groups';
+import { canViewGroup, getGroupRole, hasGroupRating } from '@/modules/groups';
 
 import {
   findDiscussionById,
@@ -105,14 +105,25 @@ export async function addComment(
 }
 
 export async function listDiscussions(
+  actor: Actor | null,
   groupId: number,
 ): Promise<Result<DiscussionSummary[]>> {
+  if (!(await canViewGroup(actor, groupId))) {
+    return err('NOT_FOUND', 'Группа не найдена');
+  }
   return ok(await listDiscussionsRepository(groupId));
 }
 
-export async function getDiscussion(id: number): Promise<Result<DiscussionDetail>> {
+export async function getDiscussion(
+  actor: Actor | null,
+  id: number,
+  groupId: number,
+): Promise<Result<DiscussionDetail>> {
   const discussion = await findDiscussionById(id);
-  if (!discussion) {
+  if (!discussion || discussion.groupId !== groupId) {
+    return err('NOT_FOUND', 'Обсуждение не найдено');
+  }
+  if (!(await canViewGroup(actor, discussion.groupId))) {
     return err('NOT_FOUND', 'Обсуждение не найдено');
   }
   const posts = await listPosts(id);

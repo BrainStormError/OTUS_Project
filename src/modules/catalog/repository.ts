@@ -2,9 +2,16 @@ import type { PoolClient } from 'pg';
 
 import { query } from '@/core/db/pool';
 
-import type { CatalogMediaKind, RatedTitle } from './types';
+import type { CatalogMediaKind, Genre, RatedTitle } from './types';
 
 const KIND_CODE: Record<CatalogMediaKind, number> = { film: 0, series: 1 };
+
+export async function listGenres(): Promise<Genre[]> {
+  const rows = await query<{ id: number; name: string }>(
+    'SELECT id, name FROM genres ORDER BY name',
+  );
+  return rows.map((row) => ({ id: row.id, name: row.name }));
+}
 
 export async function listKnownGenreIds(tx?: PoolClient): Promise<number[]> {
   const rows = tx

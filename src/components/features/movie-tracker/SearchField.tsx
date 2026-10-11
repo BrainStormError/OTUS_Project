@@ -1,6 +1,8 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +16,183 @@ const KINDS: { value: MediaKind; label: string }[] = [
   { value: 'series', label: 'Сериалы' },
 ];
 
-const selectClass =
-  'flex min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+const controlClass =
+  'flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
+function GenreDropdown({
+  genres,
+  selected,
+  onToggle,
+}: {
+  genres: FilterOption[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const id = useId();
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function handlePointer(event: MouseEvent) {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || listRef.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handlePointer);
+    document.addEventListener('keydown', handleKey, true);
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      document.removeEventListener('keydown', handleKey, true);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const bounds = triggerRef.current?.getBoundingClientRect();
+    if (bounds) {
+      setRect({ top: bounds.bottom + 4, left: bounds.left, width: bounds.width });
+    }
+    setOpen(true);
+  }
+
+  return (
+    <div className="space-y-1 text-sm">
+      <label htmlFor={`${id}-trigger`} className="block text-muted-foreground">
+        Жанр
+      </label>
+      <button
+        id={`${id}-trigger`}
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={toggle}
+        className={cn(controlClass, 'items-center justify-between gap-2 text-left')}
+      >
+        <span className={cn(selected.length === 0 && 'text-muted-foreground')}>
+          {selected.length === 0 ? 'Все жанры' : `Выбрано: ${selected.length}`}
+        </span>
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0" />
+      </button>
+
+      {open && rect
+        ? createPortal(
+            <div
+              ref={listRef}
+              role="group"
+              aria-label="Жанр"
+              style={{ position: 'fixed', top: rect.top, left: rect.left, width: rect.width }}
+              className="animate-fade z-[60] max-h-40 space-y-1 overflow-y-auto rounded-md border border-input bg-popover p-2 text-popover-foreground elevation-raised"
+            >
+              {genres.length === 0 ? (
+                <p className="px-1 py-1 text-xs text-muted-foreground">Нет жанров</p>
+              ) : (
+                genres.map((option) => {
+                  const checked = selected.includes(option.value);
+                  return (
+                    <label
+                      key={option.value}
+                      className={cn(
+                        'flex min-h-8 items-center gap-2 rounded px-1',
+                        checked && 'bg-secondary',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          onToggle(option.value);
+                          setOpen(false);
+                        }}
+                      />
+                      <span className={cn(checked && 'font-medium')}>{option.label}</span>
+                      {checked ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
+                    </label>
+                  );
+                })
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+const YEAR_MIN = 1800;
+const YEAR_MAX = 2200;
+
+function YearFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  years: number[];
+  onChange: (value: string) => void;
+}) {
+  const id = useId();
+
+  function step(delta: number) {
+    const parsed = value ? Number(value) : Number.NaN;
+    const next = Number.isFinite(parsed)
+      ? Math.min(YEAR_MAX, Math.max(YEAR_MIN, parsed + delta))
+      : new Date().getFullYear();
+    onChange(String(next));
+  }
+
+  return (
+    <div className="space-y-1 text-sm">
+      <label htmlFor={id} className="block text-muted-foreground">
+        Год
+      </label>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Уменьшить год"
+          onClick={() => step(-1)}
+        >
+          <Minus aria-hidden="true" className="h-4 w-4" />
+        </Button>
+        <Input
+          id={id}
+          inputMode="numeric"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Все годы"
+          className="text-center tabular-nums"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Увеличить год"
+          onClick={() => step(1)}
+        >
+          <Plus aria-hidden="true" className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function SearchField({
   filters,
@@ -57,14 +234,12 @@ export function SearchField({
   }
 
   function removeFilter(key: FilterKey, value?: string) {
-    if (value === undefined) {
+    if (value === undefined || key !== 'genre') {
       onFiltersChange({ ...filters, [key]: undefined });
       return;
     }
-    if (key === 'genre') {
-      const next = (filters.genre ?? []).filter((item) => item !== value);
-      onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
-    }
+    const next = (filters.genre ?? []).filter((item) => item !== value);
+    onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
   }
 
   function resetAll() {
@@ -90,15 +265,12 @@ export function SearchField({
     blocks.push({ key: 'year', label: 'Год', values: [{ value: filters.year, label: filters.year }] });
   }
 
-  const optionListClass =
-    'absolute z-20 mt-1 max-h-40 w-full space-y-1 overflow-y-auto rounded-md border border-input bg-popover p-2 text-popover-foreground shadow-md';
-
   return (
     <section
       className={cn('space-y-3 rounded-lg border border-border bg-card p-4', className)}
       aria-label={ariaLabel}
     >
-      <div className="flex min-h-11 items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Поиск</h2>
         {onSearch ? (
           <Button type="button" onClick={() => onSearch(filters)}>
@@ -126,7 +298,7 @@ export function SearchField({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Название</span>
+          <span className="block text-muted-foreground">Название</span>
           <Input
             value={filters.title ?? ''}
             onChange={(event) => setTitle(event.target.value)}
@@ -134,53 +306,9 @@ export function SearchField({
           />
         </label>
 
-        <details className="relative text-sm">
-          <summary
-            className={cn(selectClass, 'cursor-pointer list-none items-center justify-between gap-2 text-muted-foreground [&::-webkit-details-marker]:hidden')}
-          >
-            <span>Жанр</span>
-            <span className="flex items-center gap-1">
-              {genreSelected.length > 0 ? (
-                <span className="rounded-full bg-secondary px-2 text-xs tabular-nums text-secondary-foreground">
-                  {genreSelected.length}
-                </span>
-              ) : null}
-              <ChevronDown aria-hidden="true" className="h-4 w-4" />
-            </span>
-          </summary>
-          <div role="group" aria-label="Жанр" className={optionListClass}>
-            {genres.length === 0 ? (
-              <p className="px-1 py-1 text-xs text-muted-foreground">Нет жанров</p>
-            ) : (
-              genres.map((option) => (
-                <label key={option.value} className="flex min-h-8 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={genreSelected.includes(option.value)}
-                    onChange={() => toggleGenre(option.value)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))
-            )}
-          </div>
-        </details>
+        <GenreDropdown genres={genres} selected={genreSelected} onToggle={toggleGenre} />
 
-        <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Год</span>
-          <select
-            value={filters.year ?? ''}
-            onChange={(event) => setYear(event.target.value)}
-            className={selectClass}
-          >
-            <option value="">Все годы</option>
-            {years.map((year) => (
-              <option key={year} value={String(year)}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </label>
+        <YearFilter value={filters.year ?? ''} years={years} onChange={setYear} />
       </div>
 
       <FilterChips blocks={blocks} onRemove={removeFilter} onReset={resetAll} />

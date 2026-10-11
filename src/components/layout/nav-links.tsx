@@ -43,7 +43,7 @@ export function NavLinks({
   return (
     <ul
       aria-label={ariaLabel}
-      className={cn(variant === 'rail' ? 'flex flex-col gap-1' : 'grid grid-cols-6')}
+      className={cn(variant === 'rail' ? 'flex flex-col gap-1' : 'grid grid-cols-6 gap-1 p-1')}
     >
       {items.map((section) => {
         const active = isSectionActive(section.href, pathname);
@@ -59,15 +59,11 @@ export function NavLinks({
                 'transition-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 variant === 'rail'
                   ? cn(
-                      'flex min-h-11 items-center rounded-md text-sm font-medium hover:bg-secondary',
+                      'flex min-h-11 items-center rounded-md text-sm font-medium hover:bg-shell-active/60',
                       iconOnly ? 'justify-center px-0' : 'gap-3 px-3',
                     )
-                  : 'flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs',
-                active
-                  ? variant === 'rail'
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'text-primary'
-                  : 'text-muted-foreground',
+                  : 'flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-md text-xs',
+                active ? 'bg-shell-active text-shell-active-foreground' : 'text-shell-foreground',
               )}
             >
               <Icon aria-hidden="true" className="h-5 w-5" />

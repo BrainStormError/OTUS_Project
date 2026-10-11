@@ -29,6 +29,7 @@ const dummy: Record<string, string> = {
   OAUTH_CLIENT_ID: 'dummy-client-id',
   OAUTH_CLIENT_SECRET: 'dummy-client-secret',
   TMDB_ACCESS_TOKEN: 'dummy-tmdb-token',
+  TRUSTED_PROXIES: '127.0.0.1',
   DEMO_LOGIN: '0',
   LOG_LEVEL: 'info',
 };

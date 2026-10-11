@@ -77,6 +77,17 @@ jobs:
           cache-from: type=gha
       - name: Show image sizes
         run: docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}'
+      - name: Trust deploy host
+        env:
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          if [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "DEPLOY_KNOWN_HOSTS is not configured; refusing to connect." >&2
+            exit 1
+          fi
+          install -m 600 /dev/null ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Publish docker-compose.yml to host
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -87,9 +98,9 @@ jobs:
           install -m 600 /dev/null deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
           ssh-keygen -y -f deploy_key > /dev/null
-          ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             "mkdir -p '$DEPLOY_DIR'"
-          ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             "cat > '$DEPLOY_DIR/docker-compose.yml'" < docker-compose.yml
       - name: Deliver images to host over SSH
         env:
@@ -100,7 +111,7 @@ jobs:
           install -m 600 /dev/null deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
           docker save learn-watcher-platform:latest learn-watcher-platform-migrate:latest | gzip | \
-            ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
               'gunzip | docker load'
 
   deploy:
@@ -114,6 +125,17 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+      - name: Trust deploy host
+        env:
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          if [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "DEPLOY_KNOWN_HOSTS is not configured; refusing to connect." >&2
+            exit 1
+          fi
+          install -m 600 /dev/null ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Deploy with rollback
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -123,6 +145,6 @@ jobs:
         run: |
           install -m 600 /dev/null deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
-          ssh -o StrictHostKeyChecking=no -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -i deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd '$DEPLOY_DIR' && IMAGE_REF='' MIGRATE_IMAGE_REF='' APP_IMAGE='learn-watcher-platform:latest' MIGRATE_IMAGE='learn-watcher-platform-migrate:latest' bash -s" \
             < scripts/deploy.sh

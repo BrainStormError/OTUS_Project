@@ -114,7 +114,7 @@ export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[]
               variant={option === size ? 'default' : 'outline'}
               aria-pressed={option === size}
               onClick={() => setSize(option)}
-              className="min-h-11 min-w-11"
+              className="min-w-11"
             >
               {option}
             </Button>

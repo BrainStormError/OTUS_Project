@@ -29,14 +29,7 @@ export function selectKnownGenreIds(reported: readonly number[], known: readonly
 }
 
 export function genreNames(genreIds: readonly number[], namesById: ReadonlyMap<number, string>): string[] {
-  const names: string[] = [];
-  for (const id of genreIds) {
-    const name = namesById.get(id);
-    if (name) {
-      names.push(name);
-    }
-  }
-  return names;
+  return genreIds.map((id) => namesById.get(id) ?? String(id));
 }
 
 export function mapSearchItem(

@@ -7,7 +7,7 @@ import { getRequestId, REQUEST_ID_HEADER } from '@/core/log/request-id';
 import type { ErrCode, Result } from '@/core/result';
 
 import { isTrustedOrigin } from './origin';
-import { RateLimiter } from './rate-limit';
+import { MemoryRateLimiter, type RateLimiter } from './rate-limit';
 import { json } from './responses';
 
 const STATUS_BY_CODE: Record<ErrCode, number> = {
@@ -39,16 +39,73 @@ export type WithRouteConfig<TIn, TQuery = undefined> = {
     windowMs: number;
     key?: (request: Request, actor: Actor) => string;
   };
+  rateLimiter?: RateLimiter;
   maxBodyBytes?: number;
+  // Extra input derived from the request URL (for example a path id) that is
+  // merged with the parsed body before validation. Lets `withRoute` stay the
+  // single reader of the request body.
+  pathParams?: (url: URL) => Record<string, unknown>;
 };
 
 export type RouteHandler = (request: Request) => Promise<Response>;
+
+// Reads the body as a byte stream and aborts as soon as the cap is exceeded,
+// without buffering the whole payload. Returns null when the body is too large.
+async function readBodyWithinLimit(
+  request: Request,
+  maxBytes: number,
+): Promise<string | null> {
+  const body = request.body;
+  if (!body) {
+    return '';
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value) {
+        continue;
+      }
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // The stream may already be cancelled; releasing twice is harmless.
+    }
+  }
+
+  if (total === 0) {
+    return '';
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+}
 
 export function withRoute<TIn, TOut, TQuery = undefined>(
   config: WithRouteConfig<TIn, TQuery>,
   handler: (input: TIn, context: RouteContext<TQuery>) => Promise<Result<TOut>>,
 ): RouteHandler {
-  const limiter = new RateLimiter();
+  const limiter: RateLimiter = config.rateLimiter ?? new MemoryRateLimiter();
   const maxBodyBytes = config.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
 
   return async function route(request: Request): Promise<Response> {
@@ -70,10 +127,8 @@ export function withRoute<TIn, TOut, TQuery = undefined>(
     }
 
     if (config.rateLimit) {
-      const key = config.rateLimit.key
-        ? config.rateLimit.key(request, actor)
-        : actor.id;
-      const allowed = limiter.consume(
+      const key = config.rateLimit.key ? config.rateLimit.key(request, actor) : actor.id;
+      const allowed = await limiter.consume(
         `${config.operation}:${key}`,
         config.rateLimit.limit,
         config.rateLimit.windowMs,
@@ -85,11 +140,13 @@ export function withRoute<TIn, TOut, TQuery = undefined>(
     }
 
     const declaredLength = Number(request.headers.get('content-length') ?? '0');
-    const rawText = await request.text().catch(() => '');
-    if (
-      (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) ||
-      rawText.length > maxBodyBytes
-    ) {
+    if (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) {
+      log('info', 'mutation.body_too_large', { requestId, operation: config.operation });
+      return json({ error: 'Слишком большой запрос' }, 413, responseHeaders);
+    }
+
+    const rawText = await readBodyWithinLimit(request, maxBodyBytes);
+    if (rawText === null) {
       log('info', 'mutation.body_too_large', { requestId, operation: config.operation });
       return json({ error: 'Слишком большой запрос' }, 413, responseHeaders);
     }
@@ -99,6 +156,11 @@ export function withRoute<TIn, TOut, TQuery = undefined>(
       raw = rawText.length > 0 ? JSON.parse(rawText) : undefined;
     } catch {
       raw = undefined;
+    }
+
+    if (config.pathParams) {
+      const base = raw !== null && typeof raw === 'object' ? raw : {};
+      raw = { ...base, ...config.pathParams(new URL(request.url)) };
     }
 
     let query: TQuery | undefined;

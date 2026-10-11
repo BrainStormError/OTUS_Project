@@ -69,15 +69,17 @@ async function main() {
          (8, 'закрытый')`,
     );
 
-    // Users: ids 1..6. Employee role = 0, admin = 1.
+    // Users: ids 1..6. Employee role = 0, admin = 1. The two *.demo.local
+    // accounts are marked as demo-provisioned (provider `demo`, subject = email)
+    // so the hardened demo login resolves exactly these accounts and nothing else.
     await client.query(
-      `INSERT INTO users (id, email, name, role, handle, profile_hidden) VALUES
-         (1, 'employee@demo.local', 'Алексей', 0, 'me', false),
-         (2, 'maria@example.com', 'Мария', 0, 'maria', false),
-         (3, 'ivan@example.com', 'Иван', 0, 'ivan', false),
-         (4, 'nina@example.com', 'Нина', 0, 'nina', false),
-         (5, 'secret@example.com', 'Скрытый пользователь', 0, 'secret', true),
-         (6, 'admin@demo.local', 'Пётр', 1, 'admin', false)`,
+      `INSERT INTO users (id, email, name, role, handle, profile_hidden, provider, provider_subject) VALUES
+         (1, 'employee@demo.local', 'Алексей', 0, 'me', false, 'demo', 'employee@demo.local'),
+         (2, 'maria@example.com', 'Мария', 0, 'maria', false, NULL, NULL),
+         (3, 'ivan@example.com', 'Иван', 0, 'ivan', false, NULL, NULL),
+         (4, 'nina@example.com', 'Нина', 0, 'nina', false, NULL, NULL),
+         (5, 'secret@example.com', 'Скрытый пользователь', 0, 'secret', true, NULL, NULL),
+         (6, 'admin@demo.local', 'Пётр', 1, 'admin', false, 'demo', 'admin@demo.local')`,
     );
 
     // Media: kind 0 = film, 1 = series. external_ref is the numeric TMDB id
@@ -112,7 +114,9 @@ async function main() {
          (4, 'Закрытый клуб', 'Только по приглашению.', '{8}'::smallint[], true)`,
     );
 
-    // Group members: role 1 = admin, 0 = member.
+    // Group members: role 1 = admin, 0 = member. The restricted group 4 has a
+    // known member (user 6) and no membership for user 1, so the access-control
+    // e2e scenarios are deterministic.
     await client.query(
       `INSERT INTO group_members (group_id, user_id, role) VALUES
          (1, 1, 1),
@@ -122,7 +126,8 @@ async function main() {
          (2, 1, 0),
          (2, 3, 1),
          (2, 6, 0),
-         (3, 3, 1)`,
+         (3, 3, 1),
+         (4, 6, 1)`,
     );
 
     // Personal ratings (group_id NULL). rating is stored in tenths (0..100).

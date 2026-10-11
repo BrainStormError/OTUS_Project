@@ -87,4 +87,36 @@ describe('withRoute', () => {
     expect((await route(request({ name: 'b' }))).status).toBe(200);
     expect((await route(request({ name: 'c' }))).status).toBe(429);
   });
+
+  it('returns 413 when the declared body exceeds the cap', async () => {
+    const route = build({ maxBodyBytes: 5 }, async () => ok({}));
+    const response = await route(request({ name: 'ok' }));
+    expect(response.status).toBe(413);
+  });
+
+  it('rejects an oversized chunked body without a content-length', async () => {
+    const route = build({ maxBodyBytes: 16 }, async () => ok({}));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(64)));
+        controller.close();
+      },
+    });
+    const response = await route(
+      new Request('http://localhost/api/test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: stream,
+        // @ts-expect-error Node's fetch requires half-duplex for stream bodies.
+        duplex: 'half',
+      }),
+    );
+    expect(response.status).toBe(413);
+  });
+
+  it('processes a body within the cap', async () => {
+    const route = build({ maxBodyBytes: 1024 }, async () => ok({ name: 'ok' }));
+    const response = await route(request({ name: 'ok' }));
+    expect(response.status).toBe(200);
+  });
 });

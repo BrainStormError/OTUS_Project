@@ -1,14 +1,19 @@
 import { ok, type Result } from '@/core/result';
 
-import { detailRaw, genreListRaw, searchRaw } from './client';
+import { detailRaw, searchRaw } from './client';
 import { TtlCache } from './cache';
 import { mapDetail, mapSearchItem, selectKnownGenreIds } from './domain';
-import { listKnownGenreIds, listRatedTitles } from './repository';
+import {
+  listGenres as listStoredGenres,
+  listKnownGenreIds,
+  listRatedTitles,
+} from './repository';
 import type {
   CatalogDetail,
   CatalogMediaKind,
   CatalogSearchInput,
   CatalogSearchResult,
+  Genre,
   RatedTitle,
   SaveMetadata,
 } from './types';
@@ -25,18 +30,19 @@ export function resetCatalogCache(): void {
   genreCache.clear();
 }
 
-async function genreMap(kind: CatalogMediaKind): Promise<Result<Map<number, string>>> {
-  const cached = genreCache.get(kind);
+async function storedGenreMap(): Promise<Map<number, string>> {
+  const cached = genreCache.get('all');
   if (cached) {
-    return ok(cached);
+    return cached;
   }
-  const raw = await genreListRaw(kind);
-  if (!raw.ok) {
-    return raw;
-  }
-  const map = new Map(raw.value.map((genre) => [genre.id, genre.name]));
-  genreCache.set(kind, map);
-  return ok(map);
+  const genres = await listStoredGenres();
+  const map = new Map(genres.map((genre) => [genre.id, genre.name]));
+  genreCache.set('all', map);
+  return map;
+}
+
+export async function listGenres(): Promise<Result<Genre[]>> {
+  return ok(await listStoredGenres());
 }
 
 export async function searchCatalog(
@@ -57,12 +63,9 @@ export async function searchCatalog(
     return raw;
   }
 
-  const names = await genreMap(input.kind);
-  if (!names.ok) {
-    return names;
-  }
+  const names = await storedGenreMap();
 
-  let items = raw.value.map((item) => mapSearchItem(input.kind, item, names.value));
+  let items = raw.value.map((item) => mapSearchItem(input.kind, item, names));
 
   const selectedGenres = input.genreIds ?? [];
   if (selectedGenres.length > 0) {

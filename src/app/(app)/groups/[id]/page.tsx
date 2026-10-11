@@ -21,7 +21,7 @@ import {
   type DiscussionDetail,
   type DiscussionSummary,
 } from '@/modules/discussions';
-import { getGroup, listGroupRatings, type GroupRatingSummary } from '@/modules/groups';
+import { getGroup, canViewGroup, listGroupRatings, type GroupRatingSummary } from '@/modules/groups';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,13 +43,18 @@ export default async function GroupPage({
   if (!Number.isInteger(groupId)) {
     notFound();
   }
-  const result = await getGroup(groupId);
+
+  const actor = await getActor();
+  if (!(await canViewGroup(actor, groupId))) {
+    notFound();
+  }
+
+  const result = await getGroup(actor, groupId);
   if (!result.ok) {
     notFound();
   }
   const group = toGroup(result.value);
 
-  const actor = await getActor();
   const membership = actor
     ? group.members.find((member) => member.id === actor.id)
     : undefined;
@@ -66,21 +71,21 @@ export default async function GroupPage({
   let events: FeedItem[] = [];
 
   if (active === 'discussions') {
-    const list = await listDiscussions(group.id);
+    const list = await listDiscussions(actor, group.id);
     if (list.ok) {
       discussions = list.value;
     }
     if (discussionParam) {
       const discussionId = Number(discussionParam);
       if (Number.isInteger(discussionId)) {
-        const detail = await getDiscussion(discussionId);
+        const detail = await getDiscussion(actor, discussionId, group.id);
         if (detail.ok) {
           activeDiscussion = detail.value;
         }
       }
     }
   } else if (active === 'ratings') {
-    const list = await listGroupRatings(group.id);
+    const list = await listGroupRatings(actor, group.id);
     if (list.ok) {
       ratings = list.value;
     }

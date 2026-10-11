@@ -76,6 +76,14 @@ push/PR → checks: typecheck, lint, deps, verify:env, unit, integration, audit,
   и локальными тегами `learn-watcher-platform[:latest]` / `learn-watcher-platform-migrate:latest`
   (образы уже загружены); сохраняет `previous` для отката.
 - `concurrency` — отмена устаревших запусков на ветке; `deploy-production` — без отмены.
+- **Доверие к хосту (`build` и `deploy`).** Оба job-а начинают с шага **Trust deploy
+  host**: секрет `DEPLOY_KNOWN_HOSTS` (публичный host-ключ хоста) устанавливается в
+  `~/.ssh/known_hosts` с правами `600` **до** любого подключения. Если секрет пуст,
+  шаг падает — деплой не подключается (fail-closed). Все `ssh` используют
+  `-o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts`; опции
+  `StrictHostKeyChecking=no` в пайплайне нет, поэтому неверный host-ключ отклоняет
+  соединение и ничего не доставляется. Значение `DEPLOY_KNOWN_HOSTS` берётся с самого
+  хоста (`/etc/ssh/ssh_host_*_key.pub`), не из сети.
 
 ## Хостовый деплой (VPS + Caddy)
 
@@ -83,16 +91,24 @@ push/PR → checks: typecheck, lint, deps, verify:env, unit, integration, audit,
 - Каталог деплоя на VPS — из секрета `DEPLOY_DIR` (например `/opt/watcher-platform`);
   CI создаёт его, доставляет туда `docker-compose.yml` и запускает `scripts/deploy.sh`
   из этого каталога.
+- Секрет `DEPLOY_KNOWN_HOSTS` — публичный host-ключ VPS (`/etc/ssh/ssh_host_*_key.pub`).
+  CI пинит его в `known_hosts`; без него деплой не подключается (см. CI/CD выше).
 - Хостовый `.env` (в каталоге `DEPLOY_DIR`) с `APP_ORIGIN=https://learn-watcher-platform.duckdns.org`, `DATABASE_URL`/
   `POSTGRES_*`, `SESSION_SECRET`, `REGISTRATION_TICKET_SECRET`, Google `OAUTH_CLIENT_ID`/
-  `OAUTH_CLIENT_SECRET` и `TMDB_ACCESS_TOKEN` (**API Read Access Token**, длинный `eyJ...`).
+  `OAUTH_CLIENT_SECRET` и `TMDB_ACCESS_TOKEN` (**API Read Access Token**, длинный `eyJ...`),
+  а также `TRUSTED_PROXIES` (описание доверенного edge).
   `scripts/deploy.sh` подгружает этот `.env` перед миграциями.
 - `APP_ORIGIN` выставляет `Secure`-cookie сессии (см. `auth.ts`).
-- Сайт-блок Caddy для TLS и SSE-ленты (`flush_interval -1` убирает буферизацию ответа):
+- Сайт-блок Caddy для TLS и SSE-ленты (`flush_interval -1` убирает буферизацию ответа).
+  Директива `header_up X-Forwarded-For {remote_host}` **обязательна**: она перезаписывает
+  клиентский заголовок реальным адресом, и только после этого приложение доверяет
+  левому значению `X-Forwarded-For` (см. `TRUSTED_PROXIES`). `X-Real-IP` edge не
+  выставляет и клиентский `X-Real-IP` не форвардится:
 
   ```caddyfile
   learn-watcher-platform.duckdns.org {
       reverse_proxy 127.0.0.1:3000 {
+          header_up X-Forwarded-For {remote_host}
           flush_interval -1
       }
   }
@@ -115,6 +131,7 @@ REGISTRATION_TICKET_SECRET=
 OAUTH_CLIENT_ID=
 OAUTH_CLIENT_SECRET=
 TMDB_ACCESS_TOKEN=
+TRUSTED_PROXIES=127.0.0.1
 DEMO_LOGIN=0
 LOG_LEVEL=info
 ```
@@ -122,6 +139,10 @@ LOG_LEVEL=info
 Правила:
 - Прод не стартует при неполной конфигурации (см. `core/config/env.ts` + `instrumentation.ts`).
 - Схема env сверяется с `.env.example` в CI (`npm run verify:env`).
+- `TRUSTED_PROXIES` документирует доверенный edge; ключ троттлинга строится только из
+  левого валидного `X-Forwarded-For`, поэтому edge обязан перезаписать этот заголовок
+  (`header_up X-Forwarded-For {remote_host}`), иначе все клиенты схлопываются в один
+  общий бакет `unknown` (безопасная деградация, а не fail-open).
 
 ## Наблюдаемость
 

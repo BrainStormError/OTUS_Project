@@ -9,6 +9,10 @@ export const envSchema = z.object({
   OAUTH_CLIENT_ID: z.string().min(1),
   OAUTH_CLIENT_SECRET: z.string().min(1),
   TMDB_ACCESS_TOKEN: z.string().min(1),
+  // Documented description of the trusted edge that fronts the app and
+  // overwrites the client forwarding headers. The app is bound to loopback and
+  // never sees the TCP peer, so this records the sole source it trusts.
+  TRUSTED_PROXIES: z.string().min(1).default('127.0.0.1'),
   DEMO_LOGIN: z.enum(['0', '1']).default('0'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
@@ -39,6 +43,21 @@ export function getEnv(): Env {
     cachedEnv = parseEnv(process.env);
   }
   return cachedEnv;
+}
+
+// The canonical origin derived from APP_ORIGIN. Authentication callback and
+// redirect URLs must be built from this value, never from the request host.
+export function canonicalOrigin(): string {
+  return new URL(getEnv().APP_ORIGIN).origin;
+}
+
+// Pins Auth.js to the canonical origin by setting AUTH_URL. next-auth rewrites
+// every auth request URL to this origin before handling it, so a spoofed Host
+// header can never influence the OAuth callback or redirect target.
+export function ensureAuthUrl(): string {
+  const origin = canonicalOrigin();
+  process.env.AUTH_URL = origin;
+  return origin;
 }
 
 export const env: Env = new Proxy({} as Env, {

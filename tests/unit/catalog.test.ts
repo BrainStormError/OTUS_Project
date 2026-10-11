@@ -10,6 +10,11 @@ import {
 } from '@/modules/catalog';
 
 vi.mock('@/modules/catalog/repository', () => ({
+  listGenres: vi.fn(async () => [
+    { id: 28, name: 'Боевик' },
+    { id: 878, name: 'Фантастика' },
+    { id: 18, name: 'Драма' },
+  ]),
   listKnownGenreIds: vi.fn(async () => [18, 878]),
   listRatedTitles: vi.fn(async () => []),
 }));
@@ -52,13 +57,6 @@ const MOVIE_SEARCH = {
   ],
 };
 
-const MOVIE_GENRES = {
-  genres: [
-    { id: 28, name: 'Боевик' },
-    { id: 878, name: 'Фантастика' },
-  ],
-};
-
 const TV_SEARCH = {
   results: [
     {
@@ -72,8 +70,6 @@ const TV_SEARCH = {
   ],
 };
 
-const TV_GENRES = { genres: [{ id: 18, name: 'Драма' }] };
-
 describe('catalog search', () => {
   beforeEach(() => {
     resetCatalogCache();
@@ -86,7 +82,7 @@ describe('catalog search', () => {
   });
 
   it('maps a film search to the stable result shape', async () => {
-    installFetch({ '/search/movie': MOVIE_SEARCH, '/genre/movie/list': MOVIE_GENRES });
+    installFetch({ '/search/movie': MOVIE_SEARCH });
     const result = await searchCatalog({ kind: 'film', title: 'Начало' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -104,7 +100,7 @@ describe('catalog search', () => {
   });
 
   it('maps a series search to the stable result shape', async () => {
-    installFetch({ '/search/tv': TV_SEARCH, '/genre/tv/list': TV_GENRES });
+    installFetch({ '/search/tv': TV_SEARCH });
     const result = await searchCatalog({ kind: 'series', title: 'Во все тяжкие' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -119,7 +115,7 @@ describe('catalog search', () => {
   });
 
   it('does not persist search results', async () => {
-    installFetch({ '/search/movie': MOVIE_SEARCH, '/genre/movie/list': MOVIE_GENRES });
+    installFetch({ '/search/movie': MOVIE_SEARCH });
     await searchCatalog({ kind: 'film', title: 'Начало' });
     expect(listRatedTitles).not.toHaveBeenCalled();
   });
@@ -132,12 +128,34 @@ describe('catalog search', () => {
           { id: 2, title: 'B', release_date: '2001-01-01', genre_ids: [28] },
         ],
       },
-      '/genre/movie/list': MOVIE_GENRES,
     });
     const result = await searchCatalog({ kind: 'film', year: 1999, genreIds: [28] });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.map((item) => item.externalId)).toEqual(['1']);
+  });
+
+  it('joins multiple genres with | so any selected genre matches', async () => {
+    const fetchMock = installFetch({
+      '/discover/movie': {
+        results: [{ id: 1, title: 'A', release_date: '2000-01-01', genre_ids: [28, 878] }],
+      },
+    });
+    await searchCatalog({ kind: 'film', genreIds: [28, 878] });
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).toContain('with_genres=28%7C878');
+  });
+
+  it('resolves genre names from the stored catalog and falls back to the id', async () => {
+    installFetch({
+      '/discover/movie': {
+        results: [{ id: 1, title: 'A', release_date: '2000-01-01', genre_ids: [28, 999999] }],
+      },
+    });
+    const result = await searchCatalog({ kind: 'film', genreIds: [28] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value[0]!.genres).toEqual(['Боевик', '999999']);
   });
 
   it('returns an error result when TMDB fails', async () => {
@@ -241,11 +259,10 @@ describe('catalog cache', () => {
   it('avoids a second fetch for an identical search', async () => {
     const fetchMock = installFetch({
       '/search/movie': MOVIE_SEARCH,
-      '/genre/movie/list': MOVIE_GENRES,
     });
     await searchCatalog({ kind: 'film', title: 'Начало' });
     await searchCatalog({ kind: 'film', title: 'Начало' });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('expires entries after the ttl', () => {

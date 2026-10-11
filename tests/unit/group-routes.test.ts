@@ -66,13 +66,10 @@ beforeEach(() => {
 });
 
 describe('POST /api/groups/[id]/discussions', () => {
-  const context = { params: Promise.resolve({ id: '3' }) };
-
   it('returns 401 without a session', async () => {
     getActorMock.mockResolvedValue(null);
     const response = await createDiscussionRoute(
-      post('http://localhost/api/groups/x/discussions', { title: 'Тема' }),
-      context,
+      post('http://localhost/api/groups/3/discussions', { title: 'Тема' }),
     );
     expect(response.status).toBe(401);
   });
@@ -81,7 +78,6 @@ describe('POST /api/groups/[id]/discussions', () => {
     getActorMock.mockResolvedValue(actor);
     const response = await createDiscussionRoute(
       post('http://localhost/api/groups/x/discussions', { title: 'Тема' }),
-      { params: Promise.resolve({ id: 'x' }) },
     );
     expect(response.status).toBe(400);
   });
@@ -89,8 +85,7 @@ describe('POST /api/groups/[id]/discussions', () => {
   it('returns 400 for an invalid body', async () => {
     getActorMock.mockResolvedValue(actor);
     const response = await createDiscussionRoute(
-      post('http://localhost/api/groups/x/discussions', {}),
-      context,
+      post('http://localhost/api/groups/3/discussions', {}),
     );
     expect(response.status).toBe(400);
   });
@@ -99,8 +94,7 @@ describe('POST /api/groups/[id]/discussions', () => {
     getActorMock.mockResolvedValue(actor);
     createDiscussionMock.mockResolvedValue(err('FORBIDDEN', 'Нет прав'));
     const response = await createDiscussionRoute(
-      post('http://localhost/api/groups/x/discussions', { title: 'Тема' }),
-      context,
+      post('http://localhost/api/groups/3/discussions', { title: 'Тема' }),
     );
     expect(response.status).toBe(403);
     expect(createDiscussionMock).toHaveBeenCalledWith(actor, { title: 'Тема', groupId });
@@ -110,8 +104,7 @@ describe('POST /api/groups/[id]/discussions', () => {
     getActorMock.mockResolvedValue(actor);
     createDiscussionMock.mockResolvedValue(ok({ id: discussionId }));
     const response = await createDiscussionRoute(
-      post('http://localhost/api/groups/x/discussions', { title: 'Тема' }),
-      context,
+      post('http://localhost/api/groups/3/discussions', { title: 'Тема' }),
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: discussionId });
@@ -119,13 +112,10 @@ describe('POST /api/groups/[id]/discussions', () => {
 });
 
 describe('POST /api/discussions/[id]/posts', () => {
-  const context = { params: Promise.resolve({ id: '4' }) };
-
   it('returns 401 without a session', async () => {
     getActorMock.mockResolvedValue(null);
     const response = await addCommentRoute(
-      post('http://localhost/api/discussions/x/posts', { body: 'Привет' }),
-      context,
+      post('http://localhost/api/discussions/4/posts', { body: 'Привет' }),
     );
     expect(response.status).toBe(401);
   });
@@ -134,8 +124,7 @@ describe('POST /api/discussions/[id]/posts', () => {
     getActorMock.mockResolvedValue(actor);
     addCommentMock.mockResolvedValue(err('FORBIDDEN', 'Нет прав'));
     const response = await addCommentRoute(
-      post('http://localhost/api/discussions/x/posts', { body: 'Привет' }),
-      context,
+      post('http://localhost/api/discussions/4/posts', { body: 'Привет' }),
     );
     expect(response.status).toBe(403);
     expect(addCommentMock).toHaveBeenCalledWith(actor, { body: 'Привет', discussionId });
@@ -144,21 +133,17 @@ describe('POST /api/discussions/[id]/posts', () => {
   it('returns 400 for an empty body', async () => {
     getActorMock.mockResolvedValue(actor);
     const response = await addCommentRoute(
-      post('http://localhost/api/discussions/x/posts', { body: '   ' }),
-      context,
+      post('http://localhost/api/discussions/4/posts', { body: '   ' }),
     );
     expect(response.status).toBe(400);
   });
 });
 
 describe('POST /api/groups/[id]/ratings', () => {
-  const context = { params: Promise.resolve({ id: '3' }) };
-
   it('returns 401 without a session', async () => {
     getActorMock.mockResolvedValue(null);
     const response = await saveRatingRoute(
-      post('http://localhost/api/groups/x/ratings', { rating: 8 }),
-      context,
+      post('http://localhost/api/groups/3/ratings', { rating: 8 }),
     );
     expect(response.status).toBe(401);
   });
@@ -166,13 +151,12 @@ describe('POST /api/groups/[id]/ratings', () => {
   it('returns 400 for an out-of-range rating', async () => {
     getActorMock.mockResolvedValue(actor);
     const response = await saveRatingRoute(
-      post('http://localhost/api/groups/x/ratings', {
+      post('http://localhost/api/groups/3/ratings', {
         mediaKind: 'film',
         mediaRef: '27205',
         rating: 11,
         watchedAt: '2026-08-12',
       }),
-      context,
     );
     expect(response.status).toBe(400);
   });
@@ -181,13 +165,12 @@ describe('POST /api/groups/[id]/ratings', () => {
     getActorMock.mockResolvedValue(actor);
     saveGroupRatingMock.mockResolvedValue(err('FORBIDDEN', 'Нет прав'));
     const response = await saveRatingRoute(
-      post('http://localhost/api/groups/x/ratings', {
+      post('http://localhost/api/groups/3/ratings', {
         mediaKind: 'film',
         mediaRef: '27205',
         rating: 8,
         watchedAt: '2026-08-12',
       }),
-      context,
     );
     expect(response.status).toBe(403);
     expect(saveGroupRatingMock).toHaveBeenCalledWith(
@@ -198,13 +181,10 @@ describe('POST /api/groups/[id]/ratings', () => {
 });
 
 describe('POST /api/groups/[id]/ratings/[media]/discussion', () => {
-  const context = { params: Promise.resolve({ id: '3', media: '10' }) };
-
   it('returns 401 without a session', async () => {
     getActorMock.mockResolvedValue(null);
     const response = await attachRoute(
-      post('http://localhost/api/groups/x/ratings/10/discussion', { title: 'Обсуждаем' }),
-      context,
+      post('http://localhost/api/groups/3/ratings/10/discussion', { title: 'Обсуждаем' }),
     );
     expect(response.status).toBe(401);
   });
@@ -212,8 +192,7 @@ describe('POST /api/groups/[id]/ratings/[media]/discussion', () => {
   it('returns 400 for a non-numeric media segment', async () => {
     getActorMock.mockResolvedValue(actor);
     const response = await attachRoute(
-      post('http://localhost/api/groups/x/ratings/nope/discussion', { title: 'Обсуждаем' }),
-      { params: Promise.resolve({ id: '3', media: 'nope' }) },
+      post('http://localhost/api/groups/3/ratings/nope/discussion', { title: 'Обсуждаем' }),
     );
     expect(response.status).toBe(400);
   });
@@ -222,8 +201,7 @@ describe('POST /api/groups/[id]/ratings/[media]/discussion', () => {
     getActorMock.mockResolvedValue(actor);
     attachDiscussionMock.mockResolvedValue(err('VALIDATION', 'Медиа не оценено'));
     const response = await attachRoute(
-      post('http://localhost/api/groups/x/ratings/10/discussion', { title: 'Обсуждаем' }),
-      context,
+      post('http://localhost/api/groups/3/ratings/10/discussion', { title: 'Обсуждаем' }),
     );
     expect(response.status).toBe(400);
     expect(attachDiscussionMock).toHaveBeenCalledWith(actor, {
@@ -237,8 +215,7 @@ describe('POST /api/groups/[id]/ratings/[media]/discussion', () => {
     getActorMock.mockResolvedValue(actor);
     attachDiscussionMock.mockResolvedValue(err('FORBIDDEN', 'Нет прав'));
     const response = await attachRoute(
-      post('http://localhost/api/groups/x/ratings/10/discussion', { title: 'Обсуждаем' }),
-      context,
+      post('http://localhost/api/groups/3/ratings/10/discussion', { title: 'Обсуждаем' }),
     );
     expect(response.status).toBe(403);
   });

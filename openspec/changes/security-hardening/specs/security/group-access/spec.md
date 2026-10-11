@@ -1,0 +1,77 @@
+## Purpose
+
+Defines who may read a group's content, so that a restricted ("closed") group's
+members, discussions, posts and ratings are visible only to people entitled to see them.
+
+## ADDED Requirements
+
+### Requirement: Restricted group reads require membership
+
+Reading any content scoped to a restricted group SHALL require that the reader is a member
+or administrator of that group. A reader who is not entitled SHALL receive a not-found
+response and SHALL NOT learn that the group exists or receive any of its content. Reading
+content of a non-restricted (open) group SHALL be allowed for any authenticated user.
+
+#### Scenario: Non-member reads a restricted group
+
+- **WHEN** an authenticated user who is not a member requests a restricted group's page or any of its tabs
+- **THEN** the system responds as not found and returns no members, discussions, posts, ratings or statistics
+
+#### Scenario: Member reads a restricted group
+
+- **WHEN** a member of the restricted group requests the group page
+- **THEN** the system returns the group and its content
+
+#### Scenario: Administrator reads a restricted group
+
+- **WHEN** an administrator of the restricted group requests the group page
+- **THEN** the system returns the group and its content
+
+#### Scenario: Open group readable by any authenticated user
+
+- **WHEN** an authenticated user who is not a member requests a non-restricted group
+- **THEN** the system returns the group and its content
+
+#### Scenario: Unauthenticated reader
+
+- **WHEN** a request without a valid session targets any group content
+- **THEN** the system withholds the content
+
+### Requirement: Group content reads are scoped to their group
+
+Every group-scoped read SHALL resolve its resource within the group it belongs to. A
+discussion, post or rating that belongs to a different group SHALL NOT be returned through
+another group's context, and a discussion identifier from one group SHALL NOT expose content
+when requested on another group's page.
+
+#### Scenario: Discussion requested through the wrong group
+
+- **WHEN** a reader requests a discussion identifier that belongs to a different group than the one in the page context
+- **THEN** the system does not return that discussion's content
+
+#### Scenario: Direct discussion read enforces group access
+
+- **WHEN** any caller requests a discussion that belongs to a restricted group the caller cannot view
+- **THEN** the system withholds the discussion and its posts regardless of the entry point
+
+### Requirement: Member list is part of protected content
+
+The group member list SHALL be treated as restricted content and SHALL be returned only to
+readers entitled to view the group. Administrative pages that display the member list SHALL
+apply the same view-access rule as the group page.
+
+#### Scenario: Member list on the admin page
+
+- **WHEN** a reader without view access requests the group's administrative page
+- **THEN** the member list is not exposed
+
+### Requirement: View authorization is a single explicit decision
+
+The decision to allow or deny reading a group SHALL be expressed once by the authorization
+policy and applied by the group service, so that every read path — page, tab, or API — is
+covered by the same rule rather than by per-caller checks.
+
+#### Scenario: New read path inherits the guard
+
+- **WHEN** a new group-scoped read is added that goes through the group service
+- **THEN** restricted groups remain protected without adding a caller-specific check

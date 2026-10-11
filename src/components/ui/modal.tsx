@@ -9,18 +9,25 @@ import { cn } from './utils';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+const SIZES = {
+  default: 'sm:max-w-md',
+  wide: 'sm:max-w-2xl',
+} as const;
+
 export function Modal({
   open,
   onClose,
   title,
   children,
   className,
+  size = 'default',
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
   className?: string;
+  size?: keyof typeof SIZES;
 }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
@@ -104,7 +111,8 @@ export function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          'animate-slide max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-card p-4 text-card-foreground shadow-lg sm:max-w-md sm:rounded-lg',
+          'animate-slide max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-card p-4 text-card-foreground elevation-raised sm:rounded-lg',
+          SIZES[size],
           className,
         )}
       >

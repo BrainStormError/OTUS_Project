@@ -20,6 +20,7 @@ import { POST as postRecord } from '@/app/api/records/route';
 import { closeActivityChannel } from '@/core/db/activity-channel';
 import { closePool, query } from '@/core/db/pool';
 import { withTransaction } from '@/core/db/transaction';
+import { MAX_STREAM_CONNECTIONS_PER_IDENTITY } from '@/core/http/stream-guard';
 import { recordEvent } from '@/modules/activity';
 import { insertUser } from '@/modules/auth/repository';
 
@@ -261,6 +262,51 @@ describe('GET /api/feed/stream', () => {
     const resumed = await readUntil(resumeReader, String(newer.id));
     expect(resumed).toContain(String(newer.id));
     resumeController.abort();
+  });
+
+  it('refuses a connection past the per-identity cap and frees a slot on disconnect', async () => {
+    const viewer = await makeUser(`api-cap-${randomUUID().slice(0, 8)}`);
+    state.actor = viewer;
+
+    const controllers: AbortController[] = [];
+    try {
+      for (let index = 0; index < MAX_STREAM_CONNECTIONS_PER_IDENTITY; index += 1) {
+        const controller = new AbortController();
+        controllers.push(controller);
+        const response = await getStream(
+          new Request(`${TRUSTED}/api/feed/stream`, {
+            headers: { origin: TRUSTED },
+            signal: controller.signal,
+          }),
+        );
+        expect(response.status).toBe(200);
+        await readUntil(response.body!.getReader(), ': connected');
+      }
+
+      const over = await getStream(
+        new Request(`${TRUSTED}/api/feed/stream`, { headers: { origin: TRUSTED } }),
+      );
+      expect(over.status).toBe(429);
+
+      controllers[0]!.abort();
+
+      let freed: Response | null = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const candidate = await getStream(
+          new Request(`${TRUSTED}/api/feed/stream`, { headers: { origin: TRUSTED } }),
+        );
+        if (candidate.status === 200) {
+          freed = candidate;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(freed?.status).toBe(200);
+    } finally {
+      for (const controller of controllers) {
+        controller.abort();
+      }
+    }
   });
 });
 
