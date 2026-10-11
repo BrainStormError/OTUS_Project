@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { beforeEach } from 'vitest';
+
 const URL_FILE = resolve(process.cwd(), 'tests/integration/.db-url.json');
 const { databaseUrl } = JSON.parse(readFileSync(URL_FILE, 'utf8')) as {
   databaseUrl: string;
@@ -17,3 +19,10 @@ env.OAUTH_CLIENT_SECRET = 'test-client-secret';
 env.TMDB_ACCESS_TOKEN = 'test-tmdb-token';
 env.DEMO_LOGIN = '1';
 env.LOG_LEVEL = 'error';
+
+// The TMDB cache is persistent and shared by every integration file, so clear
+// it per test to keep files isolated from one another.
+beforeEach(async () => {
+  const { query } = await import('@/core/db/pool');
+  await query('TRUNCATE TABLE tmdb_cache');
+});

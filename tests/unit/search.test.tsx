@@ -377,4 +377,40 @@ describe('HomeView', () => {
     expect(urls.some((url) => url.includes('/api/genres?kind=film'))).toBe(true);
     expect(urls.some((url) => url.includes('/api/genres?kind=series'))).toBe(true);
   });
+
+  it('toggles the watch-later action on a search-result card', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      const body =
+        url.pathname === '/api/genres'
+          ? { items: [] }
+          : url.pathname === '/api/watchlist'
+            ? { id: 5 }
+            : { items: [item({ externalId: '27205', title: 'Начало' })], page: 1, hasMore: false };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<HomeView popularFilms={popularFilms} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+    const results = await screen.findByRole('region', { name: 'Результаты поиска' });
+    const card = within(results).getByTestId('movie-card');
+
+    const planButton = () => within(card).getByRole('button', { name: 'Буду смотреть' });
+    expect(planButton()).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(planButton());
+    await waitFor(() => expect(planButton()).toHaveAttribute('aria-pressed', 'true'));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/watchlist',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await userEvent.click(planButton());
+    await waitFor(() => expect(planButton()).toHaveAttribute('aria-pressed', 'false'));
+    expect(fetchMock).toHaveBeenCalledWith('/api/watchlist?id=5', { method: 'DELETE' });
+  });
 });

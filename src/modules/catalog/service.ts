@@ -1,7 +1,8 @@
 import { ok, type Result } from '@/core/result';
 
-import { detailRaw, searchRaw } from './client';
-import { TtlCache } from './cache';
+import { detailCacheKey, searchCacheKey } from './cache-key';
+import { deleteExpiredCache, selectCacheEntry, upsertCacheEntry } from './cache-repository';
+import { detailRaw, searchRaw, type SearchParams } from './client';
 import { inYearRange, mapDetail, mapSearchItem, selectKnownGenreIds } from './domain';
 import {
   listGenres as listStoredGenres,
@@ -18,27 +19,48 @@ import type {
   SaveMetadata,
 } from './types';
 
-export const CATALOG_CACHE_TTL_MS = 60_000;
+export const TMDB_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-const searchCache = new TtlCache<CatalogSearchPage>(CATALOG_CACHE_TTL_MS);
-const detailCache = new TtlCache<CatalogDetail>(CATALOG_CACHE_TTL_MS);
-const genreCache = new TtlCache<Map<number, string>>(CATALOG_CACHE_TTL_MS * 10);
+const CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
-export function resetCatalogCache(): void {
-  searchCache.clear();
-  detailCache.clear();
-  genreCache.clear();
+let lastSweepAt = 0;
+
+function sweepExpiredIfDue(now: number): void {
+  if (now - lastSweepAt < CACHE_SWEEP_INTERVAL_MS) {
+    return;
+  }
+  lastSweepAt = now;
+  void deleteExpiredCache(new Date(now)).catch(() => undefined);
+}
+
+// Read-through: fresh hit returns the stored payload without touching TMDB;
+// a miss or expired row fetches TMDB and rewrites the row; a failed fetch
+// falls back to the last known (expired) payload when one exists.
+async function readThrough<T>(
+  cacheKey: string,
+  fetcher: () => Promise<Result<T>>,
+): Promise<Result<T>> {
+  const now = Date.now();
+  const cached = await selectCacheEntry(cacheKey);
+  if (cached && cached.expiresAt.getTime() > now) {
+    return ok(cached.payload as T);
+  }
+
+  const fresh = await fetcher();
+  if (fresh.ok) {
+    await upsertCacheEntry(cacheKey, fresh.value, new Date(now + TMDB_CACHE_TTL_MS));
+    sweepExpiredIfDue(now);
+    return fresh;
+  }
+  if (cached) {
+    return ok(cached.payload as T);
+  }
+  return fresh;
 }
 
 async function storedGenreMap(): Promise<Map<number, string>> {
-  const cached = genreCache.get('all');
-  if (cached) {
-    return cached;
-  }
   const genres = await listStoredGenres();
-  const map = new Map(genres.map((genre) => [genre.id, genre.name]));
-  genreCache.set('all', map);
-  return map;
+  return new Map(genres.map((genre) => [genre.id, genre.name]));
 }
 
 export async function listGenres(kind?: CatalogMediaKind): Promise<Result<Genre[]>> {
@@ -48,19 +70,17 @@ export async function listGenres(kind?: CatalogMediaKind): Promise<Result<Genre[
 export async function searchCatalog(
   input: CatalogSearchInput,
 ): Promise<Result<CatalogSearchPage>> {
-  const key = JSON.stringify(input);
-  const cached = searchCache.get(key);
-  if (cached) {
-    return ok(cached);
-  }
-
-  const raw = await searchRaw(input.kind, {
+  const params: SearchParams = {
     query: input.title,
     genreIds: input.genreIds,
     yearFrom: input.yearFrom,
     yearTo: input.yearTo,
     page: input.page,
-  });
+  };
+
+  const raw = await readThrough(searchCacheKey(input.kind, params), () =>
+    searchRaw(input.kind, params),
+  );
   if (!raw.ok) {
     return raw;
   }
@@ -77,32 +97,24 @@ export async function searchCatalog(
   items = items.filter((item) => inYearRange(item.year, input.yearFrom, input.yearTo));
 
   const page = raw.value.page;
-  const result: CatalogSearchPage = {
+  return ok({
     items,
     page,
     hasMore: page < raw.value.totalPages,
-  };
-
-  searchCache.set(key, result);
-  return ok(result);
+  });
 }
 
 export async function resolveDetail(
   kind: CatalogMediaKind,
   externalId: string,
 ): Promise<Result<CatalogDetail>> {
-  const key = `${kind}:${externalId}`;
-  const cached = detailCache.get(key);
-  if (cached) {
-    return ok(cached);
-  }
-  const raw = await detailRaw(kind, externalId);
+  const raw = await readThrough(detailCacheKey(kind, externalId), () =>
+    detailRaw(kind, externalId),
+  );
   if (!raw.ok) {
     return raw;
   }
-  const detail = mapDetail(kind, raw.value);
-  detailCache.set(key, detail);
-  return ok(detail);
+  return ok(mapDetail(kind, raw.value));
 }
 
 export async function resolveSaveMetadata(

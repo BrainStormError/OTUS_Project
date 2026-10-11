@@ -17,18 +17,28 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const actor = await getActor();
-  let initialFeed: FeedEvent[] = [];
+
+  // Slow sections are started but not awaited: their promises stream into the
+  // client view under Suspense so the shell and SearchField paint first.
+  const initialFeedPromise: Promise<FeedEvent[]> = actor
+    ? listFeed(actor, { limit: 20 })
+        .then((feed) =>
+          feed.ok ? feed.value.items.map((item) => toFeedEvent(item, actor.id)) : [],
+        )
+        .catch(() => [])
+    : Promise.resolve([]);
+
+  const popularFilmsPromise: Promise<CatalogSearchResult[]> = searchCatalog({ kind: 'film' })
+    .then((popular) => (popular.ok ? popular.value.items : []))
+    .catch(() => []);
+
   let initialRecords: WatchedRecord[] = [];
   let initialWatchlist: WatchlistItem[] = [];
   if (actor) {
-    const [feed, records, watchlist] = await Promise.all([
-      listFeed(actor, { limit: 20 }),
+    const [records, watchlist] = await Promise.all([
       listWatchedRecords(actor),
       listWatchlist(actor, 'film'),
     ]);
-    if (feed.ok) {
-      initialFeed = feed.value.items.map((item) => toFeedEvent(item, actor.id));
-    }
     if (records.ok) {
       initialRecords = records.value
         .filter((entry) => entry.mediaKind === 'film')
@@ -39,15 +49,12 @@ export default async function HomePage() {
     }
   }
 
-  const popular = await searchCatalog({ kind: 'film' });
-  const popularFilms: CatalogSearchResult[] = popular.ok ? popular.value.items : [];
-
   return (
     <HomeView
-      popularFilms={popularFilms}
-      initialFeed={initialFeed}
       initialRecords={initialRecords}
       initialWatchlist={initialWatchlist}
+      popularFilmsPromise={popularFilmsPromise}
+      initialFeedPromise={initialFeedPromise}
     />
   );
 }

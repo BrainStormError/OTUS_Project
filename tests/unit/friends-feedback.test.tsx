@@ -12,8 +12,10 @@ import {
 import type { FriendRequest, PublicUser } from '@/components/features/movie-tracker/types';
 import { ToastProvider } from '@/components/ui/toast';
 
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ refresh: refreshMock, push: vi.fn() }),
 }));
 
 const ivan: PublicUser = {
@@ -63,6 +65,7 @@ describe('FriendsView feedback', () => {
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveAttribute('data-tone', 'success');
     expect(toast).toHaveTextContent('Заявка принята');
+    expect(refreshMock).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Принять заявку от Иван' })).not.toBeInTheDocument();
   });
 
@@ -76,6 +79,7 @@ describe('FriendsView feedback', () => {
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveAttribute('data-tone', 'error');
     expect(toast).toHaveTextContent('Не удалось принять заявку');
+    expect(refreshMock).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Принять заявку от Иван' })).toBeInTheDocument(),
     );

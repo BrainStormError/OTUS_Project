@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Bookmark, Check, Film, Star } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,7 +32,6 @@ export function FilmDetail({
   const planned = watchlistId !== null;
   const poster = movie.posterUrl ?? null;
   const isSeries = movie.kind === 'series';
-  const backHref = isSeries ? '/series' : '/';
 
   async function handleSave(payload: RatingPayload) {
     const previous = record;
@@ -124,11 +122,7 @@ export function FilmDetail({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Link href={backHref} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-        ← Назад к поиску
-      </Link>
-
+    <>
       <div className="flex flex-col gap-6 sm:flex-row">
         <div className="w-full max-w-[220px] shrink-0">
           <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-muted">
@@ -245,6 +239,6 @@ export function FilmDetail({
           onCancel={() => setOpen(false)}
         />
       </Modal>
-    </div>
+    </>
   );
 }

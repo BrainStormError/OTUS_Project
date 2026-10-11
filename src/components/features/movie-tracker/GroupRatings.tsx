@@ -356,7 +356,12 @@ export function GroupRatings({
         </div>
       )}
 
-      <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} title="Выбор медиа">
+      <Modal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="Выбор медиа"
+        size="wide"
+      >
         <div className="space-y-3">
           <SearchField
             filters={filters}

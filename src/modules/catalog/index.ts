@@ -4,7 +4,6 @@ export {
   resolveSaveMetadata,
   listCatalog,
   listGenres,
-  resetCatalogCache,
 } from './service';
 export { catalogKinds, catalogSearchQuery, catalogDetailQuery, catalogGenresQuery } from './schema';
 export { TtlCache } from './cache';

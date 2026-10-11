@@ -23,12 +23,14 @@ export function AccountMenu({ name, tag }: { name: string; tag: string }) {
         <Avatar seed={tag} size={32} />
         <span className="flex min-w-0 flex-col items-start leading-tight">
           {showName ? (
-            <span className="max-w-40 truncate font-medium text-foreground">{name}</span>
+            <span className="w-full min-w-0 max-w-40 truncate font-medium text-foreground">
+              {name}
+            </span>
           ) : null}
           {showTag ? (
             <span
               className={cn(
-                'max-w-40 truncate',
+                'w-full min-w-0 max-w-40 truncate',
                 identity === 'both' ? 'text-[0.7rem]' : 'text-sm',
               )}
             >

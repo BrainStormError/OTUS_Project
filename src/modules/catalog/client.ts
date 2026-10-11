@@ -8,6 +8,8 @@ const API_BASE = 'https://api.themoviedb.org/3';
 
 export const TMDB_REQUEST_TIMEOUT_MS = 5000;
 
+export const TMDB_LANGUAGE = 'ru-RU';
+
 export type RawGenre = { id: number; name: string };
 
 export type RawSearchItem = {
@@ -90,7 +92,7 @@ async function request<T>(
   params: Record<string, string | undefined>,
 ): Promise<Result<T>> {
   const url = new URL(`${API_BASE}${path}`);
-  url.searchParams.set('language', 'ru-RU');
+  url.searchParams.set('language', TMDB_LANGUAGE);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') {
       url.searchParams.set(key, value);

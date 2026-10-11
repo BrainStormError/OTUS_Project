@@ -237,6 +237,7 @@ describe('compact domain migrations', () => {
         'discussion_posts',
         'activity_events',
         'watchlist',
+        'tmdb_cache',
       ]) {
         expect(await tableExists(target.toString(), table), table).toBe(true);
       }
@@ -246,6 +247,7 @@ describe('compact domain migrations', () => {
       }
 
       for (const table of [
+        'tmdb_cache',
         'watchlist',
         'activity_events',
         'discussion_posts',

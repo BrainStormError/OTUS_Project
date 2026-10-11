@@ -68,7 +68,7 @@ export function NavLinks({
             >
               <Icon aria-hidden="true" className="h-5 w-5" />
               {iconOnly ? null : (
-                <span className={variant === 'rail' ? undefined : 'leading-none'}>
+                <span className={variant === 'rail' ? undefined : 'text-center leading-none'}>
                   {section.label}
                 </span>
               )}

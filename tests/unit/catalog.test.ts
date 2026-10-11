@@ -3,12 +3,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TtlCache,
   catalogSearchQuery,
-  resetCatalogCache,
   resolveDetail,
   resolveSaveMetadata,
   searchCatalog,
   selectKnownGenreIds,
 } from '@/modules/catalog';
+
+const { cacheStore } = vi.hoisted(() => ({
+  cacheStore: new Map<string, { payload: unknown; expiresAt: Date }>(),
+}));
+
+vi.mock('@/modules/catalog/cache-repository', () => ({
+  selectCacheEntry: vi.fn(async (key: string) => cacheStore.get(key) ?? null),
+  upsertCacheEntry: vi.fn(async (key: string, payload: unknown, expiresAt: Date) => {
+    cacheStore.set(key, { payload, expiresAt });
+  }),
+  deleteExpiredCache: vi.fn(async (now: Date) => {
+    let removed = 0;
+    for (const [key, entry] of cacheStore) {
+      if (entry.expiresAt.getTime() < now.getTime()) {
+        cacheStore.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
+  }),
+}));
 
 vi.mock('@/modules/catalog/repository', () => ({
   listGenres: vi.fn(async () => [
@@ -73,7 +93,7 @@ const TV_SEARCH = {
 
 describe('catalog search', () => {
   beforeEach(() => {
-    resetCatalogCache();
+    cacheStore.clear();
     vi.mocked(listKnownGenreIds).mockClear();
     vi.mocked(listRatedTitles).mockClear();
   });
@@ -204,7 +224,7 @@ describe('catalog search', () => {
 
 describe('catalog search paging', () => {
   beforeEach(() => {
-    resetCatalogCache();
+    cacheStore.clear();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -272,7 +292,7 @@ describe('catalog search schema', () => {
 
 describe('catalog detail', () => {
   beforeEach(() => {
-    resetCatalogCache();
+    cacheStore.clear();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -322,7 +342,7 @@ describe('catalog detail', () => {
 
 describe('catalog save metadata', () => {
   beforeEach(() => {
-    resetCatalogCache();
+    cacheStore.clear();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -355,7 +375,7 @@ describe('catalog save metadata', () => {
 
 describe('catalog cache', () => {
   beforeEach(() => {
-    resetCatalogCache();
+    cacheStore.clear();
   });
   afterEach(() => {
     vi.unstubAllGlobals();

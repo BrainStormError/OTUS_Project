@@ -1,26 +1,29 @@
 import { render, screen } from '@testing-library/react';
+import { Suspense, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { err, ok } from '@/core/result';
 
-const { resolveDetailMock, getActorMock, listWatchedRecordsMock, notFoundMock } = vi.hoisted(
-  () => ({
+const { resolveDetailMock, getActorMock, listWatchedRecordsMock, listWatchlistMock, notFoundMock } =
+  vi.hoisted(() => ({
     resolveDetailMock: vi.fn(),
     getActorMock: vi.fn(),
     listWatchedRecordsMock: vi.fn(),
+    listWatchlistMock: vi.fn(),
     notFoundMock: vi.fn(() => {
       throw new Error('NEXT_NOT_FOUND');
     }),
-  }),
-);
+  }));
 
 vi.mock('@/modules/catalog', () => ({ resolveDetail: resolveDetailMock }));
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 vi.mock('@/modules/records', () => ({ listWatchedRecords: listWatchedRecordsMock }));
+vi.mock('@/modules/watchlist', () => ({ listWatchlist: listWatchlistMock }));
 vi.mock('next/navigation', () => ({ notFound: notFoundMock }));
 
 import FilmPage from '@/app/(app)/film/[tmdbId]/page';
 import SeriesDetailPage from '@/app/(app)/series/[tmdbId]/page';
+import { FilmDetailSection } from '@/components/features/movie-tracker/FilmDetailSection';
 
 const filmDetail = {
   kind: 'film' as const,
@@ -48,45 +51,72 @@ const seriesDetail = {
   director: 'Винс Гиллиган',
 };
 
+function findAll(
+  node: ReactNode,
+  predicate: (element: ReactElement<Record<string, unknown>>) => boolean,
+): ReactElement<Record<string, unknown>>[] {
+  if (Array.isArray(node)) {
+    return node.flatMap((child) => findAll(child, predicate));
+  }
+  if (!isValidElement(node)) {
+    return [];
+  }
+  const element = node as ReactElement<Record<string, unknown>>;
+  const found = predicate(element) ? [element] : [];
+  return found.concat(findAll(element.props['children'] as ReactNode, predicate));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   getActorMock.mockResolvedValue(null);
 });
 
-describe('Film detail page', () => {
-  it('renders a known film resolved through catalog detail', async () => {
+describe('Film detail section', () => {
+  it('renders the resolved detail for a known film', async () => {
     resolveDetailMock.mockResolvedValue(ok(filmDetail));
-    const ui = await FilmPage({ params: Promise.resolve({ tmdbId: '603' }) });
+    const ui = await FilmDetailSection({ kind: 'film', tmdbId: '603' });
     render(ui);
 
     expect(resolveDetailMock).toHaveBeenCalledWith('film', '603');
     expect(screen.getByRole('heading', { name: 'Матрица' })).toBeInTheDocument();
   });
 
-  it('not-found when the catalog does not know the id', async () => {
+  it('raises not-found inside the section for an unknown id', async () => {
     resolveDetailMock.mockResolvedValue(err('NOT_FOUND', 'unknown'));
-    await expect(FilmPage({ params: Promise.resolve({ tmdbId: '0' }) })).rejects.toThrow(
+    await expect(FilmDetailSection({ kind: 'film', tmdbId: '0' })).rejects.toThrow(
       'NEXT_NOT_FOUND',
     );
     expect(notFoundMock).toHaveBeenCalled();
+  });
+
+  it('renders the resolved series detail', async () => {
+    resolveDetailMock.mockResolvedValue(ok(seriesDetail));
+    const ui = await FilmDetailSection({ kind: 'series', tmdbId: '1396' });
+    render(ui);
+    expect(screen.getByRole('heading', { name: 'Во все тяжкие' })).toBeInTheDocument();
   });
 });
 
-describe('Series detail page', () => {
-  it('renders a known series resolved through catalog detail', async () => {
-    resolveDetailMock.mockResolvedValue(ok(seriesDetail));
-    const ui = await SeriesDetailPage({ params: Promise.resolve({ tmdbId: '1396' }) });
-    render(ui);
+describe('Detail page shell', () => {
+  it('returns the container with a back link and a streaming skeleton before the section', async () => {
+    const tree = await FilmPage({ params: Promise.resolve({ tmdbId: '603' }) });
 
-    expect(resolveDetailMock).toHaveBeenCalledWith('series', '1396');
-    expect(screen.getByRole('heading', { name: 'Во все тяжкие' })).toBeInTheDocument();
+    const links = findAll(tree, (element) => typeof element.props['href'] === 'string');
+    expect(
+      links.some((link) => String(link.props['children']).includes('Назад к поиску')),
+    ).toBe(true);
+
+    const suspenses = findAll(tree, (element) => element.type === Suspense);
+    expect(suspenses).toHaveLength(1);
+    const fallback = suspenses[0]!.props['fallback'] as ReactNode;
+    render(fallback);
+    expect(screen.getByTestId('detail-skeleton')).toBeInTheDocument();
+    expect(resolveDetailMock).not.toHaveBeenCalled();
   });
 
-  it('not-found for an unknown series id', async () => {
-    resolveDetailMock.mockResolvedValue(err('NOT_FOUND', 'unknown'));
-    await expect(SeriesDetailPage({ params: Promise.resolve({ tmdbId: '0' }) })).rejects.toThrow(
-      'NEXT_NOT_FOUND',
-    );
-    expect(notFoundMock).toHaveBeenCalled();
+  it('points the series shell back to the series list', async () => {
+    const tree = await SeriesDetailPage({ params: Promise.resolve({ tmdbId: '1396' }) });
+    const links = findAll(tree, (element) => typeof element.props['href'] === 'string');
+    expect(links.some((link) => link.props['href'] === '/series')).toBe(true);
   });
 });

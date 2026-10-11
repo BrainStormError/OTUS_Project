@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -8,6 +8,7 @@ import type { CatalogSearchResult } from '@/modules/catalog';
 
 import { genreOptionsFromCatalog, mediaKey, toMovie } from './catalog-view';
 import type { FeedEvent } from './feed';
+import { FeedFallback, FeedStream, PopularFallback, PopularStream } from './HomeStreams';
 import { MovieCard } from './MovieCard';
 import type { RatingPayload } from './RatingForm';
 import { useWatchedRecords } from './record-store';
@@ -35,11 +36,15 @@ export function HomeView({
   initialFeed = [],
   initialRecords = [],
   initialWatchlist = [],
+  popularFilmsPromise,
+  initialFeedPromise,
 }: {
   popularFilms?: CatalogSearchResult[];
   initialFeed?: FeedEvent[];
   initialRecords?: WatchedRecord[];
   initialWatchlist?: WatchlistItem[];
+  popularFilmsPromise?: Promise<CatalogSearchResult[]>;
+  initialFeedPromise?: Promise<FeedEvent[]>;
 }) {
   const { records, upsert } = useWatchedRecords(initialRecords);
   const watchedIds = useMemo(() => new Set(records.map((record) => mediaKey(record.movie))), [records]);
@@ -173,12 +178,28 @@ export function HomeView({
         <>
           <section className="space-y-3" aria-label="Лента активности">
             <h2 className="text-lg font-medium">Лента активности</h2>
-            <SocialFeed initialEvents={initialFeed} />
+            {initialFeedPromise ? (
+              <Suspense fallback={<FeedFallback />}>
+                <FeedStream events={initialFeedPromise} />
+              </Suspense>
+            ) : (
+              <SocialFeed initialEvents={initialFeed} />
+            )}
           </section>
 
           <section className="space-y-3" aria-label="Популярные фильмы">
             <h2 className="text-lg font-medium">Популярное</h2>
-            {popularFilms.length === 0 ? (
+            {popularFilmsPromise ? (
+              <Suspense fallback={<PopularFallback />}>
+                <PopularStream
+                  films={popularFilmsPromise}
+                  watchedIds={watchedIds}
+                  plannedIds={plannedIds}
+                  onToggleWatched={setActiveMovie}
+                  onTogglePlanned={togglePlanned}
+                />
+              </Suspense>
+            ) : popularFilms.length === 0 ? (
               <EmptyState
                 title="Популярное недоступно"
                 description="Не удалось загрузить подборку из TMDB."
@@ -233,7 +254,9 @@ export function HomeView({
                           key={mediaKey(movie)}
                           movie={movie}
                           watched={watchedIds.has(mediaKey(movie))}
+                          planned={plannedIds.has(mediaKey(movie))}
                           onToggleWatched={() => setActiveMovie(movie)}
+                          onTogglePlanned={(next) => togglePlanned(movie, next)}
                         />
                       );
                     })}

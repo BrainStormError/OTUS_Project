@@ -1,22 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useToast } from '@/components/ui/toast';
 
 import { FriendListItem } from './FriendListItem';
 import { FriendRequestItem } from './FriendRequestItem';
 import { decideFriendship } from './social-actions';
 import type { FriendRequest } from './types';
-
-function decide(pending: FriendRequest[], userId: number, decision: 'accept' | 'decline') {
-  const request = pending.find((item) => item.user.id === userId);
-  if (request) {
-    decideFriendship(request.id, decision);
-  }
-}
 
 export function FriendRequestsView({
   incoming,
@@ -27,6 +22,23 @@ export function FriendRequestsView({
 }) {
   const [pending, setPending] = useState<FriendRequest[]>(incoming);
   const [sent, setSent] = useState<FriendRequest[]>(outgoing);
+  const toast = useToast();
+  const router = useRouter();
+
+  async function decide(userId: number, decision: 'accept' | 'decline') {
+    const request = pending.find((item) => item.user.id === userId);
+    if (!request) return;
+    const previousPending = pending;
+    setPending((prev) => prev.filter((item) => item.user.id !== userId));
+    const ok = await decideFriendship(request.id, decision);
+    if (ok) {
+      toast.success(decision === 'accept' ? 'Заявка принята' : 'Заявка отклонена');
+      router.refresh();
+      return;
+    }
+    setPending(previousPending);
+    toast.error(decision === 'accept' ? 'Не удалось принять заявку' : 'Не удалось отклонить заявку');
+  }
 
   return (
     <div className="space-y-8">
@@ -43,14 +55,8 @@ export function FriendRequestsView({
               <FriendRequestItem
                 key={request.id}
                 user={request.user}
-                onAccept={(id) => {
-                  decide(pending, id, 'accept');
-                  setPending((prev) => prev.filter((item) => item.user.id !== id));
-                }}
-                onDecline={(id) => {
-                  decide(pending, id, 'decline');
-                  setPending((prev) => prev.filter((item) => item.user.id !== id));
-                }}
+                onAccept={(id) => decide(id, 'accept')}
+                onDecline={(id) => decide(id, 'decline')}
               />
             ))}
           </ul>

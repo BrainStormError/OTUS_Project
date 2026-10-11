@@ -5,10 +5,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
 import { insertUser } from '@/modules/auth/repository';
-import { listCatalog, listGenres } from '@/modules/catalog';
+import { listCatalog, listGenres, resolveDetail, searchCatalog } from '@/modules/catalog';
 import { saveWatchedRecord } from '@/modules/records';
 
 import { installTmdbFetch } from './tmdb-stub';
+
+async function countMedia(): Promise<number> {
+  const rows = await query<{ count: string }>('SELECT count(*)::text AS count FROM media');
+  return Number(rows[0]!.count);
+}
 
 async function makeUser(prefix: string): Promise<Actor> {
   const row = await insertUser({
@@ -109,5 +114,14 @@ describe('catalog read', () => {
     expect(films.value[0]!.kind).toBe('film');
     expect(series.value).toHaveLength(1);
     expect(series.value[0]!.kind).toBe('series');
+  });
+});
+
+describe('catalog cache isolation', () => {
+  it('does not persist search or detail reads into the domain catalog', async () => {
+    const before = await countMedia();
+    await searchCatalog({ kind: 'film', title: `q-${randomUUID().slice(0, 8)}` });
+    await resolveDetail('film', `ref-${randomUUID().slice(0, 8)}`);
+    expect(await countMedia()).toBe(before);
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -16,6 +17,7 @@ export type GroupInvitationItem = {
 export function GroupInvitations({ invitations }: { invitations: GroupInvitationItem[] }) {
   const [items, setItems] = useState(invitations);
   const toast = useToast();
+  const router = useRouter();
 
   async function decide(id: number, decision: 'accept' | 'decline') {
     const previous = items;
@@ -28,6 +30,7 @@ export function GroupInvitations({ invitations }: { invitations: GroupInvitation
       });
       if (response.ok) {
         toast.success(decision === 'accept' ? 'Приглашение принято' : 'Приглашение отклонено');
+        router.refresh();
         return;
       }
     } catch {
