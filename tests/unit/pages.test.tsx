@@ -19,7 +19,11 @@ vi.mock('@/modules/catalog', () => ({ resolveDetail: resolveDetailMock }));
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 vi.mock('@/modules/records', () => ({ listWatchedRecords: listWatchedRecordsMock }));
 vi.mock('@/modules/watchlist', () => ({ listWatchlist: listWatchlistMock }));
-vi.mock('next/navigation', () => ({ notFound: notFoundMock }));
+vi.mock('next/navigation', () => ({
+  notFound: notFoundMock,
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
 
 import FilmPage from '@/app/(app)/film/[tmdbId]/page';
 import SeriesDetailPage from '@/app/(app)/series/[tmdbId]/page';

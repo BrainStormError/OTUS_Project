@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -12,10 +12,29 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function watchlistSignature(items: WatchlistItem[]): string {
+  return items
+    .map((item) => mediaKey(item.movie))
+    .sort()
+    .join(';');
+}
+
 export function useWatchlist(initial: WatchlistItem[]) {
   const toast = useToast();
   const router = useRouter();
   const [items, setItems] = useState<WatchlistItem[]>(initial);
+
+  // Reconcile with the server whenever the props it hands down change (for
+  // example after `router.refresh()` following a mutation elsewhere). Without
+  // this the local `useState` seed would keep showing the pre-mutation state.
+  const signature = useMemo(() => watchlistSignature(initial), [initial]);
+  useEffect(() => {
+    // Intentional prop->state reconciliation: `initial` is read on purpose and
+    // the effect is keyed by its content signature, not its identity.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setItems(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 
   const add = useCallback(
     (movie: Movie) => {

@@ -1,10 +1,18 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { act } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FilmDetail } from '@/components/features/movie-tracker/FilmDetail';
 import type { WatchedRecord } from '@/components/features/movie-tracker/types';
 import { ToastProvider } from '@/components/ui/toast';
+
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: refreshMock, push: vi.fn() }),
+  usePathname: () => '/',
+}));
 
 const movie = {
   tmdbId: 1,
@@ -26,6 +34,7 @@ const record: WatchedRecord = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  refreshMock.mockClear();
 });
 
 function renderDetail(initialRecord: WatchedRecord | null = null) {
@@ -89,5 +98,52 @@ describe('FilmDetail record feedback', () => {
     expect(toast).toHaveAttribute('data-tone', 'error');
     expect(toast).toHaveTextContent('Не удалось удалить запись');
     await waitFor(() => expect(screen.getByTestId('my-rating')).toBeInTheDocument());
+  });
+
+  it('refreshes the router after a record is removed so the previous list updates', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) })),
+    );
+    renderDetail(record);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Просмотрено' }));
+
+    const toast = await screen.findByTestId('toast');
+    expect(toast).toHaveTextContent('Запись удалена');
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes a freshly rated title using the server-assigned id', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: async () => ({ id: 11 }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderDetail();
+
+    await saveRating();
+    await userEvent.click(screen.getByRole('button', { name: 'Просмотрено' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/records?id=11', { method: 'DELETE' }),
+    );
+  });
+
+  it('drops the watched state when the server props change', async () => {
+    const { rerender } = renderDetail(record);
+    expect(screen.getByRole('button', { name: 'Просмотрено' })).toBeInTheDocument();
+
+    await act(async () => {
+      rerender(
+        <ToastProvider>
+          <FilmDetail movie={movie} initialRecord={null} />
+        </ToastProvider>,
+      );
+    });
+
+    expect(screen.getByRole('button', { name: 'Отметить просмотренным' })).toBeInTheDocument();
   });
 });

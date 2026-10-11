@@ -1,7 +1,9 @@
 'use client';
 
 import { Bookmark, Check, Film, Star } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,25 @@ export function FilmDetail({
   const [watchlistId, setWatchlistId] = useState<number | null>(initialWatchlistId);
   const [open, setOpen] = useState(false);
   const toast = useToast();
+  const router = useRouter();
+
+  // Reconcile with the server props when they change (e.g. after a refresh or a
+  // restore from the Router Cache), so the buttons never show a stale state.
+  const recordSignature = initialRecord
+    ? `${initialRecord.id}|${initialRecord.rating}|${initialRecord.watchedAt}`
+    : 'none';
+  useEffect(() => {
+    // Intentional prop->state reconciliation: keyed by the record's content
+    // signature; `initialRecord` is read on purpose so the effect only re-runs
+    // when the server data actually changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecord(initialRecord);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordSignature]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWatchlistId(initialWatchlistId);
+  }, [initialWatchlistId]);
 
   const watched = Boolean(record);
   const planned = watchlistId !== null;
@@ -57,6 +78,12 @@ export function FilmDetail({
         toast.error('Не удалось сохранить запись');
         return;
       }
+      // Keep the server-assigned id so a later removal targets the real record
+      // instead of the TMDB id used as a temporary key.
+      setRecord((current) => (current ? { ...current, id } : current));
+      // Invalidate the client Router Cache (and BFCache) so the list the user
+      // came from shows this title as watched when they navigate back.
+      router.refresh();
       toast.success('Запись сохранена');
     } catch {
       setRecord(previous);
@@ -74,6 +101,7 @@ export function FilmDetail({
       try {
         const ok = await deleteRemoteWatchlist(previous);
         if (ok) {
+          router.refresh();
           toast.success('Удалено из «Буду смотреть»');
           return;
         }
@@ -95,6 +123,7 @@ export function FilmDetail({
         return;
       }
       setWatchlistId(id);
+      router.refresh();
       toast.success('Добавлено в «Буду смотреть»');
     } catch {
       toast.error('Не удалось добавить в «Буду смотреть»');
@@ -110,6 +139,9 @@ export function FilmDetail({
     try {
       const ok = await deleteRemoteRecord(previous.id);
       if (ok) {
+        // Drop the cached render of the previous route so the card no longer
+        // shows "Просмотрено" after a Back navigation.
+        router.refresh();
         toast.success('Запись удалена');
         return;
       }

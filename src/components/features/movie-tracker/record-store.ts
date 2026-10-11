@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -8,10 +8,29 @@ import { mediaKey } from './catalog-view';
 import { deleteRemoteRecord, saveRemoteRating } from './report-rating';
 import type { WatchedRecord } from './types';
 
+function recordsSignature(records: WatchedRecord[]): string {
+  return records
+    .map((record) => `${mediaKey(record.movie)}|${record.rating}|${record.watchedAt}`)
+    .sort()
+    .join(';');
+}
+
 export function useWatchedRecords(initial: WatchedRecord[]) {
   const toast = useToast();
   const router = useRouter();
   const [records, setRecords] = useState<WatchedRecord[]>(initial);
+
+  // Reconcile with the server whenever the props it hands down change (for
+  // example after `router.refresh()` following a mutation elsewhere). Without
+  // this the local `useState` seed would keep showing the pre-mutation state.
+  const signature = useMemo(() => recordsSignature(initial), [initial]);
+  useEffect(() => {
+    // Intentional prop->state reconciliation: `initial` is read on purpose and
+    // the effect is keyed by its content signature, not its identity.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecords(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 
   const upsert = useCallback(
     (record: WatchedRecord) => {

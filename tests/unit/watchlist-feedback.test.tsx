@@ -7,6 +7,11 @@ import { MovieCard } from '@/components/features/movie-tracker/MovieCard';
 import type { Movie, WatchedRecord } from '@/components/features/movie-tracker/types';
 import { ToastProvider } from '@/components/ui/toast';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
+
 const movie: Movie = {
   tmdbId: 27205,
   kind: 'film',
