@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MySeriesView } from '@/components/features/movie-tracker/MySeriesView';
 import type { WatchedRecord } from '@/components/features/movie-tracker/types';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
+
 const seriesRecord: WatchedRecord = {
   id: 1,
   movie: {

@@ -10,6 +10,11 @@ import type { FeedEvent } from '@/components/features/movie-tracker/feed';
 import type { FilterOption, SearchFilters } from '@/components/features/movie-tracker/types';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
+
 const genres: FilterOption[] = [
   { value: 'драма', label: 'Драма' },
   { value: 'фантастика', label: 'Фантастика' },

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { useToast } from '@/components/ui/toast';
 
 import { mediaKey } from './catalog-view';
@@ -8,6 +10,7 @@ import type { WatchedRecord } from './types';
 
 export function useWatchedRecords(initial: WatchedRecord[]) {
   const toast = useToast();
+  const router = useRouter();
   const [records, setRecords] = useState<WatchedRecord[]>(initial);
 
   const upsert = useCallback(
@@ -38,11 +41,14 @@ export function useWatchedRecords(initial: WatchedRecord[]) {
           setRecords((current) =>
             current.map((item) => (mediaKey(item.movie) === recordKey ? { ...item, id } : item)),
           );
+          // Invalidate the client Router Cache so list sections show the new
+          // record the next time they are opened instead of a cached render.
+          router.refresh();
           toast.success('Запись сохранена');
         })
         .catch(() => toast.error('Не удалось сохранить запись'));
     },
-    [toast],
+    [router, toast],
   );
 
   const remove = useCallback(
@@ -52,6 +58,7 @@ export function useWatchedRecords(initial: WatchedRecord[]) {
       void deleteRemoteRecord(record.id)
         .then((ok) => {
           if (ok) {
+            router.refresh();
             toast.success('Запись удалена');
           } else {
             toast.error('Не удалось удалить запись');
@@ -59,7 +66,7 @@ export function useWatchedRecords(initial: WatchedRecord[]) {
         })
         .catch(() => toast.error('Не удалось удалить запись'));
     },
-    [toast],
+    [router, toast],
   );
 
   return { records, upsert, remove };

@@ -16,7 +16,11 @@ const { getActorMock, listCatalogMock, listWatchlistMock, redirectMock } = vi.ho
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 vi.mock('@/modules/catalog', () => ({ listCatalog: listCatalogMock }));
 vi.mock('@/modules/watchlist', () => ({ listWatchlist: listWatchlistMock }));
-vi.mock('next/navigation', () => ({ redirect: redirectMock }));
+vi.mock('next/navigation', () => ({
+  redirect: redirectMock,
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
 
 import FilmsPage from '@/app/(app)/films/page';
 import SeriesPage from '@/app/(app)/series/page';

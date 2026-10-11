@@ -31,11 +31,11 @@
 - 1.1: `next.config.js` → `experimental.staleTimes = { dynamic: 30, static: 300 }`; `npm run build` — `staleTimes` применён, сборка успешна.
 - 1.2: `prefetch` на ссылках оболочки; покрыто `tests/unit/nav-prefetch.test.tsx`.
 - 1.3 / 4.1: `prefetch={false}` и `loading="lazy" decoding="async" width={300} height={450}` на постере; покрыто `tests/unit/ui-primitives.test.tsx`.
-- 1.4: клиентские мутации хранятся в `record-store`/`watchlist-store` (локальное состояние + API); добавление `router.refresh()` отклонено — ломает размонтированные тесты и несовместимо с `force-dynamic`. Остаточное окно `staleTimes` (30 c) задокументировано как риск в `design.md`.
+- 1.4: клиентские мутации хранятся в `record-store`/`watchlist-store` (локальное состояние + API); после успешной мутации вызывается `router.refresh()`, который в Next 16 инвалидирует сегментный кэш (RSC-данные) всех маршрутов, поэтому раздел «Мои фильмы»/«Мои сериалы» перезапрашивается и показывает новую запись. Покрыто `tests/unit/store-refresh.test.tsx`.
 - 2.1-2.3: единый `FeedProvider` в `src/app/(app)/layout.tsx`; `SocialFeed`/`HomeStreams` читают `useFeed()`. Экспоненциальный ретрай с джиттером (база 1 c, максимум 30 c, 25% джиттер), полный `GET /api/feed` только при начальной загрузке и после разрыва активного соединения. Покрыто `tests/unit/feed-stream.test.tsx`.
 - 2.4: `tests/unit/feed-stream.test.tsx` — за минуту повторных сбоев число подключений меньше `CONNECT_LIMIT` (10/60 c); дополнительно проверены одиночное соединение при смене раздела и закрытие при размонтировании.
 - 3.1-3.2: `listGenres()` в `src/app/(app)/page.tsx`, проп `genres` в `HomeView`; клиентский `fetch('/api/genres')` удалён. Покрыто `tests/unit/search.test.tsx`.
-- 5.1: `npm run lint` — 2 предсуществующих предупреждения (`no-img-element` в `FilmDetail.tsx:130`, `MovieCard.tsx:50`), 0 ошибок; `npm run typecheck` — чисто; `npm run test` — 589 тестов, 83 файла; `npm run test:integration` — 169 тестов, 20 файлов; `npm run build` — успешно.
+- 5.1: `npm run lint` — 2 предсуществующих предупреждения (`no-img-element` в `FilmDetail.tsx:130`, `MovieCard.tsx:50`), 0 ошибок; `npm run typecheck` — чисто; `npm run test` — 592 теста, 84 файла; `npm run test:integration` — 169 тестов, 20 файлов; `npm run build` — успешно.
 - 5.2: поведение подтверждено юнит-тестами (одно соединение ленты, отсутствие новых подключений при переходах, предзагрузка ссылок меню, жанры из пропсов). Отдельный e2e-прогон в репозитории отсутствует.
 
 ## Известные пробелы

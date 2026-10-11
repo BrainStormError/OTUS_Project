@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeView } from '@/components/features/movie-tracker/HomeView';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
+
 const popularFilms: CatalogSearchResult[] = [
   {
     kind: 'film',

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { useToast } from '@/components/ui/toast';
 
 import { mediaKey } from './catalog-view';
@@ -12,6 +14,7 @@ function today(): string {
 
 export function useWatchlist(initial: WatchlistItem[]) {
   const toast = useToast();
+  const router = useRouter();
   const [items, setItems] = useState<WatchlistItem[]>(initial);
 
   const add = useCallback(
@@ -33,6 +36,7 @@ export function useWatchlist(initial: WatchlistItem[]) {
           setItems((current) =>
             current.map((item) => (mediaKey(item.movie) === key ? { ...item, id } : item)),
           );
+          router.refresh();
           toast.success('Добавлено в «Буду смотреть»');
         })
         .catch(() => {
@@ -40,7 +44,7 @@ export function useWatchlist(initial: WatchlistItem[]) {
           toast.error('Не удалось добавить в «Буду смотреть»');
         });
     },
-    [toast],
+    [router, toast],
   );
 
   const remove = useCallback(
@@ -50,6 +54,7 @@ export function useWatchlist(initial: WatchlistItem[]) {
       void deleteRemoteWatchlist(item.id)
         .then((ok) => {
           if (ok) {
+            router.refresh();
             toast.success('Удалено из «Буду смотреть»');
           } else {
             toast.error('Не удалось удалить запись');
@@ -57,7 +62,7 @@ export function useWatchlist(initial: WatchlistItem[]) {
         })
         .catch(() => toast.error('Не удалось удалить запись'));
     },
-    [toast],
+    [router, toast],
   );
 
   const drop = useCallback((movie: Movie) => {

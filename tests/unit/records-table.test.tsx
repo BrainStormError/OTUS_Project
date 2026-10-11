@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MyFilmsView } from '@/components/features/movie-tracker/MyFilmsView';
 import type { WatchedRecord } from '@/components/features/movie-tracker/types';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
+
 const longComment = 'Очень длинный комментарий '.repeat(20).trim();
 
 const record: WatchedRecord = {
