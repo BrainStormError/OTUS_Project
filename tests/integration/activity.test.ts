@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
 import { withTransaction } from '@/core/db/transaction';
-import { listFeed, recordEvent } from '@/modules/activity';
+import { listFeed, pruneStaleActivityEvents, recordEvent } from '@/modules/activity';
 import { insertUser } from '@/modules/auth/repository';
 import { acceptFriendship } from '@/modules/friendships';
 import { joinGroup } from '@/modules/groups';
@@ -223,6 +223,39 @@ describe('activity feed visibility and pagination', () => {
 
     const times = [...first.value.items, ...second.value.items].map((item) => item.createdAt);
     expect(times).toEqual([...times].sort((a, b) => b.localeCompare(a)));
+  });
+});
+
+describe('feed retention', () => {
+  it('keeps recent events, hides stale ones and removes them', async () => {
+    const actor = await makeUser(`retain-${randomUUID().slice(0, 8)}`);
+    const stale = await withTransaction((tx) =>
+      recordEvent(tx, { actorId: actor.id, kind: 'friendship_accepted' }),
+    );
+    await query(
+      `UPDATE activity_events SET created_at = now() - interval '2 days' WHERE id = $1`,
+      [stale.id],
+    );
+    const fresh = await withTransaction((tx) =>
+      recordEvent(tx, { actorId: actor.id, kind: 'friendship_accepted' }),
+    );
+
+    const hidden = await listFeed({ id: actor.id, role: 'employee' }, { limit: 50 });
+    expect(hidden.ok).toBe(true);
+    if (!hidden.ok) return;
+    const visibleIds = hidden.value.items.map((item) => item.id);
+    expect(visibleIds).toContain(fresh.id);
+    expect(visibleIds).not.toContain(stale.id);
+
+    expect(await pruneStaleActivityEvents()).toBeGreaterThanOrEqual(1);
+
+    const remaining = await query<{ id: number }>(
+      'SELECT id FROM activity_events WHERE id = ANY($1::bigint[])',
+      [[stale.id, fresh.id]],
+    );
+    const remainingIds = remaining.map((row) => row.id);
+    expect(remainingIds).not.toContain(stale.id);
+    expect(remainingIds).toContain(fresh.id);
   });
 });
 

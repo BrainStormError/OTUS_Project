@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminMemberPanel } from '@/components/features/movie-tracker/AdminMemberPanel';
 import { FriendListItem } from '@/components/features/movie-tracker/FriendListItem';
@@ -14,6 +14,10 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { SkeletonGrid } from '@/components/ui/skeleton';
 import type { Group } from '@/components/features/movie-tracker/types';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const groups: Group[] = [
   {
@@ -160,18 +164,35 @@ describe('friend, group, and admin primitives', () => {
   it('shows admin controls only to admins', () => {
     const { rerender } = render(<AdminMemberPanel group={groups[0]!} isAdmin />);
     expect(screen.getByTestId('admin-member-panel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Пригласить по handle')).toBeInTheDocument();
+    expect(screen.getByLabelText('Поиск людей для приглашения')).toBeInTheDocument();
 
     rerender(<AdminMemberPanel group={groups[0]!} isAdmin={false} />);
     expect(screen.queryByTestId('admin-member-panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('restricted-no-permission')).toBeInTheDocument();
   });
 
-  it('invites a member by handle and removes a member', async () => {
+  it('invites a searched user and removes a member', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/api/friendships/search') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [{ id: 9, name: 'Новичок', handle: 'newbie', relationship: 'none' }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ id: 1 }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
     render(<AdminMemberPanel group={groups[0]!} isAdmin />);
-    await userEvent.type(screen.getByLabelText('Пригласить по handle'), 'newbie');
-    await userEvent.click(screen.getByRole('button', { name: /Пригласить/ }));
-    expect(screen.getByText('@newbie')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Поиск людей для приглашения'), 'Новичок');
+    await userEvent.click(await screen.findByRole('button', { name: 'Пригласить Новичок' }));
+
+    const pending = await screen.findByRole('region', { name: 'Ожидающие приглашения' });
+    expect(within(pending).getByText('@newbie')).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('button', { name: /Удалить Алексей/ }));
     expect(screen.queryByText('@me')).not.toBeInTheDocument();
   });

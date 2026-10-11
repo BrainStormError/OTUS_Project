@@ -6,7 +6,14 @@ import type { Actor } from '@/core/auth/policy';
 import { closePool, query } from '@/core/db/pool';
 import { insertUser } from '@/modules/auth/repository';
 import { createDiscussion, getDiscussion, listDiscussions } from '@/modules/discussions';
-import { canViewGroup, getGroup, listGroupRatings } from '@/modules/groups';
+import {
+  canViewGroup,
+  cancelInvitation,
+  getGroup,
+  inviteToGroup,
+  listGroupRatings,
+  respondInvitation,
+} from '@/modules/groups';
 
 afterAll(async () => {
   await closePool();
@@ -103,6 +110,44 @@ describe('group-scoped reads self-guard', () => {
     expect((await getGroup(stranger, open)).ok).toBe(true);
     expect((await listGroupRatings(stranger, open)).ok).toBe(true);
     expect((await listDiscussions(stranger, open)).ok).toBe(true);
+  });
+});
+
+describe('invitation acceptance grants restricted access', () => {
+  it('withholds a restricted group from a pending invitee until acceptance', async () => {
+    const admin = await makeUser();
+    const invitee = await makeUser();
+    const restricted = await makeGroup(true, [{ userId: admin.id, role: 'admin' }]);
+
+    const invited = await inviteToGroup(admin, { groupId: restricted, inviteeId: invitee.id });
+    expect(invited.ok).toBe(true);
+    if (!invited.ok) return;
+
+    expect(await canViewGroup(invitee, restricted)).toBe(false);
+    expect(await getGroup(invitee, restricted)).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+
+    const accepted = await respondInvitation(invitee, {
+      invitationId: invited.value.id,
+      decision: 'accept',
+    });
+    expect(accepted.ok).toBe(true);
+
+    expect(await canViewGroup(invitee, restricted)).toBe(true);
+    expect((await getGroup(invitee, restricted)).ok).toBe(true);
+  });
+
+  it('keeps a withdrawn invitee a non-member who cannot read the group', async () => {
+    const admin = await makeUser();
+    const invitee = await makeUser();
+    const restricted = await makeGroup(true, [{ userId: admin.id, role: 'admin' }]);
+
+    const invited = await inviteToGroup(admin, { groupId: restricted, inviteeId: invitee.id });
+    if (!invited.ok) throw new Error(invited.message);
+
+    await cancelInvitation(admin, { invitationId: invited.value.id });
+
+    expect(await canViewGroup(invitee, restricted)).toBe(false);
+    expect(await getGroup(invitee, restricted)).toMatchObject({ ok: false, code: 'NOT_FOUND' });
   });
 });
 

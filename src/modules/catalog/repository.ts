@@ -6,7 +6,17 @@ import type { CatalogMediaKind, Genre, RatedTitle } from './types';
 
 const KIND_CODE: Record<CatalogMediaKind, number> = { film: 0, series: 1 };
 
-export async function listGenres(): Promise<Genre[]> {
+export async function listGenres(kind?: CatalogMediaKind): Promise<Genre[]> {
+  if (kind !== undefined) {
+    const rows = await query<{ id: number; name: string }>(
+      `SELECT g.id, g.name
+         FROM genres g
+         JOIN genre_kinds gk ON gk.genre_id = g.id AND gk.kind = $1
+        ORDER BY g.name`,
+      [KIND_CODE[kind]],
+    );
+    return rows.map((row) => ({ id: row.id, name: row.name }));
+  }
   const rows = await query<{ id: number; name: string }>(
     'SELECT id, name FROM genres ORDER BY name',
   );

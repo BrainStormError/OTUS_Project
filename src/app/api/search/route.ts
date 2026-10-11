@@ -27,8 +27,10 @@ export const GET = withRoute(
       kind: query.kind,
       title: query.q,
       genreIds,
-      year: query.year,
+      yearFrom: query.yearFrom,
+      yearTo: query.yearTo,
+      page: query.page,
     });
-    return result.ok ? ok({ items: result.value }) : result;
+    return result.ok ? ok(result.value) : result;
   },
 );

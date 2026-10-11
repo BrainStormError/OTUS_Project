@@ -13,3 +13,19 @@ export type GroupSummary = {
   restricted: boolean;
   members: GroupMemberSummary[];
 };
+
+export type GroupInvitationStatus = 'pending' | 'accepted' | 'declined';
+
+export type GroupInvitation = {
+  id: number;
+  groupId: number;
+  groupName: string;
+  inviterId: number;
+  inviterName: string;
+  inviterHandle: string;
+  inviteeId: number;
+  inviteeName: string;
+  inviteeHandle: string;
+  status: GroupInvitationStatus;
+  createdAt: string;
+};

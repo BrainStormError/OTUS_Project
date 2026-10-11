@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 
+import { CreateGroupModal } from './CreateGroupModal';
 import { GroupCard } from './GroupCard';
 import { searchGroups } from './group-search';
 import { joinGroupRemote } from './social-actions';
@@ -22,6 +24,7 @@ export function GroupsView({
   const [query, setQuery] = useState('');
   const results = searchGroups(query, groups, discoverGroups);
   const [joined, setJoined] = useState<number[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
 
   function isMember(group: Group): boolean {
     if (joined.includes(group.id)) return true;
@@ -48,6 +51,14 @@ export function GroupsView({
 
   return (
     <div className="space-y-4">
+      {currentUserId ? (
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            Создать группу
+          </Button>
+        </div>
+      ) : null}
+
       <Input
         type="search"
         value={query}
@@ -74,6 +85,8 @@ export function GroupsView({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">{groups.map(renderCard)}</div>
       )}
+
+      <CreateGroupModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
 }

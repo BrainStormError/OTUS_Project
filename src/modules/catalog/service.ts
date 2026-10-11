@@ -2,7 +2,7 @@ import { ok, type Result } from '@/core/result';
 
 import { detailRaw, searchRaw } from './client';
 import { TtlCache } from './cache';
-import { mapDetail, mapSearchItem, selectKnownGenreIds } from './domain';
+import { inYearRange, mapDetail, mapSearchItem, selectKnownGenreIds } from './domain';
 import {
   listGenres as listStoredGenres,
   listKnownGenreIds,
@@ -12,7 +12,7 @@ import type {
   CatalogDetail,
   CatalogMediaKind,
   CatalogSearchInput,
-  CatalogSearchResult,
+  CatalogSearchPage,
   Genre,
   RatedTitle,
   SaveMetadata,
@@ -20,7 +20,7 @@ import type {
 
 export const CATALOG_CACHE_TTL_MS = 60_000;
 
-const searchCache = new TtlCache<CatalogSearchResult[]>(CATALOG_CACHE_TTL_MS);
+const searchCache = new TtlCache<CatalogSearchPage>(CATALOG_CACHE_TTL_MS);
 const detailCache = new TtlCache<CatalogDetail>(CATALOG_CACHE_TTL_MS);
 const genreCache = new TtlCache<Map<number, string>>(CATALOG_CACHE_TTL_MS * 10);
 
@@ -41,13 +41,13 @@ async function storedGenreMap(): Promise<Map<number, string>> {
   return map;
 }
 
-export async function listGenres(): Promise<Result<Genre[]>> {
-  return ok(await listStoredGenres());
+export async function listGenres(kind?: CatalogMediaKind): Promise<Result<Genre[]>> {
+  return ok(await listStoredGenres(kind));
 }
 
 export async function searchCatalog(
   input: CatalogSearchInput,
-): Promise<Result<CatalogSearchResult[]>> {
+): Promise<Result<CatalogSearchPage>> {
   const key = JSON.stringify(input);
   const cached = searchCache.get(key);
   if (cached) {
@@ -57,7 +57,9 @@ export async function searchCatalog(
   const raw = await searchRaw(input.kind, {
     query: input.title,
     genreIds: input.genreIds,
-    year: input.year,
+    yearFrom: input.yearFrom,
+    yearTo: input.yearTo,
+    page: input.page,
   });
   if (!raw.ok) {
     return raw;
@@ -65,19 +67,24 @@ export async function searchCatalog(
 
   const names = await storedGenreMap();
 
-  let items = raw.value.map((item) => mapSearchItem(input.kind, item, names));
+  let items = raw.value.items.map((item) => mapSearchItem(input.kind, item, names));
 
   const selectedGenres = input.genreIds ?? [];
   if (selectedGenres.length > 0) {
     const selected = new Set(selectedGenres);
     items = items.filter((item) => item.genreIds.some((id) => selected.has(id)));
   }
-  if (input.year) {
-    items = items.filter((item) => item.year === input.year);
-  }
+  items = items.filter((item) => inYearRange(item.year, input.yearFrom, input.yearTo));
 
-  searchCache.set(key, items);
-  return ok(items);
+  const page = raw.value.page;
+  const result: CatalogSearchPage = {
+    items,
+    page,
+    hasMore: page < raw.value.totalPages,
+  };
+
+  searchCache.set(key, result);
+  return ok(result);
 }
 
 export async function resolveDetail(

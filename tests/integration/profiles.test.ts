@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Actor } from '@/core/auth/policy';
-import { closePool } from '@/core/db/pool';
+import { closePool, query } from '@/core/db/pool';
 import { resolveActor } from '@/modules/auth/actor';
 import { authorizeDemoUser } from '@/modules/auth/demo';
 import { insertUser, updatePrivacy } from '@/modules/auth/repository';
@@ -95,6 +95,35 @@ describe('profile read', () => {
 
     const missing = await getProfileByHandle(null, 'no-such-handle');
     expect(missing).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+  });
+
+  it('lists only the last week in recent while statistics count older records', async () => {
+    const owner = await makeUser('owner');
+    await addRating(owner, 8);
+    await saveWatchedRecord(owner, {
+      mediaKind: 'film',
+      mediaRef: '603',
+      rating: 7,
+      watchedAt: '2026-08-12',
+    });
+
+    const rows = await query<{ id: number }>(
+      `SELECT r.id
+         FROM ratings r
+         JOIN media m ON m.id = r.media_id
+        WHERE r.user_id = $1 AND m.external_ref = $2 AND r.group_id IS NULL`,
+      [owner.id, '603'],
+    );
+    await query(`UPDATE ratings SET created_at = now() - interval '10 days' WHERE id = $1`, [
+      rows[0]!.id,
+    ]);
+
+    const result = await getOwnProfile(owner);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.stats.count).toBe(2);
+    expect(result.value.recent).toHaveLength(1);
+    expect(result.value.recent[0]?.mediaRef).toBe('27205');
   });
 
   it('hides statistics and recent records from non-owners when stats are hidden', async () => {

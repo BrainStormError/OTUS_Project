@@ -63,6 +63,20 @@ describe('can', () => {
     expect(can(admin, 'group:view', { restricted: true, groupRole: null })).toBe(false);
   });
 
+  it('allows any authenticated actor to create a group', () => {
+    expect(can(admin, 'group:create')).toBe(true);
+    expect(can(employee, 'group:create')).toBe(true);
+  });
+
+  it('restricts group settings, invitations and member management to group admins', () => {
+    for (const action of ['group:update', 'group:invite', 'group:manage'] as const) {
+      expect(can(employee, action, { groupRole: 'admin' })).toBe(true);
+      expect(can(employee, action, { groupRole: 'member' })).toBe(false);
+      expect(can(employee, action, { groupRole: null })).toBe(false);
+      expect(can(employee, action)).toBe(false);
+    }
+  });
+
   it('allows group members and admins to discuss and rate', () => {
     expect(can(employee, 'group:discuss', { groupRole: 'member' })).toBe(true);
     expect(can(employee, 'group:discuss', { groupRole: 'admin' })).toBe(true);
@@ -72,5 +86,17 @@ describe('can', () => {
     expect(can(employee, 'group:rate', { groupRole: 'member' })).toBe(true);
     expect(can(employee, 'group:rate', { groupRole: 'admin' })).toBe(true);
     expect(can(employee, 'group:rate', { groupRole: null })).toBe(false);
+  });
+
+  it('allows only members to leave a group and only admins to delete it', () => {
+    expect(can(employee, 'group:leave', { groupRole: 'member' })).toBe(true);
+    expect(can(employee, 'group:leave', { groupRole: 'admin' })).toBe(false);
+    expect(can(employee, 'group:leave', { groupRole: null })).toBe(false);
+    expect(can(employee, 'group:leave')).toBe(false);
+
+    expect(can(employee, 'group:delete', { groupRole: 'admin' })).toBe(true);
+    expect(can(employee, 'group:delete', { groupRole: 'member' })).toBe(false);
+    expect(can(employee, 'group:delete', { groupRole: null })).toBe(false);
+    expect(can(employee, 'group:delete')).toBe(false);
   });
 });

@@ -154,6 +154,39 @@ describe('compact domain migrations', () => {
     expect(mediaIndex).toContain('WHERE (media_id IS NOT NULL)');
   });
 
+  it('makes names case-insensitively unique and adds group invitations', async () => {
+    const groupIndexes = await indexes('groups');
+    const groupName = groupIndexes.find((def) => def.includes('groups_name_key'));
+    expect(groupName).toContain('UNIQUE');
+    expect(groupName).toMatch(/lower\(\(name\)/i);
+
+    const tagIndexes = await indexes('tags');
+    const tagName = tagIndexes.find((def) => def.includes('tags_name_lower_key'));
+    expect(tagName).toContain('UNIQUE');
+    expect(tagName).toMatch(/lower\(\(name\)/i);
+    expect(tagIndexes.some((def) => def.includes('tags_name_key'))).toBe(false);
+
+    expect(await columns('group_invitations')).toEqual(
+      expect.arrayContaining([
+        'id',
+        'group_id',
+        'inviter_id',
+        'invitee_id',
+        'status',
+        'created_at',
+        'updated_at',
+      ]),
+    );
+    expect(await dataType('group_invitations', 'id')).toBe('bigint');
+    expect(await dataType('group_invitations', 'status')).toBe('smallint');
+    const invitationIndexes = await indexes('group_invitations');
+    expect(
+      invitationIndexes.some(
+        (def) => def.includes('group_invitations_group_invitee_key') && def.includes('UNIQUE'),
+      ),
+    ).toBe(true);
+  });
+
   it('creates discussion posts, friendships and activity events without a payload', async () => {
     expect(await columns('discussion_posts')).toEqual(
       expect.arrayContaining(['id', 'discussion_id', 'author_id', 'body', 'created_at']),
@@ -199,6 +232,7 @@ describe('compact domain migrations', () => {
         'groups',
         'group_members',
         'tags',
+        'group_invitations',
         'group_discussions',
         'discussion_posts',
         'activity_events',
@@ -214,6 +248,7 @@ describe('compact domain migrations', () => {
         'activity_events',
         'discussion_posts',
         'group_discussions',
+        'group_invitations',
         'group_members',
         'groups',
         'tags',

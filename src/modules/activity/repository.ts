@@ -32,6 +32,30 @@ const KIND_NAME: Record<number, ActivityKind> = {
 
 const COMMENT_KIND_CODE = KIND_CODE.comment_created;
 
+// Feed retention: events survive at most one day. The delete runs lazily on
+// read, throttled to once a minute per process so frequent reads do not each
+// issue a write.
+const PRUNE_INTERVAL_MS = 60_000;
+let lastPrunedAt = 0;
+
+export async function pruneStaleActivityEvents(): Promise<number> {
+  const rows = await query<{ id: number }>(
+    `DELETE FROM activity_events
+      WHERE created_at < now() - interval '1 day'
+      RETURNING id`,
+  );
+  return rows.length;
+}
+
+async function pruneStaleActivityEventsThrottled(): Promise<void> {
+  const now = Date.now();
+  if (now - lastPrunedAt < PRUNE_INTERVAL_MS) {
+    return;
+  }
+  lastPrunedAt = now;
+  await pruneStaleActivityEvents();
+}
+
 type EventRow = {
   id: number;
   actor_id: number;
@@ -194,11 +218,13 @@ export async function listFeedEvents(params: {
   since: ActivityCursor | null;
 }): Promise<ListFeedResult> {
   const { viewerId, limit, cursor, since } = params;
+  await pruneStaleActivityEventsThrottled();
   const rows = await query<FeedRow>(
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE ${VIEWER_VISIBILITY}
         AND e.kind <> ${COMMENT_KIND_CODE}
+        AND e.created_at > now() - interval '1 day'
         AND ($2::timestamptz IS NULL OR (e.created_at, e.id) < ($2::timestamptz, $3::bigint))
         AND ($4::timestamptz IS NULL OR (e.created_at, e.id) > ($4::timestamptz, $5::bigint))
       ORDER BY e.created_at DESC, e.id DESC
@@ -257,11 +283,13 @@ export async function listGroupFeedEvents(params: {
   cursor: ActivityCursor | null;
 }): Promise<ListFeedResult> {
   const { viewerId, groupId, limit, cursor } = params;
+  await pruneStaleActivityEventsThrottled();
   const rows = await query<FeedRow>(
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE e.group_id = $2
         AND e.kind <> ${COMMENT_KIND_CODE}
+        AND e.created_at > now() - interval '1 day'
         AND (e.actor_id = $1 OR u.profile_hidden = false)
         AND ($3::timestamptz IS NULL OR (e.created_at, e.id) < ($3::timestamptz, $4::bigint))
       ORDER BY e.created_at DESC, e.id DESC

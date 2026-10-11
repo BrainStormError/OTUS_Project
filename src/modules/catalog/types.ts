@@ -48,5 +48,13 @@ export type CatalogSearchInput = {
   kind: CatalogMediaKind;
   title?: string;
   genreIds?: number[];
-  year?: number;
+  yearFrom?: number;
+  yearTo?: number;
+  page?: number;
+};
+
+export type CatalogSearchPage = {
+  items: CatalogSearchResult[];
+  page: number;
+  hasMore: boolean;
 };

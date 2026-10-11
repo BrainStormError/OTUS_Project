@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/modal';
 import { cn } from '@/components/ui/utils';
 
 import { AddRecordModal } from './AddRecordModal';
-import { genreOptions, movieMatches, yearOptions } from './filters';
+import { genreOptions, recordMatches } from './filters';
 import type { RatingPayload } from './RatingForm';
 import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
@@ -52,7 +52,6 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
   const { records, upsert, remove } = useWatchedRecords(initialRecords);
   const movieOptions = useMemo(() => records.map((record) => record.movie), [records]);
   const genres = useMemo(() => genreOptions(movieOptions), [movieOptions]);
-  const years = useMemo(() => yearOptions(movieOptions), [movieOptions]);
 
   const [filters, setFilters] = useState<SearchFilters>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -66,7 +65,7 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
   });
 
   const filtered = useMemo(
-    () => records.filter((record) => movieMatches(record.movie, filters)),
+    () => records.filter((record) => recordMatches(record, filters)),
     [records, filters],
   );
 
@@ -117,7 +116,12 @@ export function MySeriesView({ initialRecords }: { initialRecords: WatchedRecord
 
   return (
     <div className="space-y-4">
-      <SearchField filters={filters} onFiltersChange={setFilters} genres={genres} years={years} />
+      <SearchField
+        filters={filters}
+        onFiltersChange={setFilters}
+        genres={genres}
+        yearLabel="год просмотра"
+      />
 
       <div className="flex justify-end">
         <Button type="button" onClick={() => setAdding(true)}>

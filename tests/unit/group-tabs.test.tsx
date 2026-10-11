@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GroupActivity } from '@/components/features/movie-tracker/GroupActivity';
 import { GroupDiscussions } from '@/components/features/movie-tracker/GroupDiscussions';
 import { GroupRatings } from '@/components/features/movie-tracker/GroupRatings';
+import { GroupTabPanel } from '@/components/features/movie-tracker/GroupTabPanels';
+import { GroupTabSkeleton } from '@/components/features/movie-tracker/GroupTabSkeleton';
 import { GroupTabs } from '@/components/features/movie-tracker/GroupTabs';
 import type { FeedItem } from '@/modules/activity';
 import type { DiscussionSummary, DiscussionDetail } from '@/modules/discussions';
@@ -210,6 +212,12 @@ describe('GroupRatings', () => {
     expect(screen.getByText('В группе пока нет оценок')).toBeInTheDocument();
   });
 
+  it('wraps the ratings table in a horizontally scrollable container', () => {
+    render(<GroupRatings groupId={1} isMember isAdmin={false} ratings={[rating]} />);
+    const table = screen.getByTestId('group-ratings');
+    expect(table.parentElement?.className).toContain('overflow-x-auto');
+  });
+
   it('submits a rating for a member through the media picker', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -281,5 +289,49 @@ describe('GroupActivity', () => {
 
     rerender(<GroupActivity groupId={1} events={[]} visible={false} />);
     expect(screen.getByTestId('restricted-no-permission')).toBeInTheDocument();
+  });
+});
+
+describe('GroupTabSkeleton', () => {
+  it('renders a list shape for content tabs', () => {
+    render(<GroupTabSkeleton tab="discussions" />);
+    expect(screen.getByTestId('skeleton-list')).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-stats')).not.toBeInTheDocument();
+  });
+
+  it('renders a list shape for the members tab', () => {
+    render(<GroupTabSkeleton tab="members" />);
+    expect(screen.getByTestId('skeleton-list')).toBeInTheDocument();
+  });
+
+  it('renders a stats shape for the statistics tab', () => {
+    render(<GroupTabSkeleton tab="stats" />);
+    expect(screen.getByTestId('skeleton-stats')).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-list')).not.toBeInTheDocument();
+  });
+
+  it('exposes a loading status labelled with the selected tab', () => {
+    render(<GroupTabSkeleton tab="ratings" />);
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('data-tab', 'ratings');
+    expect(status).toHaveAttribute('aria-busy', 'true');
+  });
+});
+
+function PendingPanel(): never {
+  throw new Promise<void>(() => undefined);
+}
+
+describe('GroupTabPanel', () => {
+  it("shows the active tab's skeleton until its content arrives", () => {
+    render(
+      <GroupTabPanel tab="activity">
+        <PendingPanel />
+      </GroupTabPanel>,
+    );
+
+    const skeleton = screen.getByTestId('group-tab-skeleton');
+    expect(skeleton).toHaveAttribute('data-tab', 'activity');
+    expect(screen.queryByText('Пока нет активности')).not.toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useEffect, useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -11,13 +11,10 @@ import { Modal } from '@/components/ui/modal';
 import type { CatalogSearchResult } from '@/modules/catalog';
 import type { GroupRatingSummary } from '@/modules/groups';
 
-import { deriveCatalogOptions, type CatalogOptions } from './catalog-view';
+import { genreOptionsFromCatalog } from './catalog-view';
 import { RatingForm, type RatingPayload } from './RatingForm';
 import { SearchField } from './SearchField';
-import type { MediaKind, SearchFilters } from './types';
-
-type Options = CatalogOptions;
-const EMPTY_OPTIONS: Options = { genres: [], years: [] };
+import type { FilterOption, MediaKind, SearchFilters } from './types';
 
 type SearchState =
   | { status: 'idle' }
@@ -47,9 +44,9 @@ export function GroupRatings({
   const [kind, setKind] = useState<MediaKind>('film');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [search, setSearch] = useState<SearchState>({ status: 'idle' });
-  const [optionsByKind, setOptionsByKind] = useState<Record<MediaKind, Options>>({
-    film: EMPTY_OPTIONS,
-    series: EMPTY_OPTIONS,
+  const [genresByKind, setGenresByKind] = useState<Record<MediaKind, FilterOption[]>>({
+    film: [],
+    series: [],
   });
   const [selected, setSelected] = useState<CatalogSearchResult | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -58,30 +55,38 @@ export function GroupRatings({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  function loadGenres(next: MediaKind) {
+    void fetch(`/api/genres?kind=${next}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { items?: { id: number; name: string }[] } | null) => {
+        if (data?.items) {
+          setGenresByKind((previous) => ({ ...previous, [next]: genreOptionsFromCatalog(data.items!) }));
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  useEffect(() => {
+    loadGenres('film');
+  }, []);
+
   function changeKind(next: MediaKind) {
     setKind(next);
     setFilters({});
     setSearch({ status: 'idle' });
-    const current = optionsByKind[next];
-    if (current.genres.length === 0 && current.years.length === 0) {
-      void fetch(`/api/search?kind=${next}`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { items?: CatalogSearchResult[] } | null) => {
-          if (data?.items) {
-            setOptionsByKind((previous) => ({ ...previous, [next]: deriveCatalogOptions(data.items as CatalogSearchResult[]) }));
-          }
-        })
-        .catch(() => undefined);
+    if (genresByKind[next].length === 0) {
+      loadGenres(next);
     }
   }
 
   async function runSearch(active: SearchFilters) {
     setSearch({ status: 'loading' });
     try {
-      const params = new URLSearchParams({ kind });
+      const params = new URLSearchParams({ kind, page: '1' });
       if (active.title) params.set('q', active.title);
       if (active.genre?.length) params.set('genre', active.genre.join(','));
-      if (active.year) params.set('year', active.year);
+      if (active.yearFrom) params.set('yearFrom', active.yearFrom);
+      if (active.yearTo) params.set('yearTo', active.yearTo);
       const response = await fetch(`/api/search?${params.toString()}`);
       if (!response.ok) {
         setSearch({ status: 'error' });
@@ -170,11 +175,12 @@ export function GroupRatings({
           description="Оцените фильм или сериал, чтобы появилась первая групповая оценка."
         />
       ) : (
-        <table
-          data-testid="group-ratings"
-          className="w-full border-collapse overflow-hidden rounded-lg border border-border text-left text-sm"
-        >
-          <thead>
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table
+            data-testid="group-ratings"
+            className="w-full border-collapse text-left text-sm"
+          >
+            <thead>
             <tr className="border-b border-border">
               <th scope="col" className="px-4 py-3 font-medium">
                 Медиа
@@ -265,7 +271,8 @@ export function GroupRatings({
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
 
       <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} title="Выбор медиа">
@@ -275,8 +282,7 @@ export function GroupRatings({
             onFiltersChange={setFilters}
             onSearch={runSearch}
             onReset={() => setSearch({ status: 'idle' })}
-            genres={optionsByKind[kind].genres}
-            years={optionsByKind[kind].years}
+            genres={genresByKind[kind]}
             kind={kind}
             onKindChange={changeKind}
             ariaLabel="Поиск медиа"

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 import type { FilterKey } from './types';
 
-export type ChipValue = { value: string; label: string };
+export type ChipValue = { value: string; label: string; prefix?: string };
 export type ChipBlock = { key: FilterKey; label: string; values: ChipValue[] };
 
 export function FilterChips({
@@ -39,7 +39,7 @@ export function FilterChips({
           <span className="text-xs text-muted-foreground">{block.label}:</span>
           {block.values.map((value) => (
             <span key={value.value} className="inline-flex items-center gap-1">
-              <span>{value.label}</span>
+              <span>{`${value.prefix ?? ''}${value.label}`}</span>
               <button
                 type="button"
                 aria-label={`Удалить фильтр ${block.label}: ${value.label}`}

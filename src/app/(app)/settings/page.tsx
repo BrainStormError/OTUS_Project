@@ -17,6 +17,8 @@ export default async function SettingsPage() {
       <SettingsView
         initialProfileHidden={flags.profileHidden}
         initialStatsHidden={flags.statsHidden}
+        name={actor?.name ?? ''}
+        handle={actor?.handle ?? ''}
       />
     </div>
   );

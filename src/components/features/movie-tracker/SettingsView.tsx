@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+
+import { EditIdentityModal, type IdentityField } from './EditIdentityModal';
 import { IdentitySelect } from './IdentitySelect';
 import { PrivacyToggle, type SaveStatus } from './PrivacyToggle';
 import { ThemeSelect } from './ThemeSelect';
@@ -17,15 +20,20 @@ const IDLE_STATUS: Record<FlagKey, SaveStatus> = {
 export function SettingsView({
   initialProfileHidden = false,
   initialStatsHidden = false,
+  name = '',
+  handle = '',
 }: {
   initialProfileHidden?: boolean;
   initialStatsHidden?: boolean;
+  name?: string;
+  handle?: string;
 }) {
   const [flags, setFlags] = useState<Flags>({
     profileHidden: initialProfileHidden,
     statsHidden: initialStatsHidden,
   });
   const [status, setStatus] = useState<Record<FlagKey, SaveStatus>>(IDLE_STATUS);
+  const [editField, setEditField] = useState<IdentityField | null>(null);
 
   async function save(key: FlagKey, next: boolean) {
     const previous = flags;
@@ -68,6 +76,21 @@ export function SettingsView({
         <IdentitySelect />
       </section>
 
+      <section className="space-y-3" aria-label="Имя и тэг">
+        <h2 className="text-lg font-medium">Имя и тэг</h2>
+        <p className="text-sm text-muted-foreground">
+          Измените отображаемое имя или уникальный тэг профиля.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => setEditField('name')}>
+            Изменить имя
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setEditField('handle')}>
+            Изменить тэг
+          </Button>
+        </div>
+      </section>
+
       <section className="space-y-1" aria-label="Приватность">
         <h2 className="text-lg font-medium">Приватность</h2>
         <div className="divide-y divide-border rounded-lg border border-border px-4">
@@ -87,6 +110,19 @@ export function SettingsView({
           />
         </div>
       </section>
+
+      <EditIdentityModal
+        open={editField === 'name'}
+        field="name"
+        currentValue={name}
+        onClose={() => setEditField(null)}
+      />
+      <EditIdentityModal
+        open={editField === 'handle'}
+        field="handle"
+        currentValue={handle}
+        onClose={() => setEditField(null)}
+      />
     </div>
   );
 }

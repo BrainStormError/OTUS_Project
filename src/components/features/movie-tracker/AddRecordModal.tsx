@@ -6,13 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
-import { deriveCatalogOptions, genreOptionsFromCatalog, toMovie, type CatalogOptions } from './catalog-view';
+import { genreOptionsFromCatalog, toMovie } from './catalog-view';
 import { SearchField } from './SearchField';
-import type { MediaKind, Movie, SearchFilters } from './types';
+import type { FilterOption, MediaKind, Movie, SearchFilters } from './types';
 
-type SearchState = { status: 'idle' | 'loading' | 'error' | 'done'; items: CatalogSearchResult[] };
+type SearchState = {
+  status: 'idle' | 'loading' | 'error' | 'done';
+  items: CatalogSearchResult[];
+  page: number;
+  hasMore: boolean;
+};
 
-const EMPTY_OPTIONS: CatalogOptions = { genres: [], years: [] };
+const IDLE: SearchState = { status: 'idle', items: [], page: 1, hasMore: false };
 
 export function AddRecordModal({
   open,
@@ -28,22 +33,19 @@ export function AddRecordModal({
   onSelect: (movie: Movie) => void;
 }) {
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [state, setState] = useState<SearchState>({ status: 'idle', items: [] });
-  const [options, setOptions] = useState<CatalogOptions>(EMPTY_OPTIONS);
+  const [submitted, setSubmitted] = useState<SearchFilters>({});
+  const [state, setState] = useState<SearchState>(IDLE);
+  const [genres, setGenres] = useState<FilterOption[]>([]);
 
   useEffect(() => {
     if (!open) return;
     let active = true;
-    void Promise.all([
-      fetch('/api/genres').then((response) => (response.ok ? response.json() : null)),
-      fetch(`/api/search?kind=${kind}`).then((response) => (response.ok ? response.json() : null)),
-    ])
-      .then(([genreData, searchData]) => {
-        if (!active) return;
-        setOptions({
-          genres: genreData?.items ? genreOptionsFromCatalog(genreData.items) : [],
-          years: searchData?.items ? deriveCatalogOptions(searchData.items).years : [],
-        });
+    void fetch(`/api/genres?kind=${kind}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { items?: { id: number; name: string }[] } | null) => {
+        if (active && data?.items) {
+          setGenres(genreOptionsFromCatalog(data.items));
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -51,33 +53,53 @@ export function AddRecordModal({
     };
   }, [open, kind]);
 
-  async function runSearch(active: SearchFilters) {
-    setState({ status: 'loading', items: [] });
+  function keepSelectable(item: CatalogSearchResult): boolean {
+    const watched = new Set(watchedRefs);
+    return !watched.has(item.externalId) && !watched.has(`${kind}:${item.externalId}`);
+  }
+
+  async function loadPage(active: SearchFilters, page: number) {
+    const append = page > 1;
+    setState((previous) =>
+      append && previous.status === 'done' ? previous : { ...IDLE, status: 'loading', page },
+    );
     try {
-      const params = new URLSearchParams({ kind });
+      const params = new URLSearchParams({ kind, page: String(page) });
       if (active.title) params.set('q', active.title);
       if (active.genre?.length) params.set('genre', active.genre.join(','));
-      if (active.year) params.set('year', active.year);
+      if (active.yearFrom) params.set('yearFrom', active.yearFrom);
+      if (active.yearTo) params.set('yearTo', active.yearTo);
       const response = await fetch(`/api/search?${params.toString()}`);
       if (!response.ok) {
-        setState({ status: 'error', items: [] });
+        setState({ ...IDLE, status: 'error' });
         return;
       }
-      const data = (await response.json()) as { items?: CatalogSearchResult[] };
-      let items = data.items ?? [];
-      const watched = new Set(watchedRefs);
-      items = items.filter(
-        (item) => !watched.has(item.externalId) && !watched.has(`${kind}:${item.externalId}`),
-      );
-      setState({ status: 'done', items });
+      const data = (await response.json()) as {
+        items?: CatalogSearchResult[];
+        page?: number;
+        hasMore?: boolean;
+      };
+      const items = (data.items ?? []).filter(keepSelectable);
+      setState((previous) => ({
+        status: 'done',
+        items: append && previous.status === 'done' ? [...previous.items, ...items] : items,
+        page: data.page ?? page,
+        hasMore: Boolean(data.hasMore),
+      }));
     } catch {
-      setState({ status: 'error', items: [] });
+      setState({ ...IDLE, status: 'error' });
     }
+  }
+
+  function runSearch(active: SearchFilters) {
+    setSubmitted(active);
+    void loadPage(active, 1);
   }
 
   function close() {
     setFilters({});
-    setState({ status: 'idle', items: [] });
+    setSubmitted({});
+    setState(IDLE);
     onClose();
   }
 
@@ -93,32 +115,44 @@ export function AddRecordModal({
           filters={filters}
           onFiltersChange={setFilters}
           onSearch={runSearch}
-          onReset={() => setState({ status: 'idle', items: [] })}
-          genres={options.genres}
-          years={options.years}
+          onReset={() => setState(IDLE)}
+          genres={genres}
           ariaLabel={kind === 'series' ? 'Поиск сериалов' : 'Поиск фильмов'}
         />
 
         {state.status === 'done' ? (
-          state.items.length === 0 ? (
+          state.items.length === 0 && !state.hasMore ? (
             <p role="status" className="text-sm text-muted-foreground">
               Ничего не найдено
             </p>
           ) : (
-            <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-              {state.items.map((item) => (
-                <li key={`${item.kind}:${item.externalId}`}>
-                  <button
+            <>
+              <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+                {state.items.map((item) => (
+                  <li key={`${item.kind}:${item.externalId}`}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(toMovie(item))}
+                      className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    >
+                      <span className="truncate font-medium">{item.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{item.year ?? '—'}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {state.hasMore ? (
+                <div className="flex justify-center">
+                  <Button
                     type="button"
-                    onClick={() => onSelect(toMovie(item))}
-                    className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    variant="outline"
+                    onClick={() => void loadPage(submitted, state.page + 1)}
                   >
-                    <span className="truncate font-medium">{item.title}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{item.year ?? '—'}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    Показать ещё
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )
         ) : null}
 

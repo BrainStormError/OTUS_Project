@@ -21,6 +21,7 @@ vi.mock('@/modules/catalog', async () => {
     listGenres: genresMock,
     catalogSearchQuery: schema.catalogSearchQuery,
     catalogDetailQuery: schema.catalogDetailQuery,
+    catalogGenresQuery: schema.catalogGenresQuery,
   };
 });
 
@@ -48,7 +49,18 @@ describe('GET /api/search', () => {
     expect(response.status).toBe(400);
   });
 
-  it('returns search results for a valid query', async () => {
+  it('returns 400 for an inverted year range', async () => {
+    getActorMock.mockResolvedValue(actor);
+    const response = await searchRoute(
+      new Request('http://localhost/api/search?kind=film&yearFrom=2010&yearTo=2000', {
+        headers: origin,
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a page for a valid query', async () => {
     getActorMock.mockResolvedValue(actor);
     const items = [
       {
@@ -62,20 +74,23 @@ describe('GET /api/search', () => {
         genreIds: [878],
       },
     ];
-    searchMock.mockResolvedValue(ok(items));
+    searchMock.mockResolvedValue(ok({ items, page: 2, hasMore: true }));
 
     const response = await searchRoute(
-      new Request('http://localhost/api/search?kind=film&q=Начало&genre=878&year=2010', {
-        headers: origin,
-      }),
+      new Request(
+        'http://localhost/api/search?kind=film&q=Начало&genre=878&yearFrom=2000&yearTo=2010&page=2',
+        { headers: origin },
+      ),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ items });
+    expect(await response.json()).toEqual({ items, page: 2, hasMore: true });
     expect(searchMock).toHaveBeenCalledWith({
       kind: 'film',
       title: 'Начало',
       genreIds: [878],
-      year: 2010,
+      yearFrom: 2000,
+      yearTo: 2010,
+      page: 2,
     });
   });
 });
@@ -89,7 +104,7 @@ describe('GET /api/genres', () => {
     expect(response.status).toBe(401);
   });
 
-  it('returns the stored genres', async () => {
+  it('returns the stored genres without a kind', async () => {
     getActorMock.mockResolvedValue(actor);
     const items = [
       { id: 18, name: 'Драма' },
@@ -102,6 +117,28 @@ describe('GET /api/genres', () => {
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ items });
+    expect(genresMock).toHaveBeenCalledWith(undefined);
+  });
+
+  it('scopes the list to a kind so a film-only id is excluded', async () => {
+    getActorMock.mockResolvedValue(actor);
+    genresMock.mockImplementation(async (kind?: 'film' | 'series') =>
+      kind === 'series'
+        ? ok([{ id: 10765, name: 'Научная фантастика и фэнтези' }])
+        : ok([
+            { id: 14, name: 'Фэнтези' },
+            { id: 10765, name: 'Научная фантастика и фэнтези' },
+          ]),
+    );
+
+    const response = await genresRoute(
+      new Request('http://localhost/api/genres?kind=series', { headers: origin }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { items: { id: number; name: string }[] };
+    expect(body.items).toEqual([{ id: 10765, name: 'Научная фантастика и фэнтези' }]);
+    expect(body.items.some((genre) => genre.id === 14)).toBe(false);
+    expect(genresMock).toHaveBeenCalledWith('series');
   });
 });
 

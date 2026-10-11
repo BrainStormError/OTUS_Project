@@ -31,7 +31,7 @@ export default async function HomePage() {
   }
 
   const popular = await searchCatalog({ kind: 'film' });
-  const popularFilms: CatalogSearchResult[] = popular.ok ? popular.value : [];
+  const popularFilms: CatalogSearchResult[] = popular.ok ? popular.value.items : [];
 
   return (
     <HomeView popularFilms={popularFilms} initialFeed={initialFeed} initialRecords={initialRecords} />

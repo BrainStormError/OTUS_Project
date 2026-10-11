@@ -38,19 +38,51 @@ export type RawDetail = {
 export type SearchParams = {
   query?: string;
   genreIds?: number[];
-  year?: number;
+  yearFrom?: number;
+  yearTo?: number;
+  page?: number;
+};
+
+export type RawSearchPage = {
+  items: RawSearchItem[];
+  page: number;
+  totalPages: number;
 };
 
 function segmentFor(kind: CatalogMediaKind): 'movie' | 'tv' {
   return kind === 'film' ? 'movie' : 'tv';
 }
 
-function yearParamFor(kind: CatalogMediaKind): string {
-  return kind === 'film' ? 'primary_release_year' : 'first_air_date_year';
+// TMDB `/discover` accepts inclusive date bounds per kind. `/search` (the title
+// path) has no date-range parameter, so the range is applied in memory instead.
+function dateRangeParams(
+  kind: CatalogMediaKind,
+  params: SearchParams,
+): Record<string, string | undefined> {
+  if (kind === 'film') {
+    return {
+      'primary_release_date.gte': params.yearFrom !== undefined ? `${params.yearFrom}-01-01` : undefined,
+      'primary_release_date.lte': params.yearTo !== undefined ? `${params.yearTo}-12-31` : undefined,
+    };
+  }
+  return {
+    'first_air_date.gte': params.yearFrom !== undefined ? `${params.yearFrom}-01-01` : undefined,
+    'first_air_date.lte': params.yearTo !== undefined ? `${params.yearTo}-12-31` : undefined,
+  };
 }
 
-function searchYearParamFor(kind: CatalogMediaKind): string {
-  return kind === 'film' ? 'year' : 'first_air_date_year';
+type RawPage = {
+  results?: RawSearchItem[];
+  page?: number;
+  total_pages?: number;
+};
+
+function toRawPage(body: RawPage): RawSearchPage {
+  return {
+    items: body.results ?? [],
+    page: typeof body.page === 'number' && body.page > 0 ? body.page : 1,
+    totalPages: typeof body.total_pages === 'number' && body.total_pages > 0 ? body.total_pages : 1,
+  };
 }
 
 async function request<T>(
@@ -90,28 +122,28 @@ async function request<T>(
 export async function searchRaw(
   kind: CatalogMediaKind,
   params: SearchParams,
-): Promise<Result<RawSearchItem[]>> {
+): Promise<Result<RawSearchPage>> {
   const segment = segmentFor(kind);
   const query = params.query?.trim();
+  const page = params.page && params.page > 0 ? String(params.page) : '1';
 
   if (query) {
-    const result = await request<{ results?: RawSearchItem[] }>(`/search/${segment}`, {
+    const result = await request<RawPage>(`/search/${segment}`, {
       query,
       include_adult: 'false',
-      page: '1',
-      [searchYearParamFor(kind)]: params.year ? String(params.year) : undefined,
+      page,
     });
-    return result.ok ? ok(result.value.results ?? []) : result;
+    return result.ok ? ok(toRawPage(result.value)) : result;
   }
 
-  const result = await request<{ results?: RawSearchItem[] }>(`/discover/${segment}`, {
+  const result = await request<RawPage>(`/discover/${segment}`, {
     sort_by: 'popularity.desc',
     include_adult: 'false',
-    page: '1',
+    page,
     with_genres: params.genreIds?.length ? params.genreIds.join('|') : undefined,
-    [yearParamFor(kind)]: params.year ? String(params.year) : undefined,
+    ...dateRangeParams(kind, params),
   });
-  return result.ok ? ok(result.value.results ?? []) : result;
+  return result.ok ? ok(toRawPage(result.value)) : result;
 }
 
 export async function detailRaw(

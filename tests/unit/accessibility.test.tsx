@@ -14,7 +14,6 @@ const genres = [
   { value: 'драма', label: 'Драма' },
   { value: 'боевик', label: 'Боевик' },
 ];
-const years = [2010, 1999];
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/films',
@@ -141,13 +140,20 @@ describe('accessible names and focus', () => {
         onFiltersChange={() => undefined}
         onSearch={() => undefined}
         genres={genres}
-        years={years}
       />,
     );
     await userEvent.tab();
-    expect(screen.getByRole('button', { name: 'Найти' })).toHaveFocus();
-    await userEvent.tab();
     expect(screen.getByLabelText('Название')).toHaveFocus();
+
+    let reachedSubmit = false;
+    for (let step = 0; step < 12; step += 1) {
+      await userEvent.tab();
+      if (document.activeElement === screen.getByRole('button', { name: 'Найти' })) {
+        reachedSubmit = true;
+        break;
+      }
+    }
+    expect(reachedSubmit).toBe(true);
     expect(screen.getByText('Поиск')).toBeInTheDocument();
   });
 });

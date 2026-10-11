@@ -17,6 +17,12 @@ export type Action =
   | 'thread:read'
   | 'friend:request'
   | 'friend:withdraw'
+  | 'group:create'
+  | 'group:update'
+  | 'group:invite'
+  | 'group:manage'
+  | 'group:delete'
+  | 'group:leave'
   | 'group:view'
   | 'group:rate'
   | 'group:discuss'
@@ -42,9 +48,17 @@ export function can(actor: Actor, action: Action, resource?: Resource): boolean 
     case 'friend:withdraw':
       return true;
     case 'wish:create':
+    case 'group:create':
       return true;
     case 'wish:edit':
       return actor.role === 'admin' || resource?.authorId === actor.id;
+    case 'group:update':
+    case 'group:invite':
+    case 'group:manage':
+    case 'group:delete':
+      return resource?.groupRole === 'admin';
+    case 'group:leave':
+      return resource?.groupRole === 'member';
     case 'group:view':
       return (
         resource?.restricted !== true ||

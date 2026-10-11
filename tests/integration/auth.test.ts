@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { closePool, query } from '@/core/db/pool';
 import { resolveActor } from '@/modules/auth/actor';
 import { authorizeDemoUser } from '@/modules/auth/demo';
-import { resolveGoogleUser } from '@/modules/auth/identity';
+import { resolveGoogleUser, updateIdentity } from '@/modules/auth/identity';
 import { findOrCreateDemoUser, insertUser, updatePrivacy } from '@/modules/auth/repository';
 
 afterAll(async () => {
@@ -136,5 +136,150 @@ describe('privacy persistence', () => {
     const partial = await updatePrivacy(row.id, { profileHidden: false });
     expect(partial?.profileHidden).toBe(false);
     expect(partial?.statsHidden).toBe(true);
+  });
+});
+
+describe('identity editing', () => {
+  it('updates the display name with no frequency limit', async () => {
+    const user = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Old',
+      role: 'employee',
+    });
+    const actor = { id: user.id, role: 'employee' as const };
+
+    const first = await updateIdentity(actor, { name: 'Первый' });
+    expect(first).toEqual({ ok: true, value: { name: 'Первый', handle: user.handle } });
+
+    const second = await updateIdentity(actor, { name: 'Второй' });
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.value.name).toBe('Второй');
+    }
+  });
+
+  it('changes the tag on the first request and records the change time', async () => {
+    const user = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Tag',
+      role: 'employee',
+    });
+    const tag = `tag-${randomUUID().slice(0, 8)}`;
+
+    const result = await updateIdentity({ id: user.id, role: 'employee' }, { handle: tag });
+    expect(result).toEqual({ ok: true, value: { name: user.name, handle: tag } });
+
+    const rows = await query<{ handle: string; handle_changed_at: Date | null }>(
+      `SELECT handle, handle_changed_at FROM users WHERE id = $1`,
+      [user.id],
+    );
+    expect(rows[0]?.handle).toBe(tag);
+    expect(rows[0]?.handle_changed_at).not.toBeNull();
+  });
+
+  it('rejects a second tag change inside the cooldown and keeps the stored tag', async () => {
+    const user = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Cooldown',
+      role: 'employee',
+    });
+    const actor = { id: user.id, role: 'employee' as const };
+    const first = `tag-${randomUUID().slice(0, 8)}`;
+    const second = `tag-${randomUUID().slice(0, 8)}`;
+
+    expect((await updateIdentity(actor, { handle: first })).ok).toBe(true);
+    const blocked = await updateIdentity(actor, { handle: second });
+
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      expect(blocked.code).toBe('CONFLICT');
+      expect(blocked.message).toContain('дн');
+    }
+    const rows = await query<{ handle: string }>(`SELECT handle FROM users WHERE id = $1`, [
+      user.id,
+    ]);
+    expect(rows[0]?.handle).toBe(first);
+  });
+
+  it('accepts a tag change after the cooldown has elapsed', async () => {
+    const user = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Elapsed',
+      role: 'employee',
+    });
+    const actor = { id: user.id, role: 'employee' as const };
+    await updateIdentity(actor, { handle: `tag-${randomUUID().slice(0, 8)}` });
+    await query(`UPDATE users SET handle_changed_at = now() - interval '2 months' WHERE id = $1`, [
+      user.id,
+    ]);
+
+    const next = `tag-${randomUUID().slice(0, 8)}`;
+    const result = await updateIdentity(actor, { handle: next });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.handle).toBe(next);
+    }
+  });
+
+  it('treats submitting the current tag as a no-op that does not start the cooldown', async () => {
+    const user = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Noop',
+      role: 'employee',
+    });
+    const current = user.handle as string;
+
+    const result = await updateIdentity(
+      { id: user.id, role: 'employee' },
+      { handle: current },
+    );
+
+    expect(result.ok).toBe(true);
+    const rows = await query<{ handle: string; handle_changed_at: Date | null }>(
+      `SELECT handle, handle_changed_at FROM users WHERE id = $1`,
+      [user.id],
+    );
+    expect(rows[0]?.handle).toBe(current);
+    expect(rows[0]?.handle_changed_at).toBeNull();
+  });
+
+  it('rejects a tag already taken by another account without changing it', async () => {
+    const owner = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Owner',
+      role: 'employee',
+    });
+    const other = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Other',
+      role: 'employee',
+    });
+    const taken = owner.handle as string;
+
+    const result = await updateIdentity({ id: other.id, role: 'employee' }, { handle: taken });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('CONFLICT');
+    }
+    const rows = await query<{ handle: string }>(`SELECT handle FROM users WHERE id = $1`, [
+      other.id,
+    ]);
+    expect(rows[0]?.handle).toBe(other.handle);
+  });
+
+  it('rejects invalid and reserved tags at the service boundary', async () => {
+    const user = await insertUser({
+      email: `${randomUUID()}@example.com`,
+      name: 'Valid',
+      role: 'employee',
+    });
+    const actor = { id: user.id, role: 'employee' as const };
+
+    for (const input of [{}, { handle: 'Admin' }, { handle: 'admin' }, { name: '' }]) {
+      const result = await updateIdentity(actor, input);
+      expect(result.ok, JSON.stringify(input)).toBe(false);
+    }
   });
 });

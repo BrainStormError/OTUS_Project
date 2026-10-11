@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +21,11 @@ import type {
   WatchedRecord,
 } from '@/components/features/movie-tracker/types';
 import type { CatalogSearchResult } from '@/modules/catalog';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
+}));
 
 function film(
   tmdbId: number,
@@ -111,17 +116,20 @@ function mockCatalogFetch(catalog: CatalogSearchResult[]) {
     }
     const kind = url.searchParams.get('kind');
     const q = (url.searchParams.get('q') ?? '').toLowerCase();
-    const year = url.searchParams.get('year');
+    const yearFrom = url.searchParams.get('yearFrom');
+    const yearTo = url.searchParams.get('yearTo');
     const genre = url.searchParams.get('genre');
     const genreIds = genre ? genre.split(',').map((value) => Number(value)) : [];
     const items = catalog.filter(
       (item) =>
         (!kind || item.kind === kind) &&
         (!q || item.title.toLowerCase().includes(q)) &&
-        (!year || String(item.year) === year) &&
+        (!yearFrom || (item.year !== null && item.year >= Number(yearFrom))) &&
+        (!yearTo || (item.year !== null && item.year <= Number(yearTo))) &&
         (genreIds.length === 0 || item.genreIds.some((id) => genreIds.includes(id))),
     );
-    return new Response(JSON.stringify({ items }), {
+    const page = Number(url.searchParams.get('page') ?? '1');
+    return new Response(JSON.stringify({ items, page, hasMore: false }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
@@ -251,6 +259,23 @@ describe('My Films and records', () => {
     expect(within(list).queryByText('Начало')).not.toBeInTheDocument();
   });
 
+  it('filters the year by the watch date and labels the field "год просмотра"', () => {
+    render(
+      <MyFilmsView
+        initialRecords={[
+          { id: 1, movie: film(1, 'Старый релиз', 1990, ['драма']), rating: 8, watchedAt: '2024-05-01' },
+          { id: 2, movie: film(2, 'Новый релиз', 2024, ['драма']), rating: 8, watchedAt: '2019-05-01' },
+        ]}
+      />,
+    );
+    const list = screen.getByTestId('my-films');
+    expect(screen.getByText('год просмотра')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Год (с)'), { target: { value: '2024' } });
+    expect(within(list).getByText('Старый релиз')).toBeInTheDocument();
+    expect(within(list).queryByText('Новый релиз')).not.toBeInTheDocument();
+  });
+
   it('scopes genre and year options to watched films and omits actor/director filters', async () => {
     render(<MyFilmsView initialRecords={filmRecords} />);
 
@@ -376,6 +401,11 @@ describe('My Films and records', () => {
 });
 
 describe('My Series', () => {
+  it('labels the live year filter "год просмотра"', () => {
+    render(<MySeriesView initialRecords={seriesRecords} />);
+    expect(screen.getByText('год просмотра')).toBeInTheDocument();
+  });
+
   it('lists series with title, rating, and date columns and sorts by header', async () => {
     render(<MySeriesView initialRecords={seriesRecords} />);
     const list = screen.getByTestId('my-series');
@@ -431,8 +461,8 @@ describe('My Series', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
 
-    await within(picker).findByLabelText('Год');
-    await userEvent.type(within(picker).getByLabelText('Год'), '2021');
+    await within(picker).findByLabelText('Год (с)');
+    await userEvent.type(within(picker).getByLabelText('Год (с)'), '2021');
 
     expect(within(picker).queryByRole('button', { name: /^Игра в кальмара/ })).not.toBeInTheDocument();
     await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
@@ -483,6 +513,21 @@ describe('ProfileView', () => {
     expect(screen.getByRole('heading', { name: 'Активность' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Приватность' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Настройки' })).not.toBeInTheDocument();
+  });
+
+  it('offers edit controls next to the name and tag on the own profile', () => {
+    render(<ProfileView user={ownProfile} isOwn />);
+    expect(screen.getByRole('button', { name: 'Изменить имя' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Изменить тэг' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Изменить имя' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows no edit controls on another users profile', () => {
+    render(<ProfileView user={maria} isOwn={false} />);
+    expect(screen.queryByRole('button', { name: 'Изменить имя' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Изменить тэг' })).not.toBeInTheDocument();
   });
 
   it('shows a relationship action on another users profile', () => {
@@ -584,6 +629,16 @@ describe('SettingsView', () => {
     await userEvent.click(both);
     expect(both).toHaveAttribute('aria-checked', 'true');
     expect(window.localStorage.getItem('identity-display')).toBe('both');
+  });
+
+  it('offers identity edit actions that open the matching modal', () => {
+    render(<SettingsView name="Алексей" handle="alex" />);
+    expect(screen.getByRole('button', { name: 'Изменить имя' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Изменить тэг' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Изменить тэг' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText('Тэг (handle)')).toHaveValue('alex');
   });
 });
 
@@ -711,5 +766,14 @@ describe('Scoped search in Friends and Groups', () => {
     expect(within(card).getByText('пятница')).toBeInTheDocument();
     expect(within(card).queryByText('Фильмов')).not.toBeInTheDocument();
     expect(within(card).queryByText('Средняя оценка')).not.toBeInTheDocument();
+  });
+
+  it('opens the group creation modal from the section for a signed-in user', async () => {
+    render(<GroupsView groups={ownGroups} currentUserId={1} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Создать группу' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByLabelText('Название')).toBeInTheDocument();
   });
 });

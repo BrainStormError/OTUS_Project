@@ -4,6 +4,7 @@ import { UserRound } from 'lucide-react';
 import { RestrictedState } from '@/components/ui/restricted-state';
 
 import { AddFriendButton } from './AddFriendButton';
+import { EditableIdentity } from './EditableIdentity';
 import { StatisticsView } from './StatisticsView';
 import type { PublicUser } from './types';
 
@@ -19,23 +20,25 @@ export function ProfileView({ user, isOwn }: { user: PublicUser; isOwn: boolean 
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-center gap-4">
-        <span
-          aria-hidden="true"
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
-        >
-          <UserRound className="h-8 w-8" />
-        </span>
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
-          <p className="text-sm text-muted-foreground">@{user.handle}</p>
-        </div>
-        {isOwn ? null : (
+      {isOwn ? (
+        <EditableIdentity name={user.name} handle={user.handle} />
+      ) : (
+        <header className="flex flex-wrap items-center gap-4">
+          <span
+            aria-hidden="true"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+          >
+            <UserRound className="h-8 w-8" />
+          </span>
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
+            <p className="text-sm text-muted-foreground">@{user.handle}</p>
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <AddFriendButton userId={user.id} />
           </div>
-        )}
-      </header>
+        </header>
+      )}
 
       <section className="space-y-3" aria-label="Статистика профиля">
         <h2 className="text-lg font-medium">Статистика</h2>

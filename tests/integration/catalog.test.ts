@@ -24,6 +24,10 @@ beforeAll(async () => {
     `INSERT INTO genres (id, name) VALUES (18, 'Драма'), (878, 'Фантастика')
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
   );
+  await query(
+    `INSERT INTO genre_kinds (genre_id, kind) VALUES (18, 0), (18, 1), (878, 0)
+     ON CONFLICT (genre_id, kind) DO NOTHING`,
+  );
   installTmdbFetch(() => ({
     title: 'Начало',
     year: 2010,
@@ -44,6 +48,19 @@ describe('genre catalog', () => {
     const byId = new Map(result.value.map((genre) => [genre.id, genre.name]));
     expect(byId.get(18)).toBe('Драма');
     expect(byId.get(878)).toBe('Фантастика');
+  });
+
+  it('returns series genres without film-only ids when scoped to a kind', async () => {
+    const films = await listGenres('film');
+    const series = await listGenres('series');
+    expect(films.ok && series.ok).toBe(true);
+    if (!films.ok || !series.ok) return;
+
+    const filmIds = films.value.map((genre) => genre.id);
+    const seriesIds = series.value.map((genre) => genre.id);
+    expect(filmIds).toContain(878);
+    expect(seriesIds).toContain(18);
+    expect(seriesIds).not.toContain(878);
   });
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/components/ui/utils';
 
-import { FilterChips, type ChipBlock } from './FilterChips';
+import { FilterChips, type ChipBlock, type ChipValue } from './FilterChips';
 import type { FilterKey, FilterOption, MediaKind, SearchFilters } from './types';
 
 const KINDS: { value: MediaKind; label: string }[] = [
@@ -136,59 +136,68 @@ function GenreDropdown({
   );
 }
 
-const YEAR_MIN = 1800;
-const YEAR_MAX = 2200;
+function parseYear(value?: string): number | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
-function YearFilter({
+function YearBound({
+  hint,
   value,
+  max,
   onChange,
 }: {
+  hint: string;
   value: string;
-  years: number[];
+  max: number;
   onChange: (value: string) => void;
 }) {
-  const id = useId();
-
-  function step(delta: number) {
-    const parsed = value ? Number(value) : Number.NaN;
-    const next = Number.isFinite(parsed)
-      ? Math.min(YEAR_MAX, Math.max(YEAR_MIN, parsed + delta))
-      : new Date().getFullYear();
-    onChange(String(next));
-  }
-
   return (
-    <div className="space-y-1 text-sm">
-      <label htmlFor={id} className="block text-muted-foreground">
-        Год
-      </label>
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Уменьшить год"
-          onClick={() => step(-1)}
-        >
-          <Minus aria-hidden="true" className="h-4 w-4" />
-        </Button>
-        <Input
-          id={id}
-          inputMode="numeric"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Все годы"
-          className="text-center tabular-nums"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Увеличить год"
-          onClick={() => step(1)}
-        >
-          <Plus aria-hidden="true" className="h-4 w-4" />
-        </Button>
+    <Input
+      aria-label={`Год (${hint})`}
+      inputMode="numeric"
+      max={max}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onBlur={(event) => {
+        const parsed = parseYear(event.target.value);
+        if (parsed !== null && parsed > max) {
+          onChange(String(max));
+        }
+      }}
+      placeholder={hint}
+      className="w-full min-w-0 text-center tabular-nums"
+    />
+  );
+}
+
+function YearRangeFilter({
+  from,
+  to,
+  label,
+  maxYear,
+  onFromChange,
+  onToChange,
+  className,
+}: {
+  from: string;
+  to: string;
+  label: string;
+  maxYear: number;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn('space-y-1 text-sm', className)}>
+      <span className="block text-muted-foreground">{label}</span>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <YearBound hint="с" value={from} max={maxYear} onChange={onFromChange} />
+        <YearBound hint="по" value={to} max={maxYear} onChange={onToChange} />
       </div>
     </div>
   );
@@ -200,9 +209,9 @@ export function SearchField({
   onSearch,
   onReset,
   genres = [],
-  years = [],
   kind,
   onKindChange,
+  yearLabel = 'Год',
   className,
   ariaLabel = 'Поиск',
 }: {
@@ -211,9 +220,9 @@ export function SearchField({
   onSearch?: (filters: SearchFilters) => void;
   onReset?: () => void;
   genres?: FilterOption[];
-  years?: number[];
   kind?: MediaKind;
   onKindChange?: (kind: MediaKind) => void;
+  yearLabel?: string;
   className?: string;
   ariaLabel?: string;
 }) {
@@ -229,17 +238,39 @@ export function SearchField({
     onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
   }
 
-  function setYear(value: string) {
-    onFiltersChange({ ...filters, year: value || undefined });
+  function setYearFrom(value: string) {
+    const parsed = parseYear(value);
+    if (parsed === null) {
+      onFiltersChange({ ...filters, yearFrom: undefined });
+      return;
+    }
+    const to = parseYear(filters.yearTo);
+    if (to !== null && parsed > to) {
+      onFiltersChange({ ...filters, yearFrom: value, yearTo: undefined });
+      return;
+    }
+    onFiltersChange({ ...filters, yearFrom: value });
+  }
+
+  function setYearTo(value: string) {
+    onFiltersChange({ ...filters, yearTo: value || undefined });
   }
 
   function removeFilter(key: FilterKey, value?: string) {
-    if (value === undefined || key !== 'genre') {
-      onFiltersChange({ ...filters, [key]: undefined });
+    if (key === 'genre' && value !== undefined) {
+      const next = (filters.genre ?? []).filter((item) => item !== value);
+      onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
       return;
     }
-    const next = (filters.genre ?? []).filter((item) => item !== value);
-    onFiltersChange({ ...filters, genre: next.length > 0 ? next : undefined });
+    if (key === 'yearFrom' && value?.startsWith('from:')) {
+      onFiltersChange({ ...filters, yearFrom: undefined });
+      return;
+    }
+    if (key === 'yearFrom' && value?.startsWith('to:')) {
+      onFiltersChange({ ...filters, yearTo: undefined });
+      return;
+    }
+    onFiltersChange({ ...filters, [key]: undefined });
   }
 
   function resetAll() {
@@ -249,6 +280,8 @@ export function SearchField({
 
   const genreLabel = (value: string) => genres.find((option) => option.value === value)?.label ?? value;
   const genreSelected = filters.genre ?? [];
+
+  const maxYear = new Date().getFullYear();
 
   const blocks: ChipBlock[] = [];
   if (filters.title) {
@@ -261,8 +294,15 @@ export function SearchField({
       values: genreSelected.map((value) => ({ value, label: genreLabel(value) })),
     });
   }
-  if (filters.year) {
-    blocks.push({ key: 'year', label: 'Год', values: [{ value: filters.year, label: filters.year }] });
+  if (filters.yearFrom || filters.yearTo) {
+    const values: ChipValue[] = [];
+    if (filters.yearFrom) {
+      values.push({ value: `from:${filters.yearFrom}`, label: filters.yearFrom, prefix: 'с ' });
+    }
+    if (filters.yearTo) {
+      values.push({ value: `to:${filters.yearTo}`, label: filters.yearTo, prefix: 'по ' });
+    }
+    blocks.push({ key: 'yearFrom', label: yearLabel, values });
   }
 
   return (
@@ -272,11 +312,6 @@ export function SearchField({
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Поиск</h2>
-        {onSearch ? (
-          <Button type="button" onClick={() => onSearch(filters)}>
-            Найти
-          </Button>
-        ) : null}
       </div>
 
       {onKindChange ? (
@@ -296,7 +331,7 @@ export function SearchField({
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span className="block text-muted-foreground">Название</span>
           <Input
@@ -308,10 +343,24 @@ export function SearchField({
 
         <GenreDropdown genres={genres} selected={genreSelected} onToggle={toggleGenre} />
 
-        <YearFilter value={filters.year ?? ''} years={years} onChange={setYear} />
+        <YearRangeFilter
+          from={filters.yearFrom ?? ''}
+          to={filters.yearTo ?? ''}
+          label={yearLabel}
+          maxYear={maxYear}
+          onFromChange={setYearFrom}
+          onToChange={setYearTo}
+          className="sm:col-span-2"
+        />
       </div>
 
       <FilterChips blocks={blocks} onRemove={removeFilter} onReset={resetAll} />
+
+      {onSearch ? (
+        <Button type="button" className="w-full" onClick={() => onSearch(filters)}>
+          Найти
+        </Button>
+      ) : null}
     </section>
   );
 }

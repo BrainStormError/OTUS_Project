@@ -6,7 +6,7 @@ export {
   listGenres,
   resetCatalogCache,
 } from './service';
-export { catalogKinds, catalogSearchQuery, catalogDetailQuery } from './schema';
+export { catalogKinds, catalogSearchQuery, catalogDetailQuery, catalogGenresQuery } from './schema';
 export { TtlCache } from './cache';
 export {
   mapSearchItem,
@@ -15,11 +15,17 @@ export {
   genreNames,
   posterUrlFromPath,
   yearFromDate,
+  inYearRange,
 } from './domain';
-export type { CatalogSearchQuery, CatalogDetailQuery } from './schema';
+export type {
+  CatalogSearchQuery,
+  CatalogDetailQuery,
+  CatalogGenresQuery,
+} from './schema';
 export type {
   CatalogMediaKind,
   CatalogSearchResult,
+  CatalogSearchPage,
   CatalogDetail,
   CatalogSearchInput,
   SaveMetadata,

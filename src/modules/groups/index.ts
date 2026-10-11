@@ -6,10 +6,50 @@ export {
   canViewGroup,
   hasGroupRating,
   joinGroup,
+  createGroup,
+  updateGroup,
+  changeGroupRole,
+  removeGroupMember,
+  leaveGroup,
+  dissolveGroup,
+  inviteToGroup,
+  listMyInvitations,
+  listGroupInvitations,
+  respondInvitation,
+  cancelInvitation,
   saveGroupRating,
   listGroupRatings,
 } from './service';
-export { joinGroupInput, groupRatingInput } from './schema';
-export type { JoinGroupInput, GroupRatingInput } from './schema';
-export type { GroupSummary, GroupMemberSummary } from './types';
+export {
+  joinGroupInput,
+  leaveGroupInput,
+  dissolveGroupInput,
+  groupRatingInput,
+  createGroupInput,
+  updateGroupInput,
+  groupRoleInput,
+  removeGroupMemberInput,
+  inviteToGroupInput,
+  respondInvitationInput,
+  invitationIdInput,
+} from './schema';
+export type {
+  JoinGroupInput,
+  LeaveGroupInput,
+  DissolveGroupInput,
+  GroupRatingInput,
+  CreateGroupInput,
+  UpdateGroupInput,
+  GroupRoleInput,
+  RemoveGroupMemberInput,
+  InviteToGroupInput,
+  RespondInvitationInput,
+  InvitationIdInput,
+} from './schema';
+export type {
+  GroupSummary,
+  GroupMemberSummary,
+  GroupInvitation,
+  GroupInvitationStatus,
+} from './types';
 export type { GroupRatingMember, GroupRatingSummary } from '@/modules/ratings';

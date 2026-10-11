@@ -14,7 +14,7 @@ export function AccountMenu({ name, tag }: { name: string; tag: string }) {
   const showTag = identity !== 'name';
 
   return (
-    <details className="relative">
+    <details className="relative min-w-0">
       <summary
         aria-label="Меню аккаунта"
         className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden"

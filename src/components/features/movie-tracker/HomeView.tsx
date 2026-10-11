@@ -2,15 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
-import {
-  deriveCatalogOptions,
-  genreOptionsFromCatalog,
-  mediaKey,
-  toMovie,
-} from './catalog-view';
+import { genreOptionsFromCatalog, mediaKey, toMovie } from './catalog-view';
 import type { FeedEvent } from './feed';
 import { MovieCard } from './MovieCard';
 import type { RatingPayload } from './RatingForm';
@@ -24,7 +20,7 @@ type SearchState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'done'; items: CatalogSearchResult[] };
+  | { status: 'done'; items: CatalogSearchResult[]; page: number; hasMore: boolean };
 
 export function HomeView({
   popularFilms = [],
@@ -42,10 +38,7 @@ export function HomeView({
   const [filters, setFilters] = useState<SearchFilters>({});
   const [search, setSearch] = useState<SearchState>({ status: 'idle' });
   const [genres, setGenres] = useState<FilterOption[]>([]);
-  const [yearsByKind, setYearsByKind] = useState<Record<MediaKind, number[]>>(() => ({
-    film: deriveCatalogOptions(popularFilms).years,
-    series: [],
-  }));
+  const [submitted, setSubmitted] = useState<SearchFilters>({});
 
   const [activeMovie, setActiveMovie] = useState<Movie | null>(null);
   const activeRecord = activeMovie
@@ -54,7 +47,7 @@ export function HomeView({
 
   useEffect(() => {
     let active = true;
-    void fetch('/api/genres')
+    void fetch(`/api/genres?kind=${kind}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { items?: { id: number; name: string }[] } | null) => {
         if (active && data?.items) {
@@ -65,44 +58,52 @@ export function HomeView({
     return () => {
       active = false;
     };
-  }, []);
+  }, [kind]);
 
   function changeKind(next: MediaKind) {
     setKind(next);
+    setGenres([]);
     setFilters({});
+    setSubmitted({});
     setSearch({ status: 'idle' });
-    if (yearsByKind[next].length === 0) {
-      void fetch(`/api/search?kind=${next}`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { items?: CatalogSearchResult[] } | null) => {
-          if (data?.items) {
-            setYearsByKind((previous) => ({
-              ...previous,
-              [next]: deriveCatalogOptions(data.items as CatalogSearchResult[]).years,
-            }));
-          }
-        })
-        .catch(() => undefined);
-    }
   }
 
-  async function runSearch(active: SearchFilters) {
-    setSearch({ status: 'loading' });
+  async function loadPage(active: SearchFilters, page: number) {
+    const append = page > 1;
+    setSearch((previous) =>
+      append && previous.status === 'done' ? previous : { status: 'loading' },
+    );
     try {
-      const params = new URLSearchParams({ kind });
+      const params = new URLSearchParams({ kind, page: String(page) });
       if (active.title) params.set('q', active.title);
       if (active.genre?.length) params.set('genre', active.genre.join(','));
-      if (active.year) params.set('year', active.year);
+      if (active.yearFrom) params.set('yearFrom', active.yearFrom);
+      if (active.yearTo) params.set('yearTo', active.yearTo);
       const response = await fetch(`/api/search?${params.toString()}`);
       if (!response.ok) {
         setSearch({ status: 'error' });
         return;
       }
-      const data = (await response.json()) as { items?: CatalogSearchResult[] };
-      setSearch({ status: 'done', items: data.items ?? [] });
+      const data = (await response.json()) as {
+        items?: CatalogSearchResult[];
+        page?: number;
+        hasMore?: boolean;
+      };
+      const items = data.items ?? [];
+      setSearch((previous) => ({
+        status: 'done',
+        items: append && previous.status === 'done' ? [...previous.items, ...items] : items,
+        page: data.page ?? page,
+        hasMore: Boolean(data.hasMore),
+      }));
     } catch {
       setSearch({ status: 'error' });
     }
+  }
+
+  function runSearch(active: SearchFilters) {
+    setSubmitted(active);
+    void loadPage(active, 1);
   }
 
   function saveRecord(movie: Movie, payload: RatingPayload) {
@@ -116,8 +117,6 @@ export function HomeView({
     });
     setActiveMovie(null);
   }
-
-  const activeOptions = { genres, years: yearsByKind[kind] };
 
   return (
     <div className="space-y-8">
@@ -133,8 +132,7 @@ export function HomeView({
         onFiltersChange={setFilters}
         onSearch={runSearch}
         onReset={() => setSearch({ status: 'idle' })}
-        genres={activeOptions.genres}
-        years={activeOptions.years}
+        genres={genres}
         kind={kind}
         onKindChange={changeKind}
       />
@@ -192,19 +190,32 @@ export function HomeView({
                   description="Попробуйте изменить запрос или сбросить фильтры."
                 />
               ) : (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                  {search.items.map((item) => {
-                    const movie = toMovie(item);
-                    return (
-                      <MovieCard
-                        key={mediaKey(movie)}
-                        movie={movie}
-                        watched={watchedIds.has(mediaKey(movie))}
-                        onToggleWatched={() => setActiveMovie(movie)}
-                      />
-                    );
-                  })}
-                </div>
+                <>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    {search.items.map((item) => {
+                      const movie = toMovie(item);
+                      return (
+                        <MovieCard
+                          key={mediaKey(movie)}
+                          movie={movie}
+                          watched={watchedIds.has(mediaKey(movie))}
+                          onToggleWatched={() => setActiveMovie(movie)}
+                        />
+                      );
+                    })}
+                  </div>
+                  {search.hasMore ? (
+                    <div className="flex justify-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void loadPage(submitted, search.page + 1)}
+                      >
+                        Показать ещё
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
               )}
             </>
           )}

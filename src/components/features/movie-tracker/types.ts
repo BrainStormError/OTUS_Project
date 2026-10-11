@@ -66,7 +66,8 @@ export type Group = {
 export type SearchFilters = {
   title?: string;
   genre?: string[];
-  year?: string;
+  yearFrom?: string;
+  yearTo?: string;
 };
 
 export type FilterKey = keyof SearchFilters;

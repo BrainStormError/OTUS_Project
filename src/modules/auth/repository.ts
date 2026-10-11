@@ -1,4 +1,5 @@
 import { query } from '@/core/db/pool';
+import { withTransaction } from '@/core/db/transaction';
 
 import type { UserRow } from './types';
 
@@ -140,6 +141,91 @@ export async function updatePrivacy(
   );
   const row = rows[0];
   return row ? mapUser(row) : null;
+}
+
+export type IdentityUpdateOutcome =
+  | { status: 'updated'; user: UserRow }
+  | { status: 'not_found' }
+  | { status: 'handle_taken' }
+  | { status: 'cooldown'; availableAt: Date };
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === '23505'
+  );
+}
+
+// Updates the owner's display name and tag. The tag change is guarded by a
+// one-month cooldown evaluated inside the same transaction as a conditional
+// UPDATE (not just a pre-read), so a concurrent change cannot slip past it.
+// Submitting the current tag is a no-op that leaves the cooldown untouched.
+export async function updateIdentity(
+  userId: number,
+  input: { name?: string; handle?: string },
+): Promise<IdentityUpdateOutcome> {
+  try {
+    return await withTransaction(async (tx) => {
+      const currentRows = await tx.query<UserDbRow & { handle_changed_at: Date | null }>(
+        `SELECT ${COLUMNS}, handle_changed_at FROM users WHERE id = $1 FOR UPDATE`,
+        [userId],
+      );
+      const current = currentRows.rows[0];
+      if (!current) {
+        return { status: 'not_found' };
+      }
+
+      const changingHandle = input.handle !== undefined && input.handle !== current.handle;
+
+      if (!changingHandle) {
+        const updated = await tx.query<UserDbRow>(
+          `UPDATE users
+              SET name = COALESCE($2, name),
+                  updated_at = now()
+            WHERE id = $1
+            RETURNING ${COLUMNS}`,
+          [userId, input.name ?? null],
+        );
+        const row = updated.rows[0];
+        if (!row) {
+          return { status: 'not_found' };
+        }
+        return { status: 'updated', user: mapUser(row) };
+      }
+
+      const updated = await tx.query<UserDbRow>(
+        `UPDATE users
+            SET name = COALESCE($2, name),
+                handle = $3,
+                handle_changed_at = now(),
+                updated_at = now()
+          WHERE id = $1
+            AND (handle_changed_at IS NULL OR handle_changed_at <= now() - interval '1 month')
+          RETURNING ${COLUMNS}`,
+        [userId, input.name ?? null, input.handle],
+      );
+      const row = updated.rows[0];
+      if (!row) {
+        const available = await tx.query<{ available_at: Date }>(
+          `SELECT handle_changed_at + interval '1 month' AS available_at
+             FROM users WHERE id = $1`,
+          [userId],
+        );
+        const availableAt =
+          available.rows[0]?.available_at ??
+          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        return { status: 'cooldown', availableAt };
+      }
+      return { status: 'updated', user: mapUser(row) };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { status: 'handle_taken' };
+    }
+    throw error;
+  }
 }
 
 // Resolves only accounts the demo path itself provisioned (provider `demo`,

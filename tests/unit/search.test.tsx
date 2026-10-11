@@ -1,11 +1,12 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HomeView } from '@/components/features/movie-tracker/HomeView';
 import { SearchField } from '@/components/features/movie-tracker/SearchField';
 import type { FeedEvent } from '@/components/features/movie-tracker/feed';
-import type { FilterOption } from '@/components/features/movie-tracker/types';
+import type { FilterOption, SearchFilters } from '@/components/features/movie-tracker/types';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
 const genres: FilterOption[] = [
@@ -13,7 +14,6 @@ const genres: FilterOption[] = [
   { value: 'фантастика', label: 'Фантастика' },
   { value: 'триллер', label: 'Триллер' },
 ];
-const years = [2010, 1999];
 
 function item(over: Partial<CatalogSearchResult> & { externalId: string }): CatalogSearchResult {
   return {
@@ -60,10 +60,25 @@ const feedEvents: FeedEvent[] = [
   },
 ];
 
-function mockSearch(items: CatalogSearchResult[] = [], genres: { id: number; name: string }[] = []) {
+type PageEntry = { items: CatalogSearchResult[]; hasMore?: boolean };
+
+function stubApi({
+  genres: genreItems = [],
+  pages = {},
+}: {
+  genres?: { id: number; name: string }[];
+  pages?: Record<number, PageEntry>;
+} = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    const body = url.includes('/api/genres') ? { items: genres } : { items };
+    const url = new URL(String(input), 'http://localhost');
+    const body =
+      url.pathname === '/api/genres'
+        ? { items: genreItems }
+        : (() => {
+            const page = Number(url.searchParams.get('page') ?? '1');
+            const entry = pages[page] ?? { items: [] };
+            return { items: entry.items, page, hasMore: Boolean(entry.hasMore) };
+          })();
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -83,23 +98,22 @@ async function openFilter(label: string) {
 }
 
 describe('SearchField filters', () => {
-  it('submits the active filters', async () => {
+  it('submits the active filters through a full-width button below the grid', async () => {
     const onSearch = vi.fn();
     render(
-      <SearchField
-        filters={{ title: 'Начало' }}
-        onFiltersChange={() => undefined}
-        onSearch={onSearch}
-        genres={genres}
-        years={years}
-      />,
+      <SearchField filters={{ title: 'Начало' }} onFiltersChange={() => undefined} onSearch={onSearch} genres={genres} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+    const button = screen.getByRole('button', { name: 'Найти' });
+    expect(button.className).toContain('w-full');
+    const header = screen.getByText('Поиск').parentElement!;
+    expect(within(header).queryByRole('button', { name: 'Найти' })).not.toBeInTheDocument();
+
+    await userEvent.click(button);
     expect(onSearch).toHaveBeenCalledWith({ title: 'Начало' });
   });
 
   it('renders the panel content without any activation and no standalone search field', () => {
-    render(<SearchField filters={{}} onFiltersChange={() => undefined} genres={genres} years={years} />);
+    render(<SearchField filters={{}} onFiltersChange={() => undefined} genres={genres} />);
     expect(screen.getByText('Поиск')).toBeInTheDocument();
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
     expect(screen.getByText('Жанр')).toBeInTheDocument();
@@ -109,10 +123,9 @@ describe('SearchField filters', () => {
     const onFiltersChange = vi.fn();
     render(
       <SearchField
-        filters={{ genre: ['драма', 'фантастика'] }}
+        filters={{ genre: ['драма', 'фантастика'], yearFrom: '2000', yearTo: '2010' }}
         onFiltersChange={onFiltersChange}
         genres={genres}
-        years={years}
       />,
     );
     const chips = screen.getByTestId('filter-chips');
@@ -121,22 +134,115 @@ describe('SearchField filters', () => {
     expect(within(genreBlock).getByText('Драма')).toBeInTheDocument();
     expect(within(genreBlock).getByText('Фантастика')).toBeInTheDocument();
 
+    const yearBlock = within(chips).getByTestId('filter-block-yearFrom');
+    expect(within(yearBlock).getByText('Год:')).toBeInTheDocument();
+    expect(within(yearBlock).getByText('с 2000')).toBeInTheDocument();
+    expect(within(yearBlock).getByText('по 2010')).toBeInTheDocument();
+
     await userEvent.click(
       within(genreBlock).getByRole('button', { name: 'Удалить фильтр Жанр: Фантастика' }),
     );
-    expect(onFiltersChange).toHaveBeenCalledWith({ genre: ['драма'] });
+    expect(onFiltersChange).toHaveBeenCalledWith({
+      genre: ['драма'],
+      yearFrom: '2000',
+      yearTo: '2010',
+    });
 
     await userEvent.click(within(chips).getByRole('button', { name: 'Сбросить' }));
     expect(onFiltersChange).toHaveBeenCalledWith({});
   });
 
-  it('derives genre and year options from the provided options and omits actor/director filters', async () => {
-    render(<SearchField filters={{}} onFiltersChange={() => undefined} genres={genres} years={years} />);
+  it('removes either year bound individually while the other filters stay', async () => {
+    const onFiltersChange = vi.fn();
+    const { rerender } = render(
+      <SearchField
+        filters={{ genre: ['драма'], yearFrom: '2000', yearTo: '2010' }}
+        onFiltersChange={onFiltersChange}
+        genres={genres}
+      />,
+    );
+    const chips = screen.getByTestId('filter-chips');
+    await userEvent.click(within(chips).getByRole('button', { name: 'Удалить фильтр Год: 2000' }));
+    expect(onFiltersChange).toHaveBeenCalledWith({
+      genre: ['драма'],
+      yearFrom: undefined,
+      yearTo: '2010',
+    });
+
+    rerender(
+      <SearchField
+        filters={{ genre: ['драма'], yearTo: '2010' }}
+        onFiltersChange={onFiltersChange}
+        genres={genres}
+      />,
+    );
+    await userEvent.click(
+      within(screen.getByTestId('filter-chips')).getByRole('button', { name: 'Удалить фильтр Год: 2010' }),
+    );
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ genre: ['драма'], yearTo: undefined });
+  });
+
+  it('renders a manual year input with "с"/"по" hints on its own row and no increment or decrement controls', () => {
+    render(<SearchField filters={{}} onFiltersChange={() => undefined} genres={genres} />);
+    expect((screen.getByLabelText('Год (с)') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Год (по)') as HTMLInputElement).value).toBe('');
+    expect(screen.getByPlaceholderText('с')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('по')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Увеличить год/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Уменьшить год/ })).not.toBeInTheDocument();
+
+    const grid = screen.getByText('Название').closest('label')!.parentElement!;
+    expect(grid.className).toContain('sm:grid-cols-2');
+    const yearRange = screen.getByText('Год').parentElement!;
+    expect(yearRange.className).toContain('sm:col-span-2');
+    expect(screen.getByLabelText('Год (с)').parentElement!.className).toContain('sm:grid-cols-2');
+  });
+
+  it('resets a year bound typed above the current calendar year on blur and leaves a value within the cap', async () => {
+    function Harness() {
+      const [filters, setFilters] = useState<SearchFilters>({});
+      return <SearchField filters={filters} onFiltersChange={setFilters} genres={genres} />;
+    }
+    const currentYear = new Date().getFullYear();
+    render(<Harness />);
+    const from = screen.getByLabelText('Год (с)') as HTMLInputElement;
+    expect(from).toHaveAttribute('max', String(currentYear));
+
+    await userEvent.type(from, String(currentYear + 1));
+    expect(from.value).toBe(String(currentYear + 1));
+
+    await userEvent.tab();
+    expect(from.value).toBe(String(currentYear));
+
+    await userEvent.clear(from);
+    await userEvent.type(from, String(currentYear - 1));
+    await userEvent.tab();
+    expect(from.value).toBe(String(currentYear - 1));
+  });
+
+  it('clears the upper bound when the lower bound is entered above it and keeps it otherwise', () => {
+    const onFiltersChange = vi.fn();
+    const { rerender } = render(
+      <SearchField filters={{ yearTo: '2000' }} onFiltersChange={onFiltersChange} genres={genres} />,
+    );
+    fireEvent.change(screen.getByLabelText('Год (с)'), { target: { value: '2010' } });
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ yearFrom: '2010', yearTo: undefined });
+
+    rerender(
+      <SearchField filters={{ yearTo: '2010' }} onFiltersChange={onFiltersChange} genres={genres} />,
+    );
+    fireEvent.change(screen.getByLabelText('Год (с)'), { target: { value: '2000' } });
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ yearFrom: '2000', yearTo: '2010' });
+  });
+
+  it('derives genre options from the provided options and omits actor/director filters', async () => {
+    render(<SearchField filters={{}} onFiltersChange={() => undefined} genres={genres} />);
 
     const genre = await openFilter('Жанр');
     expect(within(genre).getByRole('checkbox', { name: 'Драма' })).toBeInTheDocument();
 
-    expect(screen.getByLabelText('Год').tagName).toBe('INPUT');
+    expect(screen.getByLabelText('Год (с)').tagName).toBe('INPUT');
+    expect(screen.getByLabelText('Год (по)').tagName).toBe('INPUT');
     expect(screen.queryByText('Актёр')).not.toBeInTheDocument();
     expect(screen.queryByText('Режиссёр')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Название').tagName).toBe('INPUT');
@@ -145,24 +251,14 @@ describe('SearchField filters', () => {
   it('adds and removes several values within one filter', async () => {
     const onFiltersChange = vi.fn();
     const { rerender } = render(
-      <SearchField
-        filters={{}}
-        onFiltersChange={onFiltersChange}
-        genres={genres}
-        years={years}
-      />,
+      <SearchField filters={{}} onFiltersChange={onFiltersChange} genres={genres} />,
     );
     const genre = await openFilter('Жанр');
     await userEvent.click(within(genre).getByRole('checkbox', { name: 'Драма' }));
     expect(onFiltersChange).toHaveBeenLastCalledWith({ genre: ['драма'] });
 
     rerender(
-      <SearchField
-        filters={{ genre: ['драма'] }}
-        onFiltersChange={onFiltersChange}
-        genres={genres}
-        years={years}
-      />,
+      <SearchField filters={{ genre: ['драма'] }} onFiltersChange={onFiltersChange} genres={genres} />,
     );
     const next = await openFilter('Жанр');
     await userEvent.click(within(next).getByRole('checkbox', { name: 'Триллер' }));
@@ -173,63 +269,11 @@ describe('SearchField filters', () => {
         filters={{ genre: ['драма', 'триллер'] }}
         onFiltersChange={onFiltersChange}
         genres={genres}
-        years={years}
       />,
     );
     const last = await openFilter('Жанр');
     await userEvent.click(within(last).getByRole('checkbox', { name: 'Драма' }));
     expect(onFiltersChange).toHaveBeenLastCalledWith({ genre: ['триллер'] });
-  });
-
-  it('removes the year chip through its control while the other filters stay', async () => {
-    const onFiltersChange = vi.fn();
-    render(
-      <SearchField
-        filters={{ genre: ['драма'], year: '2010' }}
-        onFiltersChange={onFiltersChange}
-        genres={genres}
-        years={years}
-      />,
-    );
-    const chips = screen.getByTestId('filter-chips');
-    await userEvent.click(
-      within(chips).getByRole('button', { name: 'Удалить фильтр Год: 2010' }),
-    );
-    expect(onFiltersChange).toHaveBeenCalledWith({ genre: ['драма'] });
-  });
-
-  it('selects the current year on the first step from the empty state', async () => {
-    const onFiltersChange = vi.fn();
-    const currentYear = new Date().getFullYear();
-    render(
-      <SearchField filters={{}} onFiltersChange={onFiltersChange} genres={genres} years={years} />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Увеличить год' }));
-    expect(onFiltersChange).toHaveBeenLastCalledWith({ year: String(currentYear) });
-  });
-
-  it('decrements from the empty state to the current year', async () => {
-    const onFiltersChange = vi.fn();
-    const currentYear = new Date().getFullYear();
-    render(
-      <SearchField filters={{}} onFiltersChange={onFiltersChange} genres={genres} years={years} />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Уменьшить год' }));
-    expect(onFiltersChange).toHaveBeenLastCalledWith({ year: String(currentYear) });
-  });
-
-  it('accepts a year outside the available data', async () => {
-    const onFiltersChange = vi.fn();
-    render(
-      <SearchField
-        filters={{ year: '2050' }}
-        onFiltersChange={onFiltersChange}
-        genres={genres}
-        years={years}
-      />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Увеличить год' }));
-    expect(onFiltersChange).toHaveBeenLastCalledWith({ year: '2051' });
   });
 });
 
@@ -255,7 +299,7 @@ describe('HomeView', () => {
   });
 
   it('shows no results while editing filters and results only after submit', async () => {
-    mockSearch([item({ externalId: '603', title: 'Матрица' })]);
+    stubApi({ pages: { 1: { items: [item({ externalId: '603', title: 'Матрица' })] } } });
     render(<HomeView popularFilms={popularFilms} />);
     await userEvent.type(screen.getByLabelText('Название'), 'Матрица');
     expect(screen.queryByRole('region', { name: 'Результаты поиска' })).not.toBeInTheDocument();
@@ -267,7 +311,9 @@ describe('HomeView', () => {
   });
 
   it('offers a kind selector that scopes the search', async () => {
-    const fetchMock = mockSearch([item({ externalId: '1396', kind: 'series', title: 'Во все тяжкие' })]);
+    const fetchMock = stubApi({
+      pages: { 1: { items: [item({ externalId: '1396', kind: 'series', title: 'Во все тяжкие' })] } },
+    });
     render(<HomeView popularFilms={popularFilms} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Сериалы' }));
@@ -280,19 +326,55 @@ describe('HomeView', () => {
   });
 
   it('presents an empty state when a search matches nothing', async () => {
-    mockSearch([]);
+    stubApi({ pages: { 1: { items: [] } } });
     render(<HomeView popularFilms={popularFilms} />);
     await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
     expect(await screen.findByText('Ничего не найдено')).toBeInTheDocument();
   });
 
-  it('offers the full stored genre catalog, not only genres in the popular results', async () => {
-    mockSearch([], [
-      { id: 28, name: 'Боевик' },
-      { id: 878, name: 'Фантастика' },
-    ]);
+  it('appends the next page and resets to the first page on a new search', async () => {
+    stubApi({
+      pages: {
+        1: { items: [item({ externalId: '1', title: 'Первый' })], hasMore: true },
+        2: { items: [item({ externalId: '2', title: 'Второй' })], hasMore: false },
+      },
+    });
+    render(<HomeView popularFilms={popularFilms} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+    const results = await screen.findByRole('region', { name: 'Результаты поиска' });
+    expect(within(results).getByText('Первый')).toBeInTheDocument();
+
+    await userEvent.click(within(results).getByRole('button', { name: 'Показать ещё' }));
+    expect(await within(results).findByText('Второй')).toBeInTheDocument();
+    expect(within(results).getByText('Первый')).toBeInTheDocument();
+    expect(within(results).queryByRole('button', { name: 'Показать ещё' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('region', { name: 'Результаты поиска' })).queryByText('Второй'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('requests the kind-scoped genre catalog for the selected kind', async () => {
+    const fetchMock = stubApi({
+      genres: [
+        { id: 28, name: 'Боевик' },
+        { id: 878, name: 'Фантастика' },
+      ],
+    });
     render(<HomeView popularFilms={popularFilms} />);
     const genre = await openFilter('Жанр');
     expect(await within(genre).findByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Сериалы' }));
+    const seriesGenre = await openFilter('Жанр');
+    expect(await within(seriesGenre).findByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.some((url) => url.includes('/api/genres?kind=film'))).toBe(true);
+    expect(urls.some((url) => url.includes('/api/genres?kind=series'))).toBe(true);
   });
 });

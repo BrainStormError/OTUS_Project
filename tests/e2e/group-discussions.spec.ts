@@ -50,3 +50,25 @@ test('member rates a film, attaches a discussion and sees it across tabs', async
   const activity = page.getByTestId('group-activity');
   await expect(activity.getByRole('link', { name: 'К обсуждению' }).first()).toBeVisible();
 });
+
+test('keeps the group shell in place and streams the tab skeleton', async ({ page }) => {
+  await login(page);
+  await page.goto(`/groups/${GROUP_ID}?tab=discussions`);
+
+  const heading = page.getByRole('heading', { level: 1 });
+  const tablist = page.getByRole('tablist');
+  await expect(heading).toBeVisible();
+  await expect(tablist).toBeVisible();
+
+  // The streamed document for a tab renders the shell and its skeleton before the content arrives.
+  const streamed = await page.request.get(`/groups/${GROUP_ID}?tab=ratings`);
+  expect(streamed.ok()).toBeTruthy();
+  const html = await streamed.text();
+  expect(html).toContain('group-tab-skeleton');
+  expect(html).toContain('data-tab="ratings"');
+
+  // Switching tabs keeps the header and tab list visible.
+  await page.getByRole('tab', { name: 'Оценки' }).click();
+  await expect(heading).toBeVisible();
+  await expect(tablist).toBeVisible();
+});

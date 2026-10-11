@@ -13,14 +13,53 @@ import {
 } from '@/modules/ratings';
 
 import {
+  countGroupAdmins,
+  deleteGroup,
+  deleteGroupActivity,
+  deleteGroupMember,
+  deletePendingInvitation,
   findGroupById,
+  findInvitationById,
   getGroupRole as getGroupRoleRepository,
+  insertGroup,
   insertGroupMember,
+  isGroupMember,
   listDiscoverableGroups,
   listGroupsForUser,
+  listPendingInvitationsForGroup,
+  listPendingInvitationsForUser,
+  resolveTagIds,
+  setInvitationStatus,
+  updateGroupMemberRole,
+  updateGroupRow,
+  upsertInvitation,
+  userExists,
 } from './repository';
-import type { GroupRatingInput, JoinGroupInput } from './schema';
-import type { GroupSummary } from './types';
+import type {
+  CreateGroupInput,
+  DissolveGroupInput,
+  GroupRatingInput,
+  GroupRoleInput,
+  InviteToGroupInput,
+  JoinGroupInput,
+  LeaveGroupInput,
+  RemoveGroupMemberInput,
+  RespondInvitationInput,
+  UpdateGroupInput,
+} from './schema';
+import type { GroupInvitation, GroupSummary } from './types';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: string }).code === '23505'
+  );
+}
+
+function cleanDescription(description: string | undefined): string | null {
+  return description && description.length > 0 ? description : null;
+}
 
 export async function getGroups(actor: Actor): Promise<Result<GroupSummary[]>> {
   return ok(await listGroupsForUser(actor.id));
@@ -104,6 +143,256 @@ export async function joinGroup(
     return err('NOT_FOUND', 'Группа не найдена');
   }
   return ok(updated);
+}
+
+export async function leaveGroup(
+  actor: Actor,
+  input: LeaveGroupInput,
+): Promise<Result<null>> {
+  const role = await getGroupRoleRepository(input.groupId, actor.id);
+  if (!can(actor, 'group:leave', { groupRole: role })) {
+    return err('FORBIDDEN', 'Покинуть группу может только участник, не администратор');
+  }
+
+  return withTransaction(async (tx) => {
+    const removed = await deleteGroupMember(tx, input.groupId, actor.id);
+    if (!removed) {
+      return err('NOT_FOUND', 'Участник не найден');
+    }
+    return ok(null);
+  });
+}
+
+export async function createGroup(
+  actor: Actor,
+  input: CreateGroupInput,
+): Promise<Result<GroupSummary>> {
+  if (!can(actor, 'group:create')) {
+    return err('FORBIDDEN', 'Нет прав');
+  }
+
+  try {
+    const groupId = await withTransaction(async (tx) => {
+      const tagIds = input.tags ? await resolveTagIds(tx, input.tags) : [];
+      const id = await insertGroup(tx, {
+        name: input.name,
+        description: cleanDescription(input.description),
+        restricted: input.restricted ?? false,
+        tagIds,
+      });
+      await insertGroupMember(tx, id, actor.id, 'admin');
+      return id;
+    });
+
+    const group = await findGroupById(groupId);
+    if (!group) {
+      return err('INTERNAL', 'Не удалось создать группу');
+    }
+    return ok(group);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return err('CONFLICT', 'Группа с таким названием уже существует');
+    }
+    throw error;
+  }
+}
+
+export async function updateGroup(
+  actor: Actor,
+  input: UpdateGroupInput,
+): Promise<Result<GroupSummary>> {
+  const role = await getGroupRoleRepository(input.groupId, actor.id);
+  if (!can(actor, 'group:update', { groupRole: role })) {
+    return err('FORBIDDEN', 'Редактировать группу может только администратор');
+  }
+
+  try {
+    await withTransaction(async (tx) => {
+      const tagIds = input.tags ? await resolveTagIds(tx, input.tags) : undefined;
+      await updateGroupRow(tx, input.groupId, {
+        name: input.name,
+        description: input.description,
+        restricted: input.restricted,
+        tagIds,
+      });
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return err('CONFLICT', 'Группа с таким названием уже существует');
+    }
+    throw error;
+  }
+
+  const group = await findGroupById(input.groupId);
+  if (!group) {
+    return err('NOT_FOUND', 'Группа не найдена');
+  }
+  return ok(group);
+}
+
+export async function changeGroupRole(
+  actor: Actor,
+  input: GroupRoleInput,
+): Promise<Result<null>> {
+  const role = await getGroupRoleRepository(input.groupId, actor.id);
+  if (!can(actor, 'group:manage', { groupRole: role })) {
+    return err('FORBIDDEN', 'Управлять участниками может только администратор');
+  }
+
+  return withTransaction(async (tx) => {
+    if (input.role === 'member') {
+      const targetRole = await getGroupRoleRepository(input.groupId, input.userId);
+      if (targetRole === 'admin' && (await countGroupAdmins(input.groupId, tx)) <= 1) {
+        return err('CONFLICT', 'Нельзя понизить последнего администратора');
+      }
+    }
+    const updated = await updateGroupMemberRole(tx, input.groupId, input.userId, input.role);
+    if (!updated) {
+      return err('NOT_FOUND', 'Участник не найден');
+    }
+    return ok(null);
+  });
+}
+
+export async function removeGroupMember(
+  actor: Actor,
+  input: RemoveGroupMemberInput,
+): Promise<Result<null>> {
+  const role = await getGroupRoleRepository(input.groupId, actor.id);
+  if (!can(actor, 'group:manage', { groupRole: role })) {
+    return err('FORBIDDEN', 'Управлять участниками может только администратор');
+  }
+
+  return withTransaction(async (tx) => {
+    if (input.userId === actor.id) {
+      return err('FORBIDDEN', 'Нельзя удалить себя из группы');
+    }
+    const targetRole = await getGroupRoleRepository(input.groupId, input.userId);
+    if (targetRole === 'admin' && (await countGroupAdmins(input.groupId, tx)) <= 1) {
+      return err('CONFLICT', 'Нельзя удалить последнего администратора');
+    }
+    const removed = await deleteGroupMember(tx, input.groupId, input.userId);
+    if (!removed) {
+      return err('NOT_FOUND', 'Участник не найден');
+    }
+    return ok(null);
+  });
+}
+
+export async function dissolveGroup(
+  actor: Actor,
+  input: DissolveGroupInput,
+): Promise<Result<null>> {
+  const role = await getGroupRoleRepository(input.groupId, actor.id);
+  if (!can(actor, 'group:delete', { groupRole: role })) {
+    return err('FORBIDDEN', 'Распустить группу может только администратор');
+  }
+
+  return withTransaction(async (tx) => {
+    await deleteGroupActivity(tx, input.groupId);
+    const removed = await deleteGroup(tx, input.groupId);
+    if (!removed) {
+      return err('NOT_FOUND', 'Группа не найдена');
+    }
+    return ok(null);
+  });
+}
+
+export async function inviteToGroup(
+  actor: Actor,
+  input: InviteToGroupInput,
+): Promise<Result<GroupInvitation>> {
+  const role = await getGroupRoleRepository(input.groupId, actor.id);
+  if (!can(actor, 'group:invite', { groupRole: role })) {
+    return err('FORBIDDEN', 'Приглашать может только администратор группы');
+  }
+  if (!(await userExists(input.inviteeId))) {
+    return err('NOT_FOUND', 'Пользователь не найден');
+  }
+  if (await isGroupMember(input.groupId, input.inviteeId)) {
+    return err('CONFLICT', 'Пользователь уже участник группы');
+  }
+
+  return withTransaction(async (tx) =>
+    ok(await upsertInvitation(tx, input.groupId, actor.id, input.inviteeId)),
+  );
+}
+
+export async function listMyInvitations(actor: Actor): Promise<Result<GroupInvitation[]>> {
+  return ok(await listPendingInvitationsForUser(actor.id));
+}
+
+export async function listGroupInvitations(
+  actor: Actor,
+  groupId: number,
+): Promise<Result<GroupInvitation[]>> {
+  const role = await getGroupRoleRepository(groupId, actor.id);
+  if (!can(actor, 'group:invite', { groupRole: role })) {
+    return err('FORBIDDEN', 'Нет прав');
+  }
+  return ok(await listPendingInvitationsForGroup(groupId));
+}
+
+export async function respondInvitation(
+  actor: Actor,
+  input: RespondInvitationInput,
+): Promise<Result<GroupInvitation>> {
+  const invitation = await findInvitationById(input.invitationId);
+  if (!invitation) {
+    return err('NOT_FOUND', 'Приглашение не найдено');
+  }
+  if (invitation.inviteeId !== actor.id) {
+    return err('FORBIDDEN', 'Нет прав');
+  }
+  if (invitation.status !== 'pending') {
+    return err('CONFLICT', 'Приглашение уже обработано');
+  }
+
+  if (input.decision === 'decline') {
+    return withTransaction(async (tx) => {
+      const updated = await setInvitationStatus(tx, invitation.id, actor.id, 'declined');
+      if (!updated) {
+        return err('CONFLICT', 'Приглашение уже обработано');
+      }
+      return ok(updated);
+    });
+  }
+
+  return withTransaction(async (tx) => {
+    const updated = await setInvitationStatus(tx, invitation.id, actor.id, 'accepted');
+    if (!updated) {
+      return err('CONFLICT', 'Приглашение уже обработано');
+    }
+    await insertGroupMember(tx, updated.groupId, actor.id, 'member');
+    await recordEvent(tx, {
+      actorId: actor.id,
+      kind: 'group_joined',
+      groupId: updated.groupId,
+    });
+    return ok(updated);
+  });
+}
+
+export async function cancelInvitation(
+  actor: Actor,
+  input: { invitationId: number },
+): Promise<Result<null>> {
+  const invitation = await findInvitationById(input.invitationId);
+  if (!invitation) {
+    return err('NOT_FOUND', 'Приглашение не найдено');
+  }
+  const role = await getGroupRoleRepository(invitation.groupId, actor.id);
+  if (!can(actor, 'group:invite', { groupRole: role })) {
+    return err('FORBIDDEN', 'Нет прав');
+  }
+
+  return withTransaction(async (tx) => {
+    const deleted = await deletePendingInvitation(tx, invitation.id, invitation.groupId);
+    if (!deleted) {
+      return err('CONFLICT', 'Приглашение уже обработано');
+    }
+    return ok(null);
+  });
 }
 
 export async function saveGroupRating(

@@ -15,6 +15,22 @@ export function yearFromDate(date: string | undefined | null): number | null {
   return Number.isInteger(year) && year >= 1800 && year <= 2200 ? year : null;
 }
 
+export function inYearRange(year: number | null, yearFrom?: number, yearTo?: number): boolean {
+  if (yearFrom === undefined && yearTo === undefined) {
+    return true;
+  }
+  if (year === null) {
+    return false;
+  }
+  if (yearFrom !== undefined && year < yearFrom) {
+    return false;
+  }
+  if (yearTo !== undefined && year > yearTo) {
+    return false;
+  }
+  return true;
+}
+
 export function selectKnownGenreIds(reported: readonly number[], known: readonly number[]): number[] {
   const knownSet = new Set(known);
   const seen = new Set<number>();

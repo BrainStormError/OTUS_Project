@@ -6,6 +6,12 @@ import { listPersonalRatings, type RatingEntry } from '@/modules/ratings';
 
 import type { ProfileRead, ProfileStats } from './types';
 
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+function withinRecentWindow(entry: RatingEntry, now: number): boolean {
+  return new Date(entry.createdAt).getTime() >= now - RECENT_WINDOW_MS;
+}
+
 export function computeProfileStats(entries: RatingEntry[]): ProfileStats {
   const genreMap = new Map<string, number>();
   const yearMap = new Map<number, number>();
@@ -35,6 +41,7 @@ async function buildProfile(user: UserRow, viewerId: number | null): Promise<Pro
 
   const hidden = profileRestricted || statsRestricted;
   const entries = hidden ? [] : await listPersonalRatings(user.id);
+  const now = Date.now();
 
   return {
     identity: {
@@ -48,7 +55,7 @@ async function buildProfile(user: UserRow, viewerId: number | null): Promise<Pro
     profileRestricted,
     statsRestricted,
     stats: computeProfileStats(entries),
-    recent: profileRestricted ? [] : entries,
+    recent: profileRestricted ? [] : entries.filter((entry) => withinRecentWindow(entry, now)),
   };
 }
 
