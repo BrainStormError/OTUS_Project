@@ -22,6 +22,15 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: {
+    // Reuse the client Router Cache for dynamic routes so returning to a
+    // recently visited section or moving back/forward does not trigger a new
+    // full server render. `static` stays at the default to keep prefetch useful.
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
+  },
   async headers() {
     return [
       {

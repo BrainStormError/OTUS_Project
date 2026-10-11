@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { FeedProvider } from '@/components/features/movie-tracker/feed-stream';
 import { HomeView } from '@/components/features/movie-tracker/HomeView';
 import { SearchField } from '@/components/features/movie-tracker/SearchField';
 import type { FeedEvent } from '@/components/features/movie-tracker/feed';
@@ -278,8 +279,23 @@ describe('SearchField filters', () => {
 });
 
 describe('HomeView', () => {
-  it('shows the server-fed social feed and popular films instead of results before a search', () => {
-    render(<HomeView popularFilms={popularFilms} initialFeed={feedEvents} />);
+  it('shows the social feed and popular films instead of results before a search', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        const body = url.pathname === '/api/feed' ? { items: feedEvents } : { items: [] };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+    render(
+      <FeedProvider>
+        <HomeView popularFilms={popularFilms} />
+      </FeedProvider>,
+    );
     expect(screen.getByRole('heading', { name: 'Лента активности' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Популярное' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Результаты поиска' })).not.toBeInTheDocument();
@@ -287,7 +303,7 @@ describe('HomeView', () => {
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
     expect(screen.getByText('Начало')).toBeInTheDocument();
 
-    const feed = screen.getByTestId('social-feed');
+    const feed = await screen.findByTestId('social-feed');
     expect(within(feed).getByText('Тёмный рыцарь')).toBeInTheDocument();
     expect(within(feed).getAllByText(/Мария/).length).toBeGreaterThan(0);
     expect(within(feed).getByText('Во все тяжкие')).toBeInTheDocument();
@@ -358,14 +374,17 @@ describe('HomeView', () => {
     );
   });
 
-  it('requests the kind-scoped genre catalog for the selected kind', async () => {
-    const fetchMock = stubApi({
-      genres: [
-        { id: 28, name: 'Боевик' },
-        { id: 878, name: 'Фантастика' },
-      ],
-    });
-    render(<HomeView popularFilms={popularFilms} />);
+  it('draws genre options from the props without a client request', async () => {
+    const fetchMock = stubApi();
+    render(
+      <HomeView
+        popularFilms={popularFilms}
+        genres={[
+          { value: '28', label: 'Боевик' },
+          { value: '878', label: 'Фантастика' },
+        ]}
+      />,
+    );
     const genre = await openFilter('Жанр');
     expect(await within(genre).findByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
 
@@ -374,8 +393,7 @@ describe('HomeView', () => {
     expect(await within(seriesGenre).findByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
 
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(urls.some((url) => url.includes('/api/genres?kind=film'))).toBe(true);
-    expect(urls.some((url) => url.includes('/api/genres?kind=series'))).toBe(true);
+    expect(urls.some((url) => url.includes('/api/genres'))).toBe(false);
   });
 
   it('toggles the watch-later action on a search-result card', async () => {

@@ -7,15 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
 import { mediaKey, toMovie } from './catalog-view';
-import type { FeedEvent } from './feed';
 import { MovieCard } from './MovieCard';
-import { SocialFeed } from './SocialFeed';
 import type { Movie } from './types';
-
-export function FeedStream({ events }: { events: Promise<FeedEvent[]> }) {
-  const items = use(events);
-  return <SocialFeed initialEvents={items} />;
-}
 
 export function PopularStream({
   films,
@@ -54,25 +47,6 @@ export function PopularStream({
           />
         );
       })}
-    </div>
-  );
-}
-
-export function FeedFallback() {
-  return (
-    <div
-      role="status"
-      aria-busy="true"
-      aria-label="Загрузка ленты"
-      data-testid="feed-skeleton"
-      className="space-y-3"
-    >
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="space-y-2 rounded-lg border border-border p-3">
-          <Skeleton className="h-4 w-1/3" />
-          <Skeleton className="h-3 w-2/3" />
-        </div>
-      ))}
     </div>
   );
 }

@@ -2,14 +2,16 @@
 
 import Link from 'next/link';
 import { Star } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Timestamp } from '@/components/ui/timestamp';
 
-import type { FeedEvent, FeedSource } from './feed';
+import type { FeedSource } from './feed';
+import { useFeed } from './feed-stream';
 
 const SOURCE_LABEL: Record<FeedSource, string> = {
   friend: 'Друг',
@@ -19,73 +21,34 @@ const SOURCE_LABEL: Record<FeedSource, string> = {
 
 const SIZES = [5, 10, 25] as const;
 const ROW_HEIGHT_REM = 4.5;
-const RETRY_MS = 3_000;
 
-export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[] }) {
-  const [events, setEvents] = useState<FeedEvent[]>(initialEvents);
+function FeedSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Загрузка ленты"
+      data-testid="feed-skeleton"
+      className="space-y-3"
+    >
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="space-y-2 rounded-lg border border-border p-3">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-3 w-2/3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SocialFeed() {
+  const { events, connected, loading, pending, markSeen } = useFeed();
   const [size, setSize] = useState<number>(SIZES[0]);
-  const [pending, setPending] = useState(0);
-  const [connected, setConnected] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
 
-  useEffect(() => {
-    if (typeof EventSource === 'undefined') {
-      return;
-    }
-
-    let cancelled = false;
-    let source: EventSource | null = null;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-
-    const refetch = async () => {
-      try {
-        const response = await fetch('/api/feed');
-        if (!response.ok) return;
-        const data = (await response.json()) as { items?: FeedEvent[] };
-        if (!cancelled && Array.isArray(data.items)) {
-          setEvents(data.items);
-          setPending(0);
-        }
-      } catch {
-        // Network unavailable; the next retry will try again.
-      }
-    };
-
-    const connect = () => {
-      if (cancelled) return;
-      const next = new EventSource('/api/feed/stream');
-      source = next;
-      next.addEventListener('activity', (event) => {
-        try {
-          const incoming = JSON.parse((event as MessageEvent).data) as FeedEvent;
-          if (cancelled) return;
-          setEvents((previous) => {
-            if (previous.some((item) => item.id === incoming.id)) return previous;
-            return [incoming, ...previous];
-          });
-          setPending((count) => count + 1);
-        } catch {
-          // Ignore malformed payloads.
-        }
-      });
-      next.onopen = () => setConnected(true);
-      next.onerror = () => {
-        setConnected(false);
-        next.close();
-        source = null;
-        void refetch();
-        retry = setTimeout(connect, RETRY_MS);
-      };
-    };
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      if (retry) clearTimeout(retry);
-      source?.close();
-    };
-  }, []);
+  if (loading && events.length === 0) {
+    return <FeedSkeleton />;
+  }
 
   if (events.length === 0) {
     return (
@@ -100,7 +63,7 @@ export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[]
     if (listRef.current) {
       listRef.current.scrollTop = 0;
     }
-    setPending(0);
+    markSeen();
   }
 
   return (
@@ -149,6 +112,7 @@ export function SocialFeed({ initialEvents = [] }: { initialEvents?: FeedEvent[]
           >
             <Link
               href={event.href}
+              prefetch={false}
               className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <Badge>{SOURCE_LABEL[event.source]}</Badge>

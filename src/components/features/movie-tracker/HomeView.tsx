@@ -1,14 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
-import { genreOptionsFromCatalog, mediaKey, toMovie } from './catalog-view';
-import type { FeedEvent } from './feed';
-import { FeedFallback, FeedStream, PopularFallback, PopularStream } from './HomeStreams';
+import { mediaKey, toMovie } from './catalog-view';
+import { PopularFallback, PopularStream } from './HomeStreams';
 import { MovieCard } from './MovieCard';
 import type { RatingPayload } from './RatingForm';
 import { useWatchedRecords } from './record-store';
@@ -33,18 +32,16 @@ type SearchState =
 
 export function HomeView({
   popularFilms = [],
-  initialFeed = [],
+  genres = [],
   initialRecords = [],
   initialWatchlist = [],
   popularFilmsPromise,
-  initialFeedPromise,
 }: {
   popularFilms?: CatalogSearchResult[];
-  initialFeed?: FeedEvent[];
+  genres?: FilterOption[];
   initialRecords?: WatchedRecord[];
   initialWatchlist?: WatchlistItem[];
   popularFilmsPromise?: Promise<CatalogSearchResult[]>;
-  initialFeedPromise?: Promise<FeedEvent[]>;
 }) {
   const { records, upsert } = useWatchedRecords(initialRecords);
   const watchedIds = useMemo(() => new Set(records.map((record) => mediaKey(record.movie))), [records]);
@@ -62,7 +59,6 @@ export function HomeView({
   const [kind, setKind] = useState<MediaKind>('film');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [search, setSearch] = useState<SearchState>({ status: 'idle' });
-  const [genres, setGenres] = useState<FilterOption[]>([]);
   const [submitted, setSubmitted] = useState<SearchFilters>({});
 
   const [activeMovie, setActiveMovie] = useState<Movie | null>(null);
@@ -70,24 +66,8 @@ export function HomeView({
     ? records.find((record) => mediaKey(record.movie) === mediaKey(activeMovie)) ?? null
     : null;
 
-  useEffect(() => {
-    let active = true;
-    void fetch(`/api/genres?kind=${kind}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { items?: { id: number; name: string }[] } | null) => {
-        if (active && data?.items) {
-          setGenres(genreOptionsFromCatalog(data.items));
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [kind]);
-
   function changeKind(next: MediaKind) {
     setKind(next);
-    setGenres([]);
     setFilters({});
     setSubmitted({});
     setSearch({ status: 'idle' });
@@ -178,13 +158,7 @@ export function HomeView({
         <>
           <section className="space-y-3" aria-label="Лента активности">
             <h2 className="text-lg font-medium">Лента активности</h2>
-            {initialFeedPromise ? (
-              <Suspense fallback={<FeedFallback />}>
-                <FeedStream events={initialFeedPromise} />
-              </Suspense>
-            ) : (
-              <SocialFeed initialEvents={initialFeed} />
-            )}
+            <SocialFeed />
           </section>
 
           <section className="space-y-3" aria-label="Популярные фильмы">

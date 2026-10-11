@@ -81,6 +81,15 @@ describe('MovieCard', () => {
     expect(screen.queryByTestId('poster-fallback')).not.toBeInTheDocument();
   });
 
+  it('loads the poster lazily and reserves its 2/3 space', () => {
+    render(<MovieCard movie={{ ...movie, posterUrl: 'https://example.com/poster.jpg' }} />);
+    const poster = screen.getByAltText('Постер «Тестовый фильм»');
+    expect(poster).toHaveAttribute('loading', 'lazy');
+    expect(poster).toHaveAttribute('decoding', 'async');
+    expect(poster).toHaveAttribute('width', '300');
+    expect(poster).toHaveAttribute('height', '450');
+  });
+
   it('shows a watched indicator only when watched', () => {
     const { rerender } = render(<MovieCard movie={movie} />);
     expect(screen.queryByTestId('watched-badge')).not.toBeInTheDocument();

@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HomeView } from '@/components/features/movie-tracker/HomeView';
-import type { FeedEvent } from '@/components/features/movie-tracker/feed';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
 const popularFilms: CatalogSearchResult[] = [
@@ -35,25 +35,24 @@ afterEach(() => {
 });
 
 describe('HomeView streaming shell', () => {
-  it('renders the header and search field while the slow sections are pending', () => {
+  it('renders the header and search field while the slow sections are pending', async () => {
     const pendingPopular = new Promise<CatalogSearchResult[]>(() => {});
-    const pendingFeed = new Promise<FeedEvent[]>(() => {});
 
-    render(<HomeView popularFilmsPromise={pendingPopular} initialFeedPromise={pendingFeed} />);
+    await act(async () => {
+      render(<HomeView popularFilmsPromise={pendingPopular} />);
+    });
 
     expect(screen.getByRole('heading', { name: 'Главная' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Поиск' })).toBeInTheDocument();
     expect(screen.getByTestId('popular-skeleton')).toBeInTheDocument();
-    expect(screen.getByTestId('feed-skeleton')).toBeInTheDocument();
   });
 
   it('replaces the skeletons with the streamed content once resolved', async () => {
-    render(
-      <HomeView
-        popularFilmsPromise={Promise.resolve(popularFilms)}
-        initialFeedPromise={Promise.resolve([])}
-      />,
-    );
+    const resolvedPopular = Promise.resolve(popularFilms);
+
+    await act(async () => {
+      render(<HomeView popularFilmsPromise={resolvedPopular} />);
+    });
 
     expect(await screen.findByText('Начало')).toBeInTheDocument();
     expect(screen.queryByTestId('popular-skeleton')).not.toBeInTheDocument();

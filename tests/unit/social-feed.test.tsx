@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FeedProvider } from '@/components/features/movie-tracker/feed-stream';
 import { SocialFeed } from '@/components/features/movie-tracker/SocialFeed';
 import type { FeedEvent } from '@/components/features/movie-tracker/feed';
 import { writeTimezone } from '@/components/layout/preferences';
@@ -49,6 +50,19 @@ function event(id: number, title: string): FeedEvent {
   };
 }
 
+function stubFeed(items: FeedEvent[]) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://localhost');
+    const body = url.pathname === '/api/feed' ? { items } : { items: [] };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 const originalEventSource: unknown = globalThis.EventSource;
 
 beforeEach(() => {
@@ -70,7 +84,14 @@ afterEach(() => {
 
 describe('SocialFeed live updates', () => {
   it('prepends an event that arrives after subscription and shows the indicator', async () => {
-    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
+    stubFeed([event(1, 'Начало')]);
+    render(
+      <FeedProvider>
+        <SocialFeed />
+      </FeedProvider>,
+    );
+
+    expect(await screen.findByText('Начало')).toBeInTheDocument();
     const source = FakeEventSource.instances[0]!;
     expect(source.url).toBe('/api/feed/stream');
 
@@ -82,41 +103,51 @@ describe('SocialFeed live updates', () => {
     expect(screen.getByText(/Новые записи/)).toBeInTheDocument();
   });
 
-  it('falls back to re-fetching the feed when the stream errors', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ items: [event(9, 'Форрест Гамп')] }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+  it('keeps the fetched feed when the stream errors', async () => {
+    stubFeed([event(9, 'Форрест Гамп')]);
+    render(
+      <FeedProvider>
+        <SocialFeed />
+      </FeedProvider>,
+    );
 
-    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
+    expect(await screen.findByText('Форрест Гамп')).toBeInTheDocument();
     const source = FakeEventSource.instances[0]!;
 
     act(() => {
       source.onerror?.();
     });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/feed'));
-    expect(await screen.findByText('Форрест Гамп')).toBeInTheDocument();
+    expect(screen.getByText('Форрест Гамп')).toBeInTheDocument();
+    expect(screen.getByText('Обновление при подключении')).toBeInTheDocument();
   });
 });
 
 describe('SocialFeed timestamps', () => {
   it('shows the event moment in the selected timezone and format', async () => {
     writeTimezone('Europe/Moscow');
-    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
+    stubFeed([event(1, 'Начало')]);
+    render(
+      <FeedProvider>
+        <SocialFeed />
+      </FeedProvider>,
+    );
 
     expect(await screen.findByText('03:00 24.08.26')).toBeInTheDocument();
   });
 });
 
-describe('SocialFeed size control', () => {  it('renders every loaded event in a scrollable viewport sized by the selector', async () => {
-    const events = Array.from({ length: 30 }, (_, index) =>
-      event(index, `Фильм ${index}`),
+describe('SocialFeed size control', () => {
+  it('renders every loaded event in a scrollable viewport sized by the selector', async () => {
+    const events = Array.from({ length: 30 }, (_, index) => event(index, `Фильм ${index}`));
+    stubFeed(events);
+    render(
+      <FeedProvider>
+        <SocialFeed />
+      </FeedProvider>,
     );
-    render(<SocialFeed initialEvents={events} />);
 
-    const list = screen.getByTestId('social-feed');
+    const list = await screen.findByTestId('social-feed');
     expect(list).toHaveAttribute('data-size', '5');
     expect(list.className).toContain('overflow-y-auto');
     expect(list.style.maxHeight).toBe('22.5rem');
@@ -131,7 +162,14 @@ describe('SocialFeed size control', () => {  it('renders every loaded event in a
   });
 
   it('scrolls back to the newest entry when the pending indicator is used', async () => {
-    render(<SocialFeed initialEvents={[event(1, 'Начало')]} />);
+    stubFeed([event(1, 'Начало')]);
+    render(
+      <FeedProvider>
+        <SocialFeed />
+      </FeedProvider>,
+    );
+
+    expect(await screen.findByText('Начало')).toBeInTheDocument();
     const source = FakeEventSource.instances[0]!;
 
     act(() => {
@@ -145,5 +183,19 @@ describe('SocialFeed size control', () => {  it('renders every loaded event in a
 
     expect(list.scrollTop).toBe(0);
     expect(screen.queryByRole('button', { name: /Новые записи/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('SocialFeed empty and loading states', () => {
+  it('shows the empty state when there is no activity', async () => {
+    stubFeed([]);
+    render(
+      <FeedProvider>
+        <SocialFeed />
+      </FeedProvider>,
+    );
+
+    expect(await screen.findByText('Пока нет активности')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('feed-skeleton')).not.toBeInTheDocument());
   });
 });

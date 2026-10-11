@@ -42,6 +42,7 @@ export function MovieCard({
     >
       <Link
         href={detailHref}
+        prefetch={false}
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
@@ -49,6 +50,10 @@ export function MovieCard({
             <img
               src={poster}
               alt={`Постер «${movie.title}»`}
+              width={300}
+              height={450}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
           ) : (
