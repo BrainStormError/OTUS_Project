@@ -33,12 +33,21 @@ export function MySeriesView({
   initialRecords: WatchedRecord[];
   initialWatchlist?: WatchlistItem[];
 }) {
-  const { records, upsert, remove } = useWatchedRecords(initialRecords);
+  const { records: allRecords, upsert, remove } = useWatchedRecords(initialRecords);
   const {
-    items: watchlistItems,
+    items: allWatchlistItems,
     remove: removeWatchlistItem,
     drop: dropWatchlistItem,
   } = useWatchlist(initialWatchlist);
+
+  const records = useMemo(
+    () => allRecords.filter((record) => record.movie.kind === 'series'),
+    [allRecords],
+  );
+  const watchlistItems = useMemo(
+    () => allWatchlistItems.filter((item) => item.movie.kind === 'series'),
+    [allWatchlistItems],
+  );
 
   const [tab, setTab] = useState<TabId>('watched');
 

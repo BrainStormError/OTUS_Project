@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { err, ok } from '@/core/result';
 
-const { getActorMock, listMock, deleteMock } = vi.hoisted(() => ({
+const { getActorMock, listMock, deleteMock, saveMock, revalidateMock } = vi.hoisted(() => ({
   getActorMock: vi.fn(),
   listMock: vi.fn(),
   deleteMock: vi.fn(),
+  saveMock: vi.fn(),
+  revalidateMock: vi.fn(),
 }));
+
+vi.mock('next/cache', () => ({ revalidatePath: revalidateMock }));
 
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 
@@ -18,14 +22,22 @@ vi.mock('@/modules/records', async () => {
     upsertWatchedRecordInput: schema.upsertWatchedRecordInput,
     listWatchedRecords: listMock,
     deleteWatchedRecord: deleteMock,
-    saveWatchedRecord: vi.fn(),
+    saveWatchedRecord: saveMock,
   };
 });
 
-import { DELETE as deleteRoute, GET as listRoute } from '@/app/api/records/route';
+import {
+  DELETE as deleteRoute,
+  GET as listRoute,
+  POST as saveRoute,
+} from '@/app/api/records/route';
 
 const actor = { id: 1, role: 'employee' as const };
 const origin = { origin: 'http://localhost:3000' };
+
+beforeEach(() => {
+  revalidateMock.mockClear();
+});
 
 describe('GET /api/records', () => {
   it('returns 401 without a session', async () => {
@@ -53,6 +65,36 @@ describe('GET /api/records', () => {
   });
 });
 
+describe('POST /api/records', () => {
+  function save(body: unknown): Request {
+    return new Request('http://localhost/api/records', {
+      method: 'POST',
+      headers: { ...origin, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('invalidates personal routes only on success', async () => {
+    getActorMock.mockResolvedValue(actor);
+    saveMock.mockResolvedValue(ok({ id: 7 }));
+    const response = await saveRoute(
+      save({ mediaKind: 'film', mediaRef: '27205', rating: 9, watchedAt: '2026-10-15' }),
+    );
+    expect(response.status).toBe(200);
+    expect(revalidateMock).toHaveBeenCalledWith('/films');
+  });
+
+  it('does not invalidate when the save fails', async () => {
+    getActorMock.mockResolvedValue(actor);
+    saveMock.mockResolvedValue(err('NOT_FOUND', 'Запись не найдена'));
+    const response = await saveRoute(
+      save({ mediaKind: 'film', mediaRef: '27205', rating: 9, watchedAt: '2026-10-15' }),
+    );
+    expect(response.status).toBe(404);
+    expect(revalidateMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('DELETE /api/records', () => {
   function request(id: string): Request {
     return new Request(`http://localhost/api/records?id=${id}`, {
@@ -66,19 +108,23 @@ describe('DELETE /api/records', () => {
     expect((await deleteRoute(request('nope'))).status).toBe(400);
   });
 
-  it('maps a foreign record to 404', async () => {
+  it('maps a foreign record to 404 and does not invalidate', async () => {
     getActorMock.mockResolvedValue(actor);
     deleteMock.mockResolvedValue(err('NOT_FOUND', 'Запись не найдена'));
     const response = await deleteRoute(request('7'));
     expect(response.status).toBe(404);
     expect(deleteMock).toHaveBeenCalledWith(actor, 7);
+    expect(revalidateMock).not.toHaveBeenCalled();
   });
 
-  it('removes the record for the owner', async () => {
+  it('removes the record for the owner and invalidates personal routes', async () => {
     getActorMock.mockResolvedValue(actor);
     deleteMock.mockResolvedValue(ok({ id: 7 }));
     const response = await deleteRoute(request('7'));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: 7 });
+    expect(revalidateMock).toHaveBeenCalledWith('/films');
+    expect(revalidateMock).toHaveBeenCalledWith('/series');
+    expect(revalidateMock).toHaveBeenCalledWith('/');
   });
 });

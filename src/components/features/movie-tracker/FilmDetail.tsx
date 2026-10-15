@@ -1,20 +1,17 @@
 'use client';
 
 import { Bookmark, Check, Film, Star } from 'lucide-react';
-import { useEffect, useState } from 'react';
-
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
-import { useToast } from '@/components/ui/toast';
 
 import { RatingForm, type RatingPayload } from './RatingForm';
-import { deleteRemoteRecord, saveRemoteRating } from './report-rating';
-import { deleteRemoteWatchlist, saveRemoteWatchlist } from './report-watchlist';
+import { useWatchedRecordFor } from './record-store';
 import type { Movie, WatchedRecord } from './types';
+import { useWatchlistFor } from './watchlist-store';
 
 export function FilmDetail({
   movie,
@@ -25,131 +22,42 @@ export function FilmDetail({
   initialRecord?: WatchedRecord | null;
   initialWatchlistId?: number | null;
 }) {
-  const [record, setRecord] = useState<WatchedRecord | null>(initialRecord);
-  const [watchlistId, setWatchlistId] = useState<number | null>(initialWatchlistId);
   const [open, setOpen] = useState(false);
-  const toast = useToast();
-  const router = useRouter();
-
-  // Reconcile with the server props when they change (e.g. after a refresh or a
-  // restore from the Router Cache), so the buttons never show a stale state.
-  const recordSignature = initialRecord
-    ? `${initialRecord.id}|${initialRecord.rating}|${initialRecord.watchedAt}`
-    : 'none';
-  useEffect(() => {
-    // Intentional prop->state reconciliation: keyed by the record's content
-    // signature; `initialRecord` is read on purpose so the effect only re-runs
-    // when the server data actually changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRecord(initialRecord);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordSignature]);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWatchlistId(initialWatchlistId);
-  }, [initialWatchlistId]);
+  const { record, upsert, remove } = useWatchedRecordFor(movie, initialRecord);
+  const { item: plannedItem, add: addPlanned, remove: removePlanned, drop: dropPlanned } =
+    useWatchlistFor(movie, initialWatchlistId);
 
   const watched = Boolean(record);
-  const planned = watchlistId !== null;
+  const planned = plannedItem !== null;
   const poster = movie.posterUrl ?? null;
   const isSeries = movie.kind === 'series';
 
-  async function handleSave(payload: RatingPayload) {
-    const previous = record;
-    setRecord({
+  function handleSave(payload: RatingPayload) {
+    upsert({
       id: record?.id ?? movie.tmdbId,
       movie,
       rating: payload.rating,
       comment: payload.comment,
       watchedAt: payload.watchedAt,
     });
+    dropPlanned(movie);
     setOpen(false);
-    setWatchlistId(null);
-    try {
-      const id = await saveRemoteRating({
-        mediaKind: movie.kind,
-        mediaRef: String(movie.tmdbId),
-        rating: payload.rating,
-        comment: payload.comment,
-        watchedAt: payload.watchedAt,
-      });
-      if (id === null) {
-        setRecord(previous);
-        toast.error('Не удалось сохранить запись');
-        return;
-      }
-      // Keep the server-assigned id so a later removal targets the real record
-      // instead of the TMDB id used as a temporary key.
-      setRecord((current) => (current ? { ...current, id } : current));
-      // Invalidate the client Router Cache (and BFCache) so the list the user
-      // came from shows this title as watched when they navigate back.
-      router.refresh();
-      toast.success('Запись сохранена');
-    } catch {
-      setRecord(previous);
-      toast.error('Не удалось сохранить запись');
-    }
   }
 
-  async function togglePlanned() {
+  function togglePlanned() {
     if (watched) {
       return;
     }
-    if (planned && watchlistId !== null) {
-      const previous = watchlistId;
-      setWatchlistId(null);
-      try {
-        const ok = await deleteRemoteWatchlist(previous);
-        if (ok) {
-          router.refresh();
-          toast.success('Удалено из «Буду смотреть»');
-          return;
-        }
-        setWatchlistId(previous);
-        toast.error('Не удалось удалить запись');
-      } catch {
-        setWatchlistId(previous);
-        toast.error('Не удалось удалить запись');
-      }
+    if (planned && plannedItem) {
+      removePlanned(plannedItem);
       return;
     }
-    try {
-      const id = await saveRemoteWatchlist({
-        mediaKind: movie.kind,
-        mediaRef: String(movie.tmdbId),
-      });
-      if (id === null) {
-        toast.error('Не удалось добавить в «Буду смотреть»');
-        return;
-      }
-      setWatchlistId(id);
-      router.refresh();
-      toast.success('Добавлено в «Буду смотреть»');
-    } catch {
-      toast.error('Не удалось добавить в «Буду смотреть»');
-    }
+    addPlanned(movie);
   }
 
-  async function unwatch() {
-    const previous = record;
-    if (!previous) {
-      return;
-    }
-    setRecord(null);
-    try {
-      const ok = await deleteRemoteRecord(previous.id);
-      if (ok) {
-        // Drop the cached render of the previous route so the card no longer
-        // shows "Просмотрено" after a Back navigation.
-        router.refresh();
-        toast.success('Запись удалена');
-        return;
-      }
-      setRecord(previous);
-      toast.error('Не удалось удалить запись');
-    } catch {
-      setRecord(previous);
-      toast.error('Не удалось удалить запись');
+  function unwatch() {
+    if (record) {
+      remove(record);
     }
   }
 

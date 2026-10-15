@@ -1,13 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { err, ok } from '@/core/result';
 
-const { getActorMock, listMock, addMock, deleteMock } = vi.hoisted(() => ({
+const { getActorMock, listMock, addMock, deleteMock, revalidateMock } = vi.hoisted(() => ({
   getActorMock: vi.fn(),
   listMock: vi.fn(),
   addMock: vi.fn(),
   deleteMock: vi.fn(),
+  revalidateMock: vi.fn(),
 }));
+
+vi.mock('next/cache', () => ({ revalidatePath: revalidateMock }));
 
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 
@@ -27,6 +30,10 @@ import { DELETE as deleteRoute, GET as listRoute, POST as addRoute } from '@/app
 
 const actor = { id: 1, role: 'employee' as const };
 const origin = { origin: 'http://localhost:3000' };
+
+beforeEach(() => {
+  revalidateMock.mockClear();
+});
 
 function get(kind?: string): Request {
   const url = kind ? `http://localhost/api/watchlist?kind=${kind}` : 'http://localhost/api/watchlist';
@@ -66,7 +73,7 @@ describe('GET /api/watchlist', () => {
 });
 
 describe('POST /api/watchlist', () => {
-  it('adds an entry through the service', async () => {
+  it('adds an entry through the service and invalidates personal routes', async () => {
     getActorMock.mockResolvedValue(actor);
     addMock.mockResolvedValue(ok({ id: 5 }));
 
@@ -74,13 +81,16 @@ describe('POST /api/watchlist', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: 5 });
     expect(addMock).toHaveBeenCalledWith(actor, { mediaKind: 'film', mediaRef: '27205' });
+    expect(revalidateMock).toHaveBeenCalledWith('/films');
+    expect(revalidateMock).toHaveBeenCalledWith('/');
   });
 
-  it('maps a conflict to 409', async () => {
+  it('maps a conflict to 409 and does not invalidate', async () => {
     getActorMock.mockResolvedValue(actor);
     addMock.mockResolvedValue(err('CONFLICT', 'Тайтл уже отмечен просмотренным'));
 
     expect((await addRoute(add({ mediaKind: 'film', mediaRef: '27205' }))).status).toBe(409);
+    expect(revalidateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -97,11 +107,19 @@ describe('DELETE /api/watchlist', () => {
     expect((await deleteRoute(remove('nope'))).status).toBe(400);
   });
 
-  it('removes the entry for its owner', async () => {
+  it('removes the entry for its owner and invalidates personal routes', async () => {
     getActorMock.mockResolvedValue(actor);
     deleteMock.mockResolvedValue(ok({ id: 7 }));
     const response = await deleteRoute(remove('7'));
     expect(response.status).toBe(200);
     expect(deleteMock).toHaveBeenCalledWith(actor, 7);
+    expect(revalidateMock).toHaveBeenCalledWith('/films');
+  });
+
+  it('does not invalidate when the removal fails', async () => {
+    getActorMock.mockResolvedValue(actor);
+    deleteMock.mockResolvedValue(err('NOT_FOUND', 'Запись не найдена'));
+    expect((await deleteRoute(remove('7'))).status).toBe(404);
+    expect(revalidateMock).not.toHaveBeenCalled();
   });
 });

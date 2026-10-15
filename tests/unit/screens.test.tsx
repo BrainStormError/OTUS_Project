@@ -14,6 +14,7 @@ import { StatisticsView } from '@/components/features/movie-tracker/StatisticsVi
 import { AdminMemberPanel } from '@/components/features/movie-tracker/AdminMemberPanel';
 import { FriendListItem } from '@/components/features/movie-tracker/FriendListItem';
 import { searchGroups } from '@/components/features/movie-tracker/group-search';
+import { recordsStore } from '@/components/features/movie-tracker/list-store';
 import type {
   FriendContact,
   FriendRequest,
@@ -389,17 +390,34 @@ describe('My Films and records', () => {
         initialRecords={[
           {
             id: 680,
-            movie: film(680, 'Криминальное чтиво', 1994, ['драма']),
+            movie: film(680, 'РљСЂРёРјРёРЅР°Р»СЊРЅРѕРµ С‡С‚РёРІРѕ', 1994, ['РґСЂР°РјР°']),
             rating: 8.5,
-            comment: 'Классика',
+            comment: 'РљР»Р°СЃСЃРёРєР°',
             watchedAt: '2026-09-01',
           },
         ]}
       />,
     );
     const list = screen.getByTestId('my-films');
-    expect(within(list).getByText('Криминальное чтиво')).toBeInTheDocument();
+    expect(within(list).getByText('РљСЂРёРјРёРЅР°Р»СЊРЅРѕРµ С‡С‚РёРІРѕ')).toBeInTheDocument();
     expect(within(list).getByText('2026-09-01')).toBeInTheDocument();
+  });
+
+  it('never shows the empty state while the store holds records before the server responds', () => {
+    recordsStore.handle(0).upsert({
+      id: -1,
+      movie: film(4242, 'РњР°С‚СЂРёС†Р° 5', 2003, ['С„Р°РЅС‚Р°СЃС‚РёРєР°']),
+      rating: 8,
+      comment: '',
+      watchedAt: '2026-10-15',
+    });
+
+    render(<MyFilmsView initialRecords={[]} />);
+
+    expect(
+      screen.queryByText('Р’С‹ РµС‰С‘ РЅРµ РѕС‚РјРµС‚РёР»Рё РЅРё РѕРґРЅРѕРіРѕ С„РёР»СЊРјР°'),
+    ).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('my-films')).getByText('РњР°С‚СЂРёС†Р° 5')).toBeInTheDocument();
   });
 });
 

@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useRouter } from 'next/navigation';
 
 import { useToast } from '@/components/ui/toast';
 
 import { mediaKey } from './catalog-view';
+import {
+  useKeyScope,
+  useKindScope,
+  useListActorId,
+  useListHandle,
+  useListItems,
+  useReconcileOnSignature,
+  watchlistStore,
+} from './list-store';
+import type { ListHandle } from './list-store';
 import { deleteRemoteWatchlist, saveRemoteWatchlist } from './report-watchlist';
 import type { Movie, WatchlistItem } from './types';
 
@@ -19,75 +29,139 @@ function watchlistSignature(items: WatchlistItem[]): string {
     .join(';');
 }
 
-export function useWatchlist(initial: WatchlistItem[]) {
+function useWatchlistMutations(handle: ListHandle<WatchlistItem>) {
   const toast = useToast();
   const router = useRouter();
-  const [items, setItems] = useState<WatchlistItem[]>(initial);
 
-  // Reconcile with the server whenever the props it hands down change (for
-  // example after `router.refresh()` following a mutation elsewhere). Without
-  // this the local `useState` seed would keep showing the pre-mutation state.
-  const signature = useMemo(() => watchlistSignature(initial), [initial]);
-  useEffect(() => {
-    // Intentional prop->state reconciliation: `initial` is read on purpose and
-    // the effect is keyed by its content signature, not its identity.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setItems(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  const finishDelete = useCallback(
+    (key: string, item: WatchlistItem) => {
+      void deleteRemoteWatchlist(item.id)
+        .then((ok) => {
+          if (ok) {
+            handle.confirmRemove(key);
+            router.refresh();
+            toast.success('Удалено из «Буду смотреть»');
+          } else {
+            handle.failRemove(key, item);
+            toast.error('Не удалось удалить запись');
+          }
+        })
+        .catch(() => {
+          handle.failRemove(key, item);
+          toast.error('Не удалось удалить запись');
+        });
+    },
+    [handle, router, toast],
+  );
 
   const add = useCallback(
     (movie: Movie) => {
       const key = mediaKey(movie);
-      setItems((current) =>
-        current.some((item) => mediaKey(item.movie) === key)
-          ? current
-          : [...current, { id: movie.tmdbId, movie, addedAt: today() }],
-      );
-
+      if (handle.get(key)) {
+        return;
+      }
+      const { previous } = handle.upsert({
+        id: movie.tmdbId,
+        movie,
+        addedAt: today(),
+      });
       void saveRemoteWatchlist({ mediaKind: movie.kind, mediaRef: String(movie.tmdbId) })
         .then((id) => {
           if (id === null) {
-            setItems((current) => current.filter((item) => mediaKey(item.movie) !== key));
+            handle.failUpsert(key, previous);
             toast.error('Не удалось добавить в «Буду смотреть»');
             return;
           }
-          setItems((current) =>
-            current.map((item) => (mediaKey(item.movie) === key ? { ...item, id } : item)),
-          );
+          const { hidden } = handle.confirmUpsert(key, id);
+          if (hidden) {
+            finishDelete(key, { id, movie, addedAt: today() });
+            return;
+          }
           router.refresh();
           toast.success('Добавлено в «Буду смотреть»');
         })
         .catch(() => {
-          setItems((current) => current.filter((item) => mediaKey(item.movie) !== key));
+          handle.failUpsert(key, previous);
           toast.error('Не удалось добавить в «Буду смотреть»');
         });
     },
-    [router, toast],
+    [finishDelete, handle, router, toast],
   );
 
   const remove = useCallback(
     (item: WatchlistItem) => {
       const key = mediaKey(item.movie);
-      setItems((current) => current.filter((entry) => mediaKey(entry.movie) !== key));
-      void deleteRemoteWatchlist(item.id)
-        .then((ok) => {
-          if (ok) {
-            router.refresh();
-            toast.success('Удалено из «Буду смотреть»');
-          } else {
-            toast.error('Не удалось удалить запись');
-          }
-        })
-        .catch(() => toast.error('Не удалось удалить запись'));
+      const started = handle.startRemove(key);
+      if (!started) {
+        return;
+      }
+      if (!started.settled) {
+        return;
+      }
+      finishDelete(key, started.item);
     },
-    [router, toast],
+    [finishDelete, handle],
   );
 
-  const drop = useCallback((movie: Movie) => {
-    const key = mediaKey(movie);
-    setItems((current) => current.filter((item) => mediaKey(item.movie) !== key));
-  }, []);
+  return { add, remove };
+}
+
+export function useWatchlist(initial: WatchlistItem[]) {
+  const actorId = useListActorId();
+  const handle = useListHandle(watchlistStore, actorId);
+  const items = useListItems(handle);
+  const inScope = useKindScope(initial);
+  const signature = useMemo(() => watchlistSignature(initial), [initial]);
+
+  useReconcileOnSignature(signature, () => {
+    handle.reconcile(initial, inScope);
+  });
+
+  const { add, remove } = useWatchlistMutations(handle);
+
+  const drop = useCallback(
+    (movie: Movie) => {
+      handle.removeLocal(mediaKey(movie));
+    },
+    [handle],
+  );
 
   return { items, add, remove, drop };
+}
+
+export function useWatchlistFor(movie: Movie, initialWatchlistId: number | null) {
+  const actorId = useListActorId();
+  const handle = useListHandle(watchlistStore, actorId);
+  const items = useListItems(handle);
+  const key = mediaKey(movie);
+  const inScope = useKeyScope(key);
+  const feed = useMemo(
+    () => (initialWatchlistId === null ? [] : [{ id: initialWatchlistId, movie, addedAt: '' }]),
+    [initialWatchlistId, movie],
+  );
+  const signature = useMemo(
+    () => watchlistSignature(feed),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initialWatchlistId],
+  );
+
+  useReconcileOnSignature(signature, () => {
+    handle.reconcile(feed, inScope);
+  });
+
+  const { add, remove } = useWatchlistMutations(handle);
+
+  const drop = useCallback(
+    (target: Movie) => {
+      handle.removeLocal(mediaKey(target));
+    },
+    [handle],
+  );
+
+  const item = useMemo(
+    () => items.find((entry) => mediaKey(entry.movie) === key) ?? null,
+    [items, key],
+  );
+
+  return { item, add, remove, drop };
 }

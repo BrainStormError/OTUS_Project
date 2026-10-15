@@ -28,6 +28,8 @@ vi.mock('@/modules/catalog/cache-repository', () => ({
     }
     return removed;
   }),
+  selectCacheUsageBytes: vi.fn(async () => 0),
+  deleteOldestCache: vi.fn(async () => 0),
 }));
 
 vi.mock('@/modules/catalog/repository', () => ({

@@ -1,7 +1,13 @@
 import { ok, type Result } from '@/core/result';
 
 import { detailCacheKey, searchCacheKey } from './cache-key';
-import { deleteExpiredCache, selectCacheEntry, upsertCacheEntry } from './cache-repository';
+import {
+  deleteExpiredCache,
+  deleteOldestCache,
+  selectCacheEntry,
+  selectCacheUsageBytes,
+  upsertCacheEntry,
+} from './cache-repository';
 import { detailRaw, searchRaw, type SearchParams } from './client';
 import { inYearRange, mapDetail, mapSearchItem, selectKnownGenreIds } from './domain';
 import {
@@ -23,14 +29,28 @@ export const TMDB_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
+// Storage budget for the TMDB response cache, with a lower hysteresis target so
+// eviction stops before the budget boundary and avoids per-sweep churn.
+export const TMDB_CACHE_BUDGET_BYTES = 100 * 1024 * 1024;
+export const TMDB_CACHE_EVICT_TARGET_BYTES = 90 * 1024 * 1024;
+
 let lastSweepAt = 0;
+
+export async function sweepCache(now: Date): Promise<void> {
+  await deleteExpiredCache(now);
+  const usage = await selectCacheUsageBytes();
+  if (usage <= TMDB_CACHE_BUDGET_BYTES) {
+    return;
+  }
+  await deleteOldestCache(usage - TMDB_CACHE_EVICT_TARGET_BYTES);
+}
 
 function sweepExpiredIfDue(now: number): void {
   if (now - lastSweepAt < CACHE_SWEEP_INTERVAL_MS) {
     return;
   }
   lastSweepAt = now;
-  void deleteExpiredCache(new Date(now)).catch(() => undefined);
+  void sweepCache(new Date(now)).catch(() => undefined);
 }
 
 // Read-through: fresh hit returns the stored payload without touching TMDB;

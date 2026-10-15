@@ -48,6 +48,20 @@ RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+# The runtime only runs `node server.js`, so drop the npm/yarn payload bundled
+# with the base image (and their caches) to slim the runner layer.
+RUN rm -rf \
+      /usr/local/lib/node_modules/npm \
+      /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm \
+      /usr/local/bin/npx \
+      /usr/local/bin/corepack \
+      /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg \
+      /root/.npm \
+      /root/.cache/node \
+      /opt/yarn* \
+      /usr/local/share/.cache/yarn
 USER nextjs
 EXPOSE 3000
 CMD ["node", "server.js"]

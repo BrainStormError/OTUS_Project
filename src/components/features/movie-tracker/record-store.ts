@@ -1,50 +1,58 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useRouter } from 'next/navigation';
 
 import { useToast } from '@/components/ui/toast';
 
 import { mediaKey } from './catalog-view';
+import {
+  recordsStore,
+  useKeyScope,
+  useKindScope,
+  useListActorId,
+  useListHandle,
+  useListItems,
+  useReconcileOnSignature,
+} from './list-store';
+import type { ListHandle } from './list-store';
 import { deleteRemoteRecord, saveRemoteRating } from './report-rating';
-import type { WatchedRecord } from './types';
+import type { Movie, WatchedRecord } from './types';
 
 function recordsSignature(records: WatchedRecord[]): string {
   return records
-    .map((record) => `${mediaKey(record.movie)}|${record.rating}|${record.watchedAt}`)
+    .map((record) => `${mediaKey(record.movie)}|${record.rating}|${record.watchedAt}|${record.comment ?? ''}`)
     .sort()
     .join(';');
 }
 
-export function useWatchedRecords(initial: WatchedRecord[]) {
+function useRecordMutations(handle: ListHandle<WatchedRecord>) {
   const toast = useToast();
   const router = useRouter();
-  const [records, setRecords] = useState<WatchedRecord[]>(initial);
 
-  // Reconcile with the server whenever the props it hands down change (for
-  // example after `router.refresh()` following a mutation elsewhere). Without
-  // this the local `useState` seed would keep showing the pre-mutation state.
-  const signature = useMemo(() => recordsSignature(initial), [initial]);
-  useEffect(() => {
-    // Intentional prop->state reconciliation: `initial` is read on purpose and
-    // the effect is keyed by its content signature, not its identity.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRecords(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  const finishDelete = useCallback(
+    (key: string, record: WatchedRecord) => {
+      void deleteRemoteRecord(record.id)
+        .then((ok) => {
+          if (ok) {
+            handle.confirmRemove(key);
+            router.refresh();
+            toast.success('Запись удалена');
+          } else {
+            handle.failRemove(key, record);
+            toast.error('Не удалось удалить запись');
+          }
+        })
+        .catch(() => {
+          handle.failRemove(key, record);
+          toast.error('Не удалось удалить запись');
+        });
+    },
+    [handle, router, toast],
+  );
 
   const upsert = useCallback(
     (record: WatchedRecord) => {
-      const recordKey = mediaKey(record.movie);
-      setRecords((current) => {
-        const index = current.findIndex((item) => mediaKey(item.movie) === recordKey);
-        if (index >= 0) {
-          const next = [...current];
-          next[index] = { ...current[index], ...record };
-          return next;
-        }
-        return [...current, record];
-      });
-
+      const { key, previous } = handle.upsert(record);
       void saveRemoteRating({
         mediaKind: record.movie.kind,
         mediaRef: String(record.movie.tmdbId),
@@ -54,39 +62,79 @@ export function useWatchedRecords(initial: WatchedRecord[]) {
       })
         .then((id) => {
           if (id === null) {
+            handle.failUpsert(key, previous);
             toast.error('Не удалось сохранить запись');
             return;
           }
-          setRecords((current) =>
-            current.map((item) => (mediaKey(item.movie) === recordKey ? { ...item, id } : item)),
-          );
-          // Invalidate the client Router Cache so list sections show the new
-          // record the next time they are opened instead of a cached render.
+          const { hidden } = handle.confirmUpsert(key, id);
+          if (hidden) {
+            finishDelete(key, { ...record, id });
+            return;
+          }
           router.refresh();
           toast.success('Запись сохранена');
         })
-        .catch(() => toast.error('Не удалось сохранить запись'));
+        .catch(() => {
+          handle.failUpsert(key, previous);
+          toast.error('Не удалось сохранить запись');
+        });
     },
-    [router, toast],
+    [finishDelete, handle, router, toast],
   );
 
   const remove = useCallback(
     (record: WatchedRecord) => {
-      const recordKey = mediaKey(record.movie);
-      setRecords((current) => current.filter((item) => mediaKey(item.movie) !== recordKey));
-      void deleteRemoteRecord(record.id)
-        .then((ok) => {
-          if (ok) {
-            router.refresh();
-            toast.success('Запись удалена');
-          } else {
-            toast.error('Не удалось удалить запись');
-          }
-        })
-        .catch(() => toast.error('Не удалось удалить запись'));
+      const key = mediaKey(record.movie);
+      const started = handle.startRemove(key);
+      if (!started) {
+        return;
+      }
+      if (!started.settled) {
+        return;
+      }
+      finishDelete(key, started.item);
     },
-    [router, toast],
+    [finishDelete, handle],
   );
 
+  return { upsert, remove };
+}
+
+export function useWatchedRecords(initial: WatchedRecord[]) {
+  const actorId = useListActorId();
+  const handle = useListHandle(recordsStore, actorId);
+  const records = useListItems(handle);
+  const inScope = useKindScope(initial);
+  const signature = useMemo(() => recordsSignature(initial), [initial]);
+
+  useReconcileOnSignature(signature, () => {
+    handle.reconcile(initial, inScope);
+  });
+
+  const { upsert, remove } = useRecordMutations(handle);
+
   return { records, upsert, remove };
+}
+
+export function useWatchedRecordFor(movie: Movie, initialRecord: WatchedRecord | null) {
+  const actorId = useListActorId();
+  const handle = useListHandle(recordsStore, actorId);
+  const records = useListItems(handle);
+  const key = mediaKey(movie);
+  const inScope = useKeyScope(key);
+  const feed = useMemo(() => (initialRecord ? [initialRecord] : []), [initialRecord]);
+  const signature = useMemo(() => recordsSignature(feed), [feed]);
+
+  useReconcileOnSignature(signature, () => {
+    handle.reconcile(feed, inScope);
+  });
+
+  const { upsert, remove } = useRecordMutations(handle);
+
+  const record = useMemo(
+    () => records.find((item) => mediaKey(item.movie) === key) ?? null,
+    [records, key],
+  );
+
+  return { record, upsert, remove };
 }

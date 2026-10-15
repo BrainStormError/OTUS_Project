@@ -3,10 +3,16 @@ name: learn-watcher-platform
 services:
   db:
     image: postgres:16-alpine
+    command: ['postgres', '-c', 'shared_buffers=64MB', '-c', 'work_mem=4MB', '-c', 'max_connections=20']
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-watcher}
+    logging:
+      driver: json-file
+      options:
+        max-size: '1m'
+        max-file: '5'
     ports:
       - '127.0.0.1:5433:5432'
     healthcheck:
@@ -27,6 +33,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=256
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-watcher}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
       AUTH_URL: ${APP_ORIGIN:-http://localhost:3000}
@@ -37,6 +44,11 @@ services:
       TMDB_ACCESS_TOKEN: ${TMDB_ACCESS_TOKEN}
       DEMO_LOGIN: ${DEMO_LOGIN:-0}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    logging:
+      driver: json-file
+      options:
+        max-size: '1m'
+        max-file: '5'
     ports:
       - '127.0.0.1:3000:3000'
     healthcheck:

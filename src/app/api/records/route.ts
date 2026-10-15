@@ -11,6 +11,8 @@ import {
   upsertWatchedRecordInput,
 } from '@/modules/records';
 
+import { revalidatePersonalData } from '../personal-revalidate';
+
 export const dynamic = 'force-dynamic';
 
 const deleteRecordQuery = z.object({
@@ -40,7 +42,11 @@ export const POST = withRoute(
   },
   async (input, { actor }) => {
     const result = await saveWatchedRecord(actor, input);
-    return result.ok ? ok({ id: result.value.id }) : result;
+    if (!result.ok) {
+      return result;
+    }
+    revalidatePersonalData();
+    return ok({ id: result.value.id });
   },
 );
 
@@ -52,5 +58,12 @@ export const DELETE = withRoute(
     resolveActor: getActor,
     rateLimit: { limit: 60, windowMs: 60_000 },
   },
-  async (_input, { actor, query }) => deleteWatchedRecord(actor, query.id),
+  async (_input, { actor, query }) => {
+    const result = await deleteWatchedRecord(actor, query.id);
+    if (!result.ok) {
+      return result;
+    }
+    revalidatePersonalData();
+    return result;
+  },
 );
