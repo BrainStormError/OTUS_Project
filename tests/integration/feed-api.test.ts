@@ -12,6 +12,10 @@ vi.mock('@/modules/auth/session', () => ({
   getActor: async () => state.actor,
 }));
 
+// Route handlers are invoked directly here, outside Next's request scope, so
+// revalidatePath would throw its "static generation store missing" invariant.
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+
 import { GET as getFeed } from '@/app/api/feed/route';
 import { GET as getStream } from '@/app/api/feed/stream/route';
 import { POST as postAccept } from '@/app/api/friendships/accept/route';
