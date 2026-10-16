@@ -14,7 +14,7 @@ const { signOutMock } = vi.hoisted(() => ({ signOutMock: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/films',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
 }));
 
 vi.mock('next-auth/react', () => ({

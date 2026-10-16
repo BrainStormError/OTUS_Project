@@ -28,7 +28,15 @@ function stubFetch(ok: boolean) {
 function renderList(isAdmin = true) {
   return render(
     <ToastProvider>
-      <GroupDiscussions groupId={1} isMember isAdmin={isAdmin} discussions={[]} activeDiscussion={null} />
+      <GroupDiscussions
+        groupId={1}
+        isMember
+        isAdmin={isAdmin}
+        discussions={[]}
+        activeDiscussion={null}
+        onOpenDiscussion={() => undefined}
+        onCloseDiscussion={() => undefined}
+      />
     </ToastProvider>,
   );
 }
@@ -93,7 +101,15 @@ describe('GroupDiscussions feedback', () => {
     stubFetch(true);
     render(
       <ToastProvider>
-        <GroupDiscussions groupId={1} isMember isAdmin={false} discussions={[]} activeDiscussion={activeDiscussion} />
+        <GroupDiscussions
+          groupId={1}
+          isMember
+          isAdmin={false}
+          discussions={[]}
+          activeDiscussion={activeDiscussion}
+          onOpenDiscussion={() => undefined}
+          onCloseDiscussion={() => undefined}
+        />
       </ToastProvider>,
     );
 
@@ -123,7 +139,15 @@ describe('GroupDiscussions feedback', () => {
     };
     render(
       <ToastProvider>
-        <GroupDiscussions groupId={1} isMember isAdmin={false} discussions={[]} activeDiscussion={discussion} />
+        <GroupDiscussions
+          groupId={1}
+          isMember
+          isAdmin={false}
+          discussions={[]}
+          activeDiscussion={discussion}
+          onOpenDiscussion={() => undefined}
+          onCloseDiscussion={() => undefined}
+        />
       </ToastProvider>,
     );
 

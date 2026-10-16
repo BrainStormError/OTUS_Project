@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 
@@ -23,12 +22,16 @@ export function GroupDiscussions({
   isAdmin,
   discussions,
   activeDiscussion,
+  onOpenDiscussion,
+  onCloseDiscussion,
 }: {
   groupId: number;
   isMember: boolean;
   isAdmin: boolean;
   discussions: DiscussionSummary[];
   activeDiscussion: DiscussionDetail | null;
+  onOpenDiscussion: (id: number) => void;
+  onCloseDiscussion: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -104,12 +107,13 @@ export function GroupDiscussions({
   if (activeDiscussion) {
     return (
       <div className="space-y-4" data-testid="discussion-detail">
-        <Link
-          href={`/groups/${groupId}?tab=discussions`}
+        <button
+          type="button"
+          onClick={onCloseDiscussion}
           className="text-sm text-muted-foreground underline-offset-4 hover:underline"
         >
           ← К обсуждениям
-        </Link>
+        </button>
         <h2 className="text-lg font-medium">{activeDiscussion.title}</h2>
         <p className="text-xs text-muted-foreground">
           Автор: {authorLabel(activeDiscussion.authorName, activeDiscussion.authorHandle)}
@@ -183,9 +187,10 @@ export function GroupDiscussions({
         >
           {discussions.map((discussion) => (
             <li key={discussion.id}>
-              <Link
-                href={`/groups/${groupId}?tab=discussions&discussion=${discussion.id}`}
-                className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-2 transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              <button
+                type="button"
+                onClick={() => onOpenDiscussion(discussion.id)}
+                className="flex min-h-14 w-full flex-wrap items-center justify-between gap-3 px-4 py-2 text-left transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{discussion.title}</span>
@@ -196,7 +201,7 @@ export function GroupDiscussions({
                 <span className="shrink-0 text-xs text-muted-foreground">
                   Комментариев: {discussion.commentCount}
                 </span>
-              </Link>
+              </button>
             </li>
           ))}
         </ul>

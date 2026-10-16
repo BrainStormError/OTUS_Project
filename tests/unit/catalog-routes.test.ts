@@ -120,6 +120,21 @@ describe('GET /api/genres', () => {
     expect(genresMock).toHaveBeenCalledWith(undefined);
   });
 
+  it('marks the genre response cacheable for the client only', async () => {
+    getActorMock.mockResolvedValue(actor);
+    genresMock.mockResolvedValue(ok([{ id: 18, name: 'Драма' }]));
+
+    const response = await genresRoute(
+      new Request('http://localhost/api/genres', { headers: origin }),
+    );
+    expect(response.status).toBe(200);
+    const cacheControl = response.headers.get('cache-control') ?? '';
+    expect(cacheControl).toContain('private');
+    const maxAge = Number(/max-age=(\d+)/.exec(cacheControl)?.[1]);
+    expect(maxAge).toBeGreaterThan(0);
+    expect(maxAge).toBeLessThanOrEqual(3600);
+  });
+
   it('scopes the list to a kind so a film-only id is excluded', async () => {
     getActorMock.mockResolvedValue(actor);
     genresMock.mockImplementation(async (kind?: 'film' | 'series') =>

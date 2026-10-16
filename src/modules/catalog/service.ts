@@ -1,5 +1,6 @@
 import { ok, type Result } from '@/core/result';
 
+import { TtlCache } from './cache';
 import { detailCacheKey, searchCacheKey } from './cache-key';
 import {
   deleteExpiredCache,
@@ -78,13 +79,30 @@ async function readThrough<T>(
   return fresh;
 }
 
+// The stored genre catalog changes only through the deploy-time sync script,
+// which restarts the process, so a short in-process TTL is enough to stop
+// re-reading it from the database on every search and every /api/genres call.
+const GENRES_CACHE_TTL_MS = 10 * 60 * 1000;
+const genresCache = new TtlCache<Genre[]>(GENRES_CACHE_TTL_MS);
+
+async function cachedGenres(kind?: CatalogMediaKind): Promise<Genre[]> {
+  const key = kind ?? 'all';
+  const cached = genresCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const genres = await listStoredGenres(kind);
+  genresCache.set(key, genres);
+  return genres;
+}
+
 async function storedGenreMap(): Promise<Map<number, string>> {
-  const genres = await listStoredGenres();
+  const genres = await cachedGenres();
   return new Map(genres.map((genre) => [genre.id, genre.name]));
 }
 
 export async function listGenres(kind?: CatalogMediaKind): Promise<Result<Genre[]>> {
-  return ok(await listStoredGenres(kind));
+  return ok(await cachedGenres(kind));
 }
 
 export async function searchCatalog(

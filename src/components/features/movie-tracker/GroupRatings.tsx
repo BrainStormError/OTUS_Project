@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Fragment, useEffect, useId, useState } from 'react';
 
@@ -43,12 +42,14 @@ export function GroupRatings({
   isAdmin,
   currentUserId,
   ratings,
+  onOpenDiscussion,
 }: {
   groupId: number;
   isMember: boolean;
   isAdmin: boolean;
   currentUserId?: number;
   ratings: GroupRatingSummary[];
+  onOpenDiscussion: (id: number) => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -304,12 +305,16 @@ export function GroupRatings({
                     </td>
                     <td className="px-4 py-3">
                       {rating.discussionId ? (
-                        <Button asChild variant="outline" size="sm">
-                          <Link
-                            href={`/groups/${groupId}?tab=discussions&discussion=${rating.discussionId}`}
-                          >
-                            К обсуждению
-                          </Link>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenDiscussion(rating.discussionId as number);
+                          }}
+                        >
+                          К обсуждению
                         </Button>
                       ) : isAdmin ? (
                         <Button

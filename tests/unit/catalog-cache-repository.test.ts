@@ -26,6 +26,8 @@ describe('catalog cache repository', () => {
     expect(sql).toMatch(/INSERT INTO tmdb_cache/);
     expect(sql).toMatch(/ON CONFLICT \(cache_key\) DO UPDATE/);
     expect(sql).toContain('$2::jsonb');
+    expect(sql).toMatch(/payload_bytes/);
+    expect(sql).toContain('octet_length($2::jsonb::text)');
     expect(params).toEqual([
       'search:film|lang=ru-RU',
       JSON.stringify({ results: [] }),
@@ -64,7 +66,7 @@ describe('catalog cache repository', () => {
     expect(await selectCacheUsageBytes()).toBe(4096);
 
     const [sql] = queryMock.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('SUM(octet_length(payload::text))');
+    expect(sql).toContain('SUM(payload_bytes)');
     expect(sql).toMatch(/FROM tmdb_cache/);
   });
 
@@ -82,6 +84,7 @@ describe('catalog cache repository', () => {
     const [sql, params] = queryMock.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/DELETE FROM tmdb_cache/);
     expect(sql).toMatch(/ORDER BY updated_at ASC, id ASC/);
+    expect(sql).toMatch(/SUM\(payload_bytes\)/);
     expect(sql).toMatch(/RETURNING id/);
     expect(params).toEqual([1024]);
   });

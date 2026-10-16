@@ -12,8 +12,6 @@ import {
   removeWatchlist,
 } from '@/modules/watchlist';
 
-import { revalidatePersonalData } from '../personal-revalidate';
-
 export const dynamic = 'force-dynamic';
 
 const listQuery = z.object({
@@ -55,7 +53,6 @@ export const POST = withRoute(
     if (!result.ok) {
       return result;
     }
-    revalidatePersonalData();
     return ok({ id: result.value.id });
   },
 );
@@ -73,7 +70,6 @@ export const DELETE = withRoute(
     if (!result.ok) {
       return result;
     }
-    revalidatePersonalData();
     return result;
   },
 );

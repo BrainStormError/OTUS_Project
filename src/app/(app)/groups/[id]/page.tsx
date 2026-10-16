@@ -2,23 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { toGroup } from '@/components/features/movie-tracker/adapters';
-import {
-  ActivityPanel,
-  DiscussionsPanel,
-  GroupTabPanel,
-  RatingsPanel,
-} from '@/components/features/movie-tracker/GroupTabPanels';
-import {
-  GroupTabs,
-  isGroupTabId,
-  type GroupTabId,
-} from '@/components/features/movie-tracker/GroupTabs';
+import { GroupTabs } from '@/components/features/movie-tracker/GroupTabs';
 import { LeaveGroupButton } from '@/components/features/movie-tracker/LeaveGroupButton';
-import { StatisticsView } from '@/components/features/movie-tracker/StatisticsView';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getActor } from '@/modules/auth/session';
-import { getGroup, canViewGroup } from '@/modules/groups';
+import { listGroupFeed, type FeedItem } from '@/modules/activity';
+import { listDiscussionDetails, type DiscussionDetail } from '@/modules/discussions';
+import { getGroup, canViewGroup, listGroupRatings, type GroupRatingSummary } from '@/modules/groups';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,10 +48,26 @@ export default async function GroupPage({
   const isMember = Boolean(membership);
   const isAdmin = membership?.role === 'admin';
 
-  const tabParam = single(query.tab);
-  const active: GroupTabId = isGroupTabId(tabParam) ? tabParam : 'discussions';
+  const discussionsResult = await listDiscussionDetails(actor, groupId);
+  const discussions: DiscussionDetail[] = discussionsResult.ok ? discussionsResult.value : [];
+
+  const ratingsResult = await listGroupRatings(actor, groupId);
+  const ratings: GroupRatingSummary[] = ratingsResult.ok ? ratingsResult.value : [];
+
+  const activityVisible = Boolean(actor && isMember);
+  let activityEvents: FeedItem[] = [];
+  if (actor && isMember) {
+    const feed = await listGroupFeed(actor, groupId, { limit: 20 });
+    if (feed.ok) {
+      activityEvents = feed.value.items;
+    }
+  }
+
   const discussionParam = single(query.discussion);
-  const discussionId = discussionParam ? Number(discussionParam) : undefined;
+  const parsedDiscussion =
+    discussionParam !== undefined && Number.isInteger(Number(discussionParam))
+      ? Number(discussionParam)
+      : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -84,63 +90,19 @@ export default async function GroupPage({
         ) : null}
       </header>
 
-      <GroupTabs groupId={group.id} active={active} />
-
-      <section
-        role="tabpanel"
-        id={`panel-${active}`}
-        aria-labelledby={`tab-${active}`}
-        className="space-y-4"
-      >
-        <GroupTabPanel tab={active}>
-          {active === 'discussions' ? (
-            <DiscussionsPanel
-              actor={actor}
-              groupId={group.id}
-              isMember={isMember}
-              isAdmin={isAdmin}
-              discussionId={discussionId}
-            />
-          ) : null}
-
-          {active === 'ratings' ? (
-            <RatingsPanel
-              actor={actor}
-              groupId={group.id}
-              isMember={isMember}
-              isAdmin={isAdmin}
-            />
-          ) : null}
-
-          {active === 'activity' ? (
-            <ActivityPanel actor={actor} groupId={group.id} isMember={isMember} />
-          ) : null}
-
-          {active === 'members' ? (
-            <ul
-              className="divide-y divide-border rounded-lg border border-border"
-              data-testid="group-members"
-            >
-              {group.members.map((member) => (
-                <li
-                  key={member.id}
-                  className="flex min-h-14 items-center justify-between gap-3 px-4 py-2"
-                >
-                  <Link
-                    href={`/u/${member.handle}`}
-                    className="text-sm font-medium underline-offset-4 hover:underline"
-                  >
-                    {member.name}
-                  </Link>
-                  {member.role === 'admin' ? <Badge>Администратор</Badge> : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {active === 'stats' ? <StatisticsView stats={group.stats} /> : null}
-        </GroupTabPanel>
-      </section>
+      <GroupTabs
+        groupId={group.id}
+        group={group}
+        isMember={isMember}
+        isAdmin={isAdmin}
+        currentUserId={actor?.id}
+        discussions={discussions}
+        ratings={ratings}
+        activityEvents={activityEvents}
+        activityVisible={activityVisible}
+        initialTab={single(query.tab)}
+        initialDiscussionId={parsedDiscussion}
+      />
     </div>
   );
 }

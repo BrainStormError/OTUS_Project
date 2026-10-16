@@ -14,6 +14,10 @@ export const GET = withRoute(
     querySchema: catalogGenresQuery,
     resolveActor: getActor,
     rateLimit: { limit: 60, windowMs: 60_000 },
+    // The stored catalog only changes on deploy; a private client cache stops
+    // the modals from re-querying on every open. `private` keeps shared proxies
+    // from caching an authenticated response.
+    headers: { 'cache-control': 'private, max-age=3600' },
   },
   async (_input, { query }) => {
     const result = await listGenres(query.kind);

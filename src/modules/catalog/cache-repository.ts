@@ -30,10 +30,11 @@ export async function upsertCacheEntry(
   expiresAt: Date,
 ): Promise<void> {
   await query(
-    `INSERT INTO tmdb_cache (cache_key, payload, expires_at)
-          VALUES ($1, $2::jsonb, $3)
+    `INSERT INTO tmdb_cache (cache_key, payload, payload_bytes, expires_at)
+          VALUES ($1, $2::jsonb, octet_length($2::jsonb::text), $3)
      ON CONFLICT (cache_key) DO UPDATE
             SET payload = EXCLUDED.payload,
+                payload_bytes = EXCLUDED.payload_bytes,
                 expires_at = EXCLUDED.expires_at,
                 updated_at = now()`,
     [cacheKey, JSON.stringify(payload), expiresAt],
@@ -50,7 +51,7 @@ export async function deleteExpiredCache(now: Date): Promise<number> {
 
 export async function selectCacheUsageBytes(): Promise<number> {
   const rows = await query<{ usage: number }>(
-    'SELECT COALESCE(SUM(octet_length(payload::text)), 0)::bigint AS usage FROM tmdb_cache',
+    'SELECT COALESCE(SUM(payload_bytes), 0)::bigint AS usage FROM tmdb_cache',
   );
   return Number(rows[0]?.usage ?? 0);
 }
@@ -68,9 +69,9 @@ export async function deleteOldestCache(maxBytes: number): Promise<number> {
       WHERE id IN (
         SELECT id FROM (
           SELECT id,
-                 SUM(octet_length(payload::text))
+                 SUM(payload_bytes)
                    OVER (ORDER BY updated_at ASC, id ASC)
-                   - octet_length(payload::text) AS removed_before
+                   - payload_bytes AS removed_before
             FROM tmdb_cache
         ) ordered
         WHERE removed_before < $1

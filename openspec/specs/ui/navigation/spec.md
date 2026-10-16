@@ -19,7 +19,7 @@ The application SHALL expose seven primary sections: Home/Search, My Films, My S
 ### Requirement: Navigation depth limit
 Every key screen SHALL be reachable from Home in at most three navigation transitions.
 
-Key screens include film results, film card, the rating and comment form, a series card, its season and episode levels, the series rating form, a profile, another user's profile, statistics, friend requests, a group card, the group admin panel, and privacy settings.
+Key screens include film results, film card, the rating and comment form, a series card and the series rating form, a profile, another user's profile, statistics, friend requests, a group card, the group admin panel, and privacy settings.
 
 #### Scenario: Key screen within depth budget
 - **WHEN** a user navigates from Home to any key screen
@@ -173,3 +173,73 @@ A successful sign-in SHALL land the user on Home, and no retired or non-product 
 #### Scenario: OAuth sign-in lands on Home
 - **WHEN** the user completes OAuth sign-in
 - **THEN** they are taken to Home
+
+### Requirement: Mobile tab-bar label alignment
+
+In the mobile bottom tab bar, each section label SHALL be horizontally centered within its tab, including when the label wraps onto more than one line on a narrow viewport.
+
+#### Scenario: Label wraps onto two lines
+
+- **WHEN** a section label such as "Мои фильмы" or "Мои сериалы" wraps onto two lines on a narrow phone viewport
+- **THEN** both lines of the label are horizontally centered within the tab
+
+#### Scenario: Label fits on one line
+
+- **WHEN** a section label fits on a single line
+- **THEN** the label remains horizontally centered within its tab
+
+### Requirement: Route navigation reuses loaded state
+
+Moving between sections SHALL reuse the state already loaded for a previously visited route within a short freshness window, so that returning to a section or moving back and forward does not require a new full server render.
+
+#### Scenario: Returning to a recently visited section
+
+- **WHEN** the user leaves a section and returns to it within the freshness window
+- **THEN** the section is shown from already-loaded state without a new full server render
+
+#### Scenario: Back and forward between sections
+
+- **WHEN** the user moves back or forward in history between recently visited sections
+- **THEN** the target section is shown from already-loaded state
+
+### Requirement: Shell links prefetch their destination
+
+Navigation shell links SHALL prefetch their destination so an activation begins with the destination already being prepared, and title-card links inside result grids SHALL NOT prefetch every card destination.
+
+#### Scenario: Shell link prefetches
+
+- **WHEN** a navigation shell link is displayed and can be activated
+- **THEN** the destination for that link is prefetched before activation
+
+#### Scenario: Catalog cards are not prefetched
+
+- **WHEN** a grid of title cards is displayed
+- **THEN** displaying the grid does not prefetch every card's destination
+
+### Requirement: Personal lists reflect mutations without a manual reload
+
+After a successful mutation of the signed-in user's watched records or watch-later list — saving, editing, or deleting a record, and adding or removing a watch-later title — the affected sections SHALL reflect the change without a manual page reload. The section where the mutation was made SHALL reflect it immediately, and every other affected section SHALL reflect it on its next visit. A mutation that fails SHALL NOT remain visible as if it had succeeded.
+
+#### Scenario: Record saved on Home appears in My Films
+- **WHEN** the user saves a watched record for a title on Home and then opens My Films, including when the watched list was previously empty
+- **THEN** My Films shows the saved record without a manual page reload
+
+#### Scenario: Saved record appears regardless of navigation order
+- **WHEN** the user saves a watched record on Home and opens My Films either before or after the save request completes
+- **THEN** My Films eventually shows the saved record without a manual page reload, and never keeps an outdated empty list
+
+#### Scenario: Deleted record disappears on the next visit
+- **WHEN** the user deletes a watched record and then opens the section that listed it
+- **THEN** the deleted record is absent without a manual page reload
+
+#### Scenario: Watch-later change is reflected
+- **WHEN** the user adds or removes a watch-later title in one section and then opens the watch-later list in My Films or My Series
+- **THEN** the list reflects the addition or removal without a manual page reload
+
+#### Scenario: Failed mutation leaves no visible record
+- **WHEN** saving or deleting a watched record or a watch-later title fails
+- **THEN** the failed change is not left visible as if it had succeeded, and the user is informed of the failure
+
+#### Scenario: Cross-section value is consistent
+- **WHEN** a watched record or watch-later title is saved in one section and viewed in another
+- **THEN** both sections present the same rating, comment, watch date, and watch-later state

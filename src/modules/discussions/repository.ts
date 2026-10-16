@@ -121,6 +121,20 @@ export async function listPosts(discussionId: number): Promise<DiscussionPost[]>
   return rows.map(mapPost);
 }
 
+export async function listPostsByGroup(groupId: number): Promise<DiscussionPost[]> {
+  const rows = await query<PostRow>(
+    `SELECT p.id, p.discussion_id, p.author_id, p.body, p.created_at,
+            u.name AS author_name, u.handle AS author_handle
+       FROM discussion_posts p
+       JOIN users u ON u.id = p.author_id
+       JOIN group_discussions d ON d.id = p.discussion_id
+      WHERE d.group_id = $1
+      ORDER BY p.created_at ASC, p.id ASC`,
+    [groupId],
+  );
+  return rows.map(mapPost);
+}
+
 export async function insertPost(
   tx: PoolClient,
   input: { discussionId: number; authorId: number; body: string },

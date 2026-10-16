@@ -41,6 +41,9 @@ export type WithRouteConfig<TIn, TQuery = undefined> = {
   };
   rateLimiter?: RateLimiter;
   maxBodyBytes?: number;
+  // Extra headers merged into the success response (for example a cache policy
+  // for a read-only endpoint). Error responses keep their own headers.
+  headers?: Record<string, string>;
   // Extra input derived from the request URL (for example a path id) that is
   // merged with the parsed body before validation. Lets `withRoute` stay the
   // single reader of the request body.
@@ -194,7 +197,7 @@ export function withRoute<TIn, TOut, TQuery = undefined>(
           responseHeaders,
         );
       }
-      return json(result.value, 200, responseHeaders);
+      return json(result.value, 200, { ...responseHeaders, ...config.headers });
     } catch (error) {
       log('error', 'mutation.unexpected', {
         requestId,

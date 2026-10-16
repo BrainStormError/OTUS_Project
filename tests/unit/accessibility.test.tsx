@@ -17,6 +17,7 @@ const genres = [
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/films',
+  useRouter: () => ({ prefetch: vi.fn() }),
 }));
 
 beforeEach(() => {

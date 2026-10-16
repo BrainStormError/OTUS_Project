@@ -1,16 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { err, ok } from '@/core/result';
 
-const { getActorMock, listMock, deleteMock, saveMock, revalidateMock } = vi.hoisted(() => ({
+const { getActorMock, listMock, deleteMock, saveMock } = vi.hoisted(() => ({
   getActorMock: vi.fn(),
   listMock: vi.fn(),
   deleteMock: vi.fn(),
   saveMock: vi.fn(),
-  revalidateMock: vi.fn(),
 }));
-
-vi.mock('next/cache', () => ({ revalidatePath: revalidateMock }));
 
 vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
 
@@ -34,10 +31,6 @@ import {
 
 const actor = { id: 1, role: 'employee' as const };
 const origin = { origin: 'http://localhost:3000' };
-
-beforeEach(() => {
-  revalidateMock.mockClear();
-});
 
 describe('GET /api/records', () => {
   it('returns 401 without a session', async () => {
@@ -74,24 +67,23 @@ describe('POST /api/records', () => {
     });
   }
 
-  it('invalidates personal routes only on success', async () => {
+  it('saves the record for the owner', async () => {
     getActorMock.mockResolvedValue(actor);
     saveMock.mockResolvedValue(ok({ id: 7 }));
     const response = await saveRoute(
       save({ mediaKind: 'film', mediaRef: '27205', rating: 9, watchedAt: '2026-10-15' }),
     );
     expect(response.status).toBe(200);
-    expect(revalidateMock).toHaveBeenCalledWith('/films');
+    expect(await response.json()).toEqual({ id: 7 });
   });
 
-  it('does not invalidate when the save fails', async () => {
+  it('returns the service error when the save fails', async () => {
     getActorMock.mockResolvedValue(actor);
     saveMock.mockResolvedValue(err('NOT_FOUND', 'Запись не найдена'));
     const response = await saveRoute(
       save({ mediaKind: 'film', mediaRef: '27205', rating: 9, watchedAt: '2026-10-15' }),
     );
     expect(response.status).toBe(404);
-    expect(revalidateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -108,23 +100,19 @@ describe('DELETE /api/records', () => {
     expect((await deleteRoute(request('nope'))).status).toBe(400);
   });
 
-  it('maps a foreign record to 404 and does not invalidate', async () => {
+  it('maps a foreign record to 404', async () => {
     getActorMock.mockResolvedValue(actor);
     deleteMock.mockResolvedValue(err('NOT_FOUND', 'Запись не найдена'));
     const response = await deleteRoute(request('7'));
     expect(response.status).toBe(404);
     expect(deleteMock).toHaveBeenCalledWith(actor, 7);
-    expect(revalidateMock).not.toHaveBeenCalled();
   });
 
-  it('removes the record for the owner and invalidates personal routes', async () => {
+  it('removes the record for the owner', async () => {
     getActorMock.mockResolvedValue(actor);
     deleteMock.mockResolvedValue(ok({ id: 7 }));
     const response = await deleteRoute(request('7'));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: 7 });
-    expect(revalidateMock).toHaveBeenCalledWith('/films');
-    expect(revalidateMock).toHaveBeenCalledWith('/series');
-    expect(revalidateMock).toHaveBeenCalledWith('/');
   });
 });

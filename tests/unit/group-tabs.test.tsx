@@ -1,17 +1,17 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GroupActivity } from '@/components/features/movie-tracker/GroupActivity';
 import { GroupDiscussions } from '@/components/features/movie-tracker/GroupDiscussions';
 import { GroupRatings } from '@/components/features/movie-tracker/GroupRatings';
-import { GroupTabPanel } from '@/components/features/movie-tracker/GroupTabPanels';
-import { GroupTabSkeleton } from '@/components/features/movie-tracker/GroupTabSkeleton';
 import { GroupTabs } from '@/components/features/movie-tracker/GroupTabs';
 import { writeTimezone } from '@/components/layout/preferences';
 import type { FeedItem } from '@/modules/activity';
 import type { DiscussionSummary, DiscussionDetail } from '@/modules/discussions';
 import type { GroupRatingSummary } from '@/modules/groups';
+
+import type { Group } from '@/components/features/movie-tracker/types';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -44,6 +44,16 @@ function stubRatingsFetch(responses: RatingsResponse[]) {
   return mock;
 }
 
+function stubGenresFetch() {
+  const mock = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ items: [] }),
+  });
+  vi.stubGlobal('fetch', mock);
+  return mock;
+}
+
 function ratingsCalls(mock: ReturnType<typeof vi.fn>): RequestInit[] {
   return mock.mock.calls
     .filter(([input]) => isRatingsCall(input))
@@ -66,6 +76,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 const discussion: DiscussionSummary = {
   id: 1,
   groupId: 1,
@@ -76,6 +91,60 @@ const discussion: DiscussionSummary = {
   mediaId: null,
   commentCount: 2,
   createdAt: '2026-10-01T00:00:00.000Z',
+};
+
+const discussionDetail: DiscussionDetail = {
+  ...discussion,
+  posts: [
+    {
+      id: 1,
+      discussionId: 1,
+      authorId: 2,
+      authorName: 'Иван',
+      authorHandle: 'ivan',
+      body: 'Первый комментарий',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
+  ],
+};
+
+const parasites: DiscussionDetail = {
+  ...discussion,
+  id: 7,
+  title: 'Обсуждаем Паразиты',
+  posts: [],
+};
+
+const rating: GroupRatingSummary = {
+  mediaId: 27205,
+  mediaKind: 'film',
+  mediaRef: '27205',
+  title: 'Начало',
+  year: 2010,
+  average: 8.5,
+  discussionId: null,
+  ratings: [
+    {
+      mediaId: 27205,
+      userId: 1,
+      name: 'Мария',
+      handle: 'maria',
+      rating: 8,
+      comment: null,
+      watchedAt: '2026-08-12',
+      createdAt: '2026-08-12T00:00:00.000Z',
+    },
+    {
+      mediaId: 27205,
+      userId: 2,
+      name: 'Иван',
+      handle: 'ivan',
+      rating: 9,
+      comment: null,
+      watchedAt: '2026-08-13',
+      createdAt: '2026-08-13T00:00:00.000Z',
+    },
+  ],
 };
 
 function feedItem(overrides: Partial<FeedItem>): FeedItem {
@@ -97,21 +166,108 @@ function feedItem(overrides: Partial<FeedItem>): FeedItem {
   };
 }
 
-describe('GroupTabs', () => {
-  it('renders the full tab set with the active tab selected', () => {
-    render(<GroupTabs groupId={1} active="ratings" />);
-    for (const label of ['Обсуждения', 'Оценки', 'Активность', 'Участники', 'Статистика']) {
-      expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
-    }
+const group: Group = {
+  id: 1,
+  name: 'Киновечера',
+  tags: [],
+  members: [{ id: 1, name: 'Админ', handle: 'admin', role: 'admin' }],
+  stats: { count: 0, genres: [], years: [] },
+};
+
+function renderTabs(overrides: Partial<Parameters<typeof GroupTabs>[0]> = {}) {
+  return render(
+    <GroupTabs
+      groupId={1}
+      group={group}
+      isMember
+      isAdmin={false}
+      currentUserId={1}
+      discussions={[discussionDetail]}
+      ratings={[]}
+      activityEvents={[]}
+      activityVisible
+      initialDiscussionId={null}
+      {...overrides}
+    />,
+  );
+}
+
+describe('GroupTabs controller', () => {
+  it('switches the visible panel on a tab click without navigation', async () => {
+    stubGenresFetch();
+    const replace = vi.spyOn(window.history, 'replaceState');
+    renderTabs();
+
+    expect(screen.getByText('Обсуждаем Начало')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Оценки' }));
+
     expect(screen.getByRole('tab', { name: 'Оценки' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Обсуждения' })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
+    expect(screen.getByText('В группе пока нет оценок')).toBeInTheDocument();
+    expect(screen.queryByTestId('group-tab-skeleton')).not.toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith(null, '', '/groups/1?tab=ratings');
   });
 
-  it('provides a visible focus indicator on the tab controls', () => {
-    render(<GroupTabs groupId={1} active="discussions" />);
+  it('falls back to the discussions tab for an unknown initial tab', () => {
+    renderTabs({ initialTab: 'nope' });
+    expect(screen.getByRole('tab', { name: 'Обсуждения' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByText('Обсуждаем Начало')).toBeInTheDocument();
+  });
+
+  it('opens a deep-linked discussion with its comments', () => {
+    renderTabs({ initialTab: 'discussions', initialDiscussionId: 1 });
+    expect(screen.getByTestId('discussion-detail')).toBeInTheDocument();
+    expect(screen.getByText('Первый комментарий')).toBeInTheDocument();
+  });
+
+  it('does not create history entries when switching tabs', async () => {
+    renderTabs();
+    const replace = vi.spyOn(window.history, 'replaceState');
+    const push = vi.spyOn(window.history, 'pushState');
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Участники' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Статистика' }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(replace).toHaveBeenCalled();
+  });
+
+  it('opens a discussion from a cross-tab link in place', async () => {
+    stubGenresFetch();
+    const replace = vi.spyOn(window.history, 'replaceState');
+    renderTabs({
+      initialTab: 'ratings',
+      ratings: [{ ...rating, discussionId: 7 }],
+      discussions: [parasites],
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'К обсуждению' }));
+
+    expect(screen.getByRole('tab', { name: 'Обсуждения' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('discussion-detail')).toBeInTheDocument();
+    expect(screen.getByText('Обсуждаем Паразиты')).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith(null, '', '/groups/1?tab=discussions&discussion=7');
+  });
+
+  it('returns to the discussion list through the local controller', async () => {
+    const replace = vi.spyOn(window.history, 'replaceState');
+    renderTabs({ initialTab: 'discussions', initialDiscussionId: 1 });
+
+    await userEvent.click(screen.getByRole('button', { name: '← К обсуждениям' }));
+
+    expect(screen.getByTestId('group-discussions')).toBeInTheDocument();
+    expect(screen.queryByTestId('discussion-detail')).not.toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith(null, '', '/groups/1?tab=discussions');
+  });
+
+  it('keeps the tab controls visually focusable', () => {
+    renderTabs();
     expect(screen.getByRole('tab', { name: 'Обсуждения' }).className).toContain(
       'focus-visible:ring-2',
     );
@@ -127,12 +283,33 @@ describe('GroupDiscussions', () => {
         isAdmin={false}
         discussions={[discussion]}
         activeDiscussion={null}
+        onOpenDiscussion={vi.fn()}
+        onCloseDiscussion={vi.fn()}
       />,
     );
     const list = screen.getByTestId('group-discussions');
     expect(within(list).getByText('Обсуждаем Начало')).toBeInTheDocument();
     expect(within(list).getByText('Админ')).toBeInTheDocument();
     expect(within(list).getByText(/Комментариев: 2/)).toBeInTheDocument();
+  });
+
+  it('opens a topic through the local controller instead of navigating', async () => {
+    const onOpenDiscussion = vi.fn();
+    render(
+      <GroupDiscussions
+        groupId={1}
+        isMember
+        isAdmin={false}
+        discussions={[discussion]}
+        activeDiscussion={null}
+        onOpenDiscussion={onOpenDiscussion}
+        onCloseDiscussion={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Обсуждаем Начало/ }));
+
+    expect(onOpenDiscussion).toHaveBeenCalledWith(1);
   });
 
   it('shows the create form only to admins', () => {
@@ -143,6 +320,8 @@ describe('GroupDiscussions', () => {
         isAdmin={false}
         discussions={[]}
         activeDiscussion={null}
+        onOpenDiscussion={vi.fn()}
+        onCloseDiscussion={vi.fn()}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Создать обсуждение' })).not.toBeInTheDocument();
@@ -154,6 +333,8 @@ describe('GroupDiscussions', () => {
         isAdmin
         discussions={[]}
         activeDiscussion={null}
+        onOpenDiscussion={vi.fn()}
+        onCloseDiscussion={vi.fn()}
       />,
     );
     expect(screen.getByRole('button', { name: 'Создать обсуждение' })).toBeInTheDocument();
@@ -167,6 +348,8 @@ describe('GroupDiscussions', () => {
         isAdmin={false}
         discussions={[]}
         activeDiscussion={null}
+        onOpenDiscussion={vi.fn()}
+        onCloseDiscussion={vi.fn()}
       />,
     );
     expect(screen.getByText('Пока нет обсуждений')).toBeInTheDocument();
@@ -175,27 +358,15 @@ describe('GroupDiscussions', () => {
   it('renders an open discussion with its comments and posts a new comment', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 2 }) });
     vi.stubGlobal('fetch', fetchMock);
-    const detail: DiscussionDetail = {
-      ...discussion,
-      posts: [
-        {
-          id: 1,
-          discussionId: 1,
-          authorId: 2,
-          authorName: 'Иван',
-          authorHandle: 'ivan',
-          body: 'Первый комментарий',
-          createdAt: '2026-10-01T00:00:00.000Z',
-        },
-      ],
-    };
     render(
       <GroupDiscussions
         groupId={1}
         isMember
         isAdmin={false}
         discussions={[discussion]}
-        activeDiscussion={detail}
+        activeDiscussion={discussionDetail}
+        onOpenDiscussion={vi.fn()}
+        onCloseDiscussion={vi.fn()}
       />,
     );
     expect(screen.getByText('Первый комментарий')).toBeInTheDocument();
@@ -211,40 +382,16 @@ describe('GroupDiscussions', () => {
 });
 
 describe('GroupRatings', () => {
-  const rating: GroupRatingSummary = {
-    mediaId: 27205,
-    mediaKind: 'film',
-    mediaRef: '27205',
-    title: 'Начало',
-    year: 2010,
-    average: 8.5,
-    discussionId: null,
-    ratings: [
-      {
-        mediaId: 27205,
-        userId: 1,
-        name: 'Мария',
-        handle: 'maria',
-        rating: 8,
-        comment: null,
-        watchedAt: '2026-08-12',
-        createdAt: '2026-08-12T00:00:00.000Z',
-      },
-      {
-        mediaId: 27205,
-        userId: 2,
-        name: 'Иван',
-        handle: 'ivan',
-        rating: 9,
-        comment: null,
-        watchedAt: '2026-08-13',
-        createdAt: '2026-08-13T00:00:00.000Z',
-      },
-    ],
-  };
-
   it('shows the group average and reveals individual ratings', async () => {
-    render(<GroupRatings groupId={1} isMember isAdmin={false} ratings={[rating]} />);
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
+    );
     const table = screen.getByTestId('group-ratings');
     expect(within(table).getByText('8.5')).toBeInTheDocument();
     await userEvent.click(within(table).getByRole('button', { name: 'Начало' }));
@@ -253,12 +400,22 @@ describe('GroupRatings', () => {
   });
 
   it('shows the empty state when there are no ratings', () => {
-    render(<GroupRatings groupId={1} isMember isAdmin={false} ratings={[]} />);
+    render(
+      <GroupRatings groupId={1} isMember isAdmin={false} ratings={[]} onOpenDiscussion={vi.fn()} />,
+    );
     expect(screen.getByText('В группе пока нет оценок')).toBeInTheDocument();
   });
 
   it('wraps the ratings table in a horizontally scrollable container', () => {
-    render(<GroupRatings groupId={1} isMember isAdmin={false} ratings={[rating]} />);
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
+    );
     const table = screen.getByTestId('group-ratings');
     expect(table.parentElement?.className).toContain('overflow-x-auto');
   });
@@ -282,7 +439,16 @@ describe('GroupRatings', () => {
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<GroupRatings groupId={1} isMember isAdmin currentUserId={1} ratings={[]} />);
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin
+        currentUserId={1}
+        ratings={[]}
+        onOpenDiscussion={vi.fn()}
+      />,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Добавить оценку' }));
     const picker = screen.getByRole('dialog');
@@ -302,25 +468,49 @@ describe('GroupRatings', () => {
   });
 
   it('does not offer the start control to a member', () => {
-    render(<GroupRatings groupId={1} isMember isAdmin={false} currentUserId={2} ratings={[]} />);
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={2}
+        ratings={[]}
+        onOpenDiscussion={vi.fn()}
+      />,
+    );
     expect(screen.queryByRole('button', { name: 'Добавить оценку' })).not.toBeInTheDocument();
   });
 
   it('offers Оценить without an own rating and Изменить once the member has one', () => {
     const { rerender } = render(
-      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={999}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
     );
     expect(screen.getByRole('button', { name: 'Оценить' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Изменить' })).not.toBeInTheDocument();
 
     rerender(
-      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={1} ratings={[rating]} />,
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={1}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
     );
     expect(screen.getByRole('button', { name: 'Изменить' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Оценить' })).not.toBeInTheDocument();
   });
 
-  it('shows К обсуждению beside the rate action when a discussion is attached', () => {
+  it('opens an attached discussion through the local controller', async () => {
+    const onOpenDiscussion = vi.fn();
     render(
       <GroupRatings
         groupId={1}
@@ -328,19 +518,29 @@ describe('GroupRatings', () => {
         isAdmin={false}
         currentUserId={1}
         ratings={[{ ...rating, discussionId: 7 }]}
+        onOpenDiscussion={onOpenDiscussion}
       />,
     );
-    expect(screen.getByRole('link', { name: 'К обсуждению' })).toHaveAttribute(
-      'href',
-      '/groups/1?tab=discussions&discussion=7',
-    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'К обсуждению' }));
+
+    expect(onOpenDiscussion).toHaveBeenCalledWith(7);
     expect(screen.getByRole('button', { name: 'Изменить' })).toBeInTheDocument();
   });
 
   it('saves a rating from the row action and refreshes the tab', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ userId: 1 }) });
     vi.stubGlobal('fetch', fetchMock);
-    render(<GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />);
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={999}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
     const form = await screen.findByRole('dialog');
@@ -356,14 +556,23 @@ describe('GroupRatings', () => {
   });
 
   it('offers an attach control to admins for a rated media', () => {
-    render(<GroupRatings groupId={1} isMember isAdmin ratings={[rating]} />);
+    render(
+      <GroupRatings groupId={1} isMember isAdmin ratings={[rating]} onOpenDiscussion={vi.fn()} />,
+    );
     expect(screen.getByRole('button', { name: 'Обсудить' })).toBeInTheDocument();
   });
 
   it('offers the add-to-personal checkbox and sends it when set', async () => {
     const fetchMock = stubRatingsFetch([{ ok: true, body: { userId: 1 } }]);
     render(
-      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={999}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
@@ -391,7 +600,14 @@ describe('GroupRatings', () => {
       { ok: true, body: { userId: 1 } },
     ]);
     render(
-      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={999}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
@@ -420,7 +636,14 @@ describe('GroupRatings', () => {
       { ok: false, status: 409, body: { error: 'conflict' } },
     ]);
     render(
-      <GroupRatings groupId={1} isMember isAdmin={false} currentUserId={999} ratings={[rating]} />,
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin={false}
+        currentUserId={999}
+        ratings={[rating]}
+        onOpenDiscussion={vi.fn()}
+      />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Оценить' }));
@@ -445,30 +668,33 @@ describe('GroupRatings', () => {
 });
 
 describe('GroupActivity', () => {
-  it('offers a link to the discussion only for rating events with an attached discussion', () => {
+  it('offers the discussion control only for rating events with an attached discussion', async () => {
+    const onOpenDiscussion = vi.fn();
     render(
       <GroupActivity
-        groupId={1}
         visible
         events={[
           feedItem({ id: 1, discussionId: 1 }),
           feedItem({ id: 2, mediaId: 603, discussionId: null }),
         ]}
+        onOpenDiscussion={onOpenDiscussion}
       />,
     );
     const list = screen.getByTestId('group-activity');
-    expect(within(list).getAllByRole('link', { name: 'К обсуждению' })).toHaveLength(1);
-    expect(within(list).getByRole('link', { name: 'К обсуждению' })).toHaveAttribute(
-      'href',
-      '/groups/1?tab=discussions&discussion=1',
-    );
+    const controls = within(list).getAllByRole('button', { name: 'К обсуждению' });
+    expect(controls).toHaveLength(1);
+
+    await userEvent.click(controls[0]!);
+    expect(onOpenDiscussion).toHaveBeenCalledWith(1);
   });
 
   it('shows the empty state and the restricted state', () => {
-    const { rerender } = render(<GroupActivity groupId={1} events={[]} visible />);
+    const { rerender } = render(
+      <GroupActivity events={[]} visible onOpenDiscussion={vi.fn()} />,
+    );
     expect(screen.getByText('Пока нет активности')).toBeInTheDocument();
 
-    rerender(<GroupActivity groupId={1} events={[]} visible={false} />);
+    rerender(<GroupActivity events={[]} visible={false} onOpenDiscussion={vi.fn()} />);
     expect(screen.getByTestId('restricted-no-permission')).toBeInTheDocument();
   });
 
@@ -476,56 +702,12 @@ describe('GroupActivity', () => {
     writeTimezone('Europe/Moscow');
     render(
       <GroupActivity
-        groupId={1}
         visible
         events={[feedItem({ id: 1, createdAt: '2024-01-05T14:07:00.000Z' })]}
+        onOpenDiscussion={vi.fn()}
       />,
     );
     const list = screen.getByTestId('group-activity');
     expect(await within(list).findByText('17:07 05.01.24')).toBeInTheDocument();
-  });
-});
-
-describe('GroupTabSkeleton', () => {
-  it('renders a list shape for content tabs', () => {
-    render(<GroupTabSkeleton tab="discussions" />);
-    expect(screen.getByTestId('skeleton-list')).toBeInTheDocument();
-    expect(screen.queryByTestId('skeleton-stats')).not.toBeInTheDocument();
-  });
-
-  it('renders a list shape for the members tab', () => {
-    render(<GroupTabSkeleton tab="members" />);
-    expect(screen.getByTestId('skeleton-list')).toBeInTheDocument();
-  });
-
-  it('renders a stats shape for the statistics tab', () => {
-    render(<GroupTabSkeleton tab="stats" />);
-    expect(screen.getByTestId('skeleton-stats')).toBeInTheDocument();
-    expect(screen.queryByTestId('skeleton-list')).not.toBeInTheDocument();
-  });
-
-  it('exposes a loading status labelled with the selected tab', () => {
-    render(<GroupTabSkeleton tab="ratings" />);
-    const status = screen.getByRole('status');
-    expect(status).toHaveAttribute('data-tab', 'ratings');
-    expect(status).toHaveAttribute('aria-busy', 'true');
-  });
-});
-
-function PendingPanel(): never {
-  throw new Promise<void>(() => undefined);
-}
-
-describe('GroupTabPanel', () => {
-  it("shows the active tab's skeleton until its content arrives", () => {
-    render(
-      <GroupTabPanel tab="activity">
-        <PendingPanel />
-      </GroupTabPanel>,
-    );
-
-    const skeleton = screen.getByTestId('group-tab-skeleton');
-    expect(skeleton).toHaveAttribute('data-tab', 'activity');
-    expect(screen.queryByText('Пока нет активности')).not.toBeInTheDocument();
   });
 });

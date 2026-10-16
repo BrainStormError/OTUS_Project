@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Film,
   Heart,
@@ -16,6 +17,20 @@ import {
 import { cn } from '@/components/ui/utils';
 
 import { isSectionActive, sections, tabSections, type SectionKey } from './sections';
+
+// Destinations already scheduled for background warming. Shared across the
+// shell's instances so mounting both the rail and the tab bar warms each link
+// once, not twice.
+const warmedHrefs = new Set<string>();
+
+function scheduleIdle(callback: () => void): { cancel: () => void } {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(callback);
+    return { cancel: () => window.cancelIdleCallback(id) };
+  }
+  const id = setTimeout(callback, 1);
+  return { cancel: () => clearTimeout(id) };
+}
 
 const ICONS: Record<SectionKey, LucideIcon> = {
   home: Home,
@@ -37,8 +52,47 @@ export function NavLinks({
   collapsed?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const items = variant === 'rail' ? sections : tabSections;
   const iconOnly = variant === 'rail' && collapsed;
+
+  useEffect(() => {
+    const targets = items
+      .map((section) => section.href)
+      .filter((href) => !warmedHrefs.has(href));
+    if (targets.length === 0) {
+      return;
+    }
+    for (const href of targets) {
+      warmedHrefs.add(href);
+    }
+
+    let cancelled = false;
+    let handle: { cancel: () => void } | null = null;
+    let index = 0;
+
+    const warmNext = () => {
+      if (cancelled) {
+        return;
+      }
+      const href = targets[index];
+      if (href === undefined) {
+        return;
+      }
+      router.prefetch(href);
+      index += 1;
+      if (index < targets.length) {
+        handle = scheduleIdle(warmNext);
+      }
+    };
+
+    handle = scheduleIdle(warmNext);
+
+    return () => {
+      cancelled = true;
+      handle?.cancel();
+    };
+  }, [items, router]);
 
   return (
     <ul
@@ -52,7 +106,9 @@ export function NavLinks({
           <li key={section.key} className={variant === 'tabs' ? 'flex' : undefined}>
             <Link
               href={section.href}
-              prefetch
+              prefetch={false}
+              onPointerEnter={() => router.prefetch(section.href)}
+              onFocus={() => router.prefetch(section.href)}
               aria-current={active ? 'page' : undefined}
               aria-label={iconOnly ? section.label : undefined}
               title={iconOnly ? section.label : undefined}

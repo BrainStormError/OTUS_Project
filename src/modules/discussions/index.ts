@@ -3,6 +3,7 @@ export {
   attachDiscussion,
   addComment,
   listDiscussions,
+  listDiscussionDetails,
   getDiscussion,
 } from './service';
 export { createDiscussionInput, createPostInput, attachDiscussionInput } from './schema';

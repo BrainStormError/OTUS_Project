@@ -1,4 +1,4 @@
-import Link from 'next/link';
+'use client';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -29,13 +29,13 @@ function isRating(event: FeedItem): boolean {
 }
 
 export function GroupActivity({
-  groupId,
   events,
   visible,
+  onOpenDiscussion,
 }: {
-  groupId: number;
   events: FeedItem[];
   visible: boolean;
+  onOpenDiscussion: (id: number) => void;
 }) {
   if (!visible) {
     return <RestrictedState kind="no-permission" />;
@@ -71,10 +71,13 @@ export function GroupActivity({
           <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
             <Timestamp value={event.createdAt} />
             {isRating(event) && event.discussionId ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/groups/${groupId}?tab=discussions&discussion=${event.discussionId}`}>
-                  К обсуждению
-                </Link>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenDiscussion(event.discussionId as number)}
+              >
+                К обсуждению
               </Button>
             ) : null}
           </span>

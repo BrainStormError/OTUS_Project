@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 import { can, type Actor } from '@/core/auth/policy';
 import { withTransaction } from '@/core/db/transaction';
 import { err, ok, type Result } from '@/core/result';
@@ -65,6 +67,13 @@ function cleanDescription(description: string | undefined): string | null {
   return description && description.length > 0 ? description : null;
 }
 
+// The group context is read by many layers of a single server render
+// (GroupPage, getGroup, canViewGroup, and the panel services). Memoizing the
+// reads per server request keeps each of them calling the same functions while
+// performing the SQL once, the same way getActor is memoized.
+const findGroupByIdForRequest = cache(findGroupById);
+const getGroupRoleForRequest = cache(getGroupRoleRepository);
+
 export async function getGroups(actor: Actor): Promise<Result<GroupSummary[]>> {
   return ok(await listGroupsForUser(actor.id));
 }
@@ -80,7 +89,7 @@ export async function getGroup(
   if (!(await canViewGroup(actor, groupId))) {
     return err('NOT_FOUND', 'Группа не найдена');
   }
-  const group = await findGroupById(groupId);
+  const group = await findGroupByIdForRequest(groupId);
   if (!group) {
     return err('NOT_FOUND', 'Группа не найдена');
   }
@@ -91,7 +100,7 @@ export async function getGroupRole(
   groupId: number,
   userId: number,
 ): Promise<'admin' | 'member' | null> {
-  return getGroupRoleRepository(groupId, userId);
+  return getGroupRoleForRequest(groupId, userId);
 }
 
 export async function canViewGroup(
@@ -101,11 +110,11 @@ export async function canViewGroup(
   if (!actor) {
     return false;
   }
-  const group = await findGroupById(groupId);
+  const group = await findGroupByIdForRequest(groupId);
   if (!group) {
     return false;
   }
-  const role = await getGroupRoleRepository(groupId, actor.id);
+  const role = await getGroupRoleForRequest(groupId, actor.id);
   return can(actor, 'group:view', { groupRole: role, restricted: group.restricted });
 }
 

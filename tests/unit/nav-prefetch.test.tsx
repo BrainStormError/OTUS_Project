@@ -1,11 +1,11 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MovieCard } from '@/components/features/movie-tracker/MovieCard';
-import { NavLinks } from '@/components/layout/nav-links';
+const { prefetchMock } = vi.hoisted(() => ({ prefetchMock: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
+  useRouter: () => ({ prefetch: prefetchMock }),
 }));
 
 vi.mock('next/link', () => ({
@@ -29,14 +29,35 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+import { MovieCard } from '@/components/features/movie-tracker/MovieCard';
+import { NavLinks } from '@/components/layout/nav-links';
+
 describe('shell link prefetching', () => {
-  it('prefetches every navigation shell destination', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    prefetchMock.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not prefetch any shell destination just by rendering the shell', () => {
     render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
-    const links = screen.getAllByRole('link');
-    expect(links.length).toBeGreaterThan(0);
-    for (const link of links) {
-      expect(link).toHaveAttribute('data-prefetch', 'true');
-    }
+    expect(screen.getAllByRole('link').length).toBeGreaterThan(0);
+    expect(prefetchMock).not.toHaveBeenCalled();
+  });
+
+  it('prefetches the destination of a hovered shell link', () => {
+    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
+    fireEvent.pointerEnter(screen.getByRole('link', { name: /Мои фильмы/ }));
+    expect(prefetchMock).toHaveBeenCalledWith('/films');
+  });
+
+  it('prefetches the destination of a focused shell link', () => {
+    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
+    fireEvent.focus(screen.getByRole('link', { name: /Друзья/ }));
+    expect(prefetchMock).toHaveBeenCalledWith('/friends');
   });
 
   it('does not prefetch catalog card destinations', () => {
@@ -54,5 +75,6 @@ describe('shell link prefetching', () => {
       />,
     );
     expect(screen.getByRole('link')).toHaveAttribute('data-prefetch', 'false');
+    expect(prefetchMock).not.toHaveBeenCalled();
   });
 });

@@ -38,20 +38,22 @@ test('member rates a film, attaches a discussion and sees it across tabs', async
   await attach.getByLabel('Название обсуждения').fill('Обсуждаем Паразиты');
   await attach.getByRole('button', { name: 'Прикрепить' }).click();
 
-  // The ratings tab now links to the attached discussion.
-  await expect(parasityRow.getByRole('link', { name: 'К обсуждению' })).toBeVisible();
+  // The ratings tab now offers the attached discussion.
+  await expect(parasityRow.getByRole('button', { name: 'К обсуждению' })).toBeVisible();
 
   // The discussion is visible in the discussions tab.
   await page.goto(`/groups/${GROUP_ID}?tab=discussions`);
   await expect(page.getByText('Обсуждаем Паразиты')).toBeVisible();
 
-  // The activity tab exposes the rating with a link to the discussion.
+  // The activity tab exposes the rating with a control to the discussion.
   await page.goto(`/groups/${GROUP_ID}?tab=activity`);
   const activity = page.getByTestId('group-activity');
-  await expect(activity.getByRole('link', { name: 'К обсуждению' }).first()).toBeVisible();
+  await expect(activity.getByRole('button', { name: 'К обсуждению' }).first()).toBeVisible();
 });
 
-test('keeps the group shell in place and streams the tab skeleton', async ({ page }) => {
+test('keeps the group shell in place and switches tabs without a server round trip', async ({
+  page,
+}) => {
   await login(page);
   await page.goto(`/groups/${GROUP_ID}?tab=discussions`);
 
@@ -60,17 +62,32 @@ test('keeps the group shell in place and streams the tab skeleton', async ({ pag
   await expect(heading).toBeVisible();
   await expect(tablist).toBeVisible();
 
-  // The streamed document for a tab renders the shell and its skeleton before the content arrives.
-  const streamed = await page.request.get(`/groups/${GROUP_ID}?tab=ratings`);
-  expect(streamed.ok()).toBeTruthy();
-  const html = await streamed.text();
-  expect(html).toContain('group-tab-skeleton');
-  expect(html).toContain('data-tab="ratings"');
+  const rscRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = request.url();
+    if (url.includes(`/groups/${GROUP_ID}`) && url.includes('_rsc')) {
+      rscRequests.push(url);
+    }
+  });
 
-  // Switching tabs keeps the header and tab list visible.
+  // Switching tabs updates the panel and the address without reloading the page.
   await page.getByRole('tab', { name: 'Оценки' }).click();
   await expect(heading).toBeVisible();
   await expect(tablist).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/groups/${GROUP_ID}\\?tab=ratings$`));
+  expect(rscRequests).toHaveLength(0);
+});
+
+test('switching tabs does not add browser history entries', async ({ page }) => {
+  await login(page);
+  await page.goto('/groups');
+  await page.goto(`/groups/${GROUP_ID}`);
+
+  await page.getByRole('tab', { name: 'Оценки' }).click();
+  await page.getByRole('tab', { name: 'Участники' }).click();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/groups$/);
 });
 
 test('changing the timezone and clock format changes a comment moment', async ({ page }) => {

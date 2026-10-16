@@ -25,17 +25,21 @@ The system SHALL search real user records by name or handle. Results SHALL first
 - **THEN** that user does not appear in the results
 
 ### Requirement: Relationship status in results
-Each search result SHALL indicate the current relationship between the searcher and the found user: already friends, request pending (incoming or outgoing), or no relationship, and the available action SHALL follow that status.
+
+Each search result SHALL indicate the current relationship between the searcher and the found user: already friends, request pending (incoming or outgoing), or no relationship, and the available action SHALL follow that status. A result that is an accepted friend SHALL offer the action to remove the friend; a result with a pending request SHALL NOT offer any add action; a result without a relationship SHALL offer the add action.
 
 #### Scenario: Result already a friend
+
 - **WHEN** the search result is an accepted friend
-- **THEN** the result is shown as a friend without an add action
+- **THEN** the result offers the action to remove the friend and does not offer an add action
 
 #### Scenario: Result with a pending request
+
 - **WHEN** a pending request already exists between the searcher and the found user in either direction
 - **THEN** the result is marked as pending and no new request can be sent
 
 #### Scenario: Result without a relationship
+
 - **WHEN** the search result has no friendship and no pending request with the searcher
 - **THEN** the result offers the action to send a friend request
 
@@ -64,3 +68,22 @@ The system SHALL let a user see the friend requests they have sent and withdraw 
 #### Scenario: Outgoing request withdrawn
 - **WHEN** the user withdraws a pending outgoing request
 - **THEN** the pending request is removed and the other user no longer sees it as incoming
+
+### Requirement: Accepting an incoming friend request
+
+A user SHALL be able to accept an incoming friend request, which SHALL make the two users accepted friends. After acceptance, the new friend SHALL appear in the user's friends list and the pending incoming count SHALL update without a manual reload. If acceptance fails, the request SHALL remain pending and the user SHALL receive failure feedback.
+
+#### Scenario: Incoming request accepted
+
+- **WHEN** the user accepts an incoming friend request
+- **THEN** the two users become friends, the request no longer appears as pending, and the new friend appears in the friends list without a manual reload
+
+#### Scenario: Pending count reflects acceptance
+
+- **WHEN** the user accepts an incoming friend request
+- **THEN** the pending incoming count decreases to match the remaining requests without a manual reload
+
+#### Scenario: Failed acceptance
+
+- **WHEN** accepting an incoming friend request fails
+- **THEN** the request remains pending and failure feedback is shown

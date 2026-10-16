@@ -11,6 +11,7 @@ import {
   insertPost,
   listDiscussions as listDiscussionsRepository,
   listPosts,
+  listPostsByGroup,
 } from './repository';
 import type { AttachDiscussionInput, CreateDiscussionInput, CreatePostInput } from './schema';
 import type { DiscussionDetail, DiscussionPost, DiscussionSummary } from './types';
@@ -112,6 +113,29 @@ export async function listDiscussions(
     return err('NOT_FOUND', 'Группа не найдена');
   }
   return ok(await listDiscussionsRepository(groupId));
+}
+
+// Loads the group's discussions with their comments in a single pass, so a
+// discussion can be opened from any tab without another server request.
+export async function listDiscussionDetails(
+  actor: Actor | null,
+  groupId: number,
+): Promise<Result<DiscussionDetail[]>> {
+  if (!(await canViewGroup(actor, groupId))) {
+    return err('NOT_FOUND', 'Группа не найдена');
+  }
+
+  const discussions = await listDiscussionsRepository(groupId);
+  const posts = await listPostsByGroup(groupId);
+
+  const byDiscussion = new Map<number, DiscussionPost[]>();
+  for (const post of posts) {
+    const list = byDiscussion.get(post.discussionId) ?? [];
+    list.push(post);
+    byDiscussion.set(post.discussionId, list);
+  }
+
+  return ok(discussions.map((discussion) => ({ ...discussion, posts: byDiscussion.get(discussion.id) ?? [] })));
 }
 
 export async function getDiscussion(

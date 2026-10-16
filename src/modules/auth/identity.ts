@@ -1,6 +1,7 @@
 import type { Actor } from '@/core/auth/policy';
 import { err, ok, type Result } from '@/core/result';
 
+import { invalidateActor } from './actor';
 import {
   bindProviderSubject,
   findUserByEmail,
@@ -98,6 +99,7 @@ export async function updateIdentity(
     case 'cooldown':
       return err('CONFLICT', cooldownMessage(outcome.availableAt));
     case 'updated':
+      invalidateActor(actor.id);
       return ok({
         name: outcome.user.name ?? '',
         handle: outcome.user.handle ?? '',
