@@ -26,8 +26,12 @@ export async function GET(request: Request): Promise<Response> {
     return json({ error: result.message, code: result.code }, 400);
   }
 
-  return json({
-    items: result.value.items.map((item) => toFeedEvent(item, actor.id)),
-    nextCursor: result.value.nextCursor,
-  });
+  return json(
+    {
+      items: result.value.items.map((item) => toFeedEvent(item, actor.id)),
+      nextCursor: result.value.nextCursor,
+    },
+    200,
+    { 'cache-control': 'private, max-age=30' },
+  );
 }

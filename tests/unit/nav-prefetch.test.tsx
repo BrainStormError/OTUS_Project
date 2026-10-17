@@ -22,6 +22,7 @@ vi.mock('next/link', () => ({
     <a
       href={typeof href === 'string' ? href : '#'}
       data-prefetch={prefetch === true ? 'true' : prefetch === false ? 'false' : 'auto'}
+      onClick={(event) => event.preventDefault()}
       {...rest}
     >
       {children}
@@ -48,16 +49,28 @@ describe('shell link prefetching', () => {
     expect(prefetchMock).not.toHaveBeenCalled();
   });
 
-  it('prefetches the destination of a hovered shell link', () => {
+  it('does not prefetch the destination of a hovered shell link', () => {
     render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
     fireEvent.pointerEnter(screen.getByRole('link', { name: /Мои фильмы/ }));
-    expect(prefetchMock).toHaveBeenCalledWith('/films');
+    expect(prefetchMock).not.toHaveBeenCalled();
   });
 
-  it('prefetches the destination of a focused shell link', () => {
+  it('does not prefetch the destination of a focused shell link', () => {
     render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
     fireEvent.focus(screen.getByRole('link', { name: /Друзья/ }));
-    expect(prefetchMock).toHaveBeenCalledWith('/friends');
+    expect(prefetchMock).not.toHaveBeenCalled();
+  });
+
+  it('issues no prefetch when a shell link is activated', () => {
+    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
+    fireEvent.click(screen.getByRole('link', { name: /Мои фильмы/ }));
+    expect(prefetchMock).not.toHaveBeenCalled();
+  });
+
+  it('issues no prefetch during browser idle time', async () => {
+    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
+    await vi.runAllTimersAsync();
+    expect(prefetchMock).not.toHaveBeenCalled();
   });
 
   it('does not prefetch catalog card destinations', () => {

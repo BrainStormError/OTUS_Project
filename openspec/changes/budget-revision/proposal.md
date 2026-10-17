@@ -8,7 +8,8 @@ VPS measurements show Postgres burning CPU while the app idles (237% CPU in the 
 
 - **`tmdb_cache` budget 100 MB -> 16 MB.** `TMDB_CACHE_BUDGET_BYTES` and the eviction target (hysteresis 90 MB -> 14 MB) shrink so the cache fits inside `shared_buffers`. One-line constant change plus the budget requirement in `platform/resource-budgets`.
 - **Postgres `shared_buffers` 64 MB -> 128 MB.** The `db` service command in `docker-compose.yml` raises the buffer pool so the database keeps catalog and app tables resident on the 1 GB host (measured usage was 557 MB of 960 MB before this raise).
-- **Not changed:** eviction order (oldest by `updated_at` first), TTL sweep behavior, eviction cost shape (bounded by bytes, not table size), `work_mem=4MB`, `max_connections=20`, app heap bound.
+- **Application heap 256 MB -> 320 MB.** `NODE_OPTIONS` in the `app` service raises the heap ceiling to the maximum the resource-budget requirement allows, so a larger share of the free RAM absorbs garbage instead of forcing collections. Fewer collections is CPU saved on a single-core host.
+- **Not changed:** eviction order (oldest by `updated_at` first), TTL sweep behavior, eviction cost shape (bounded by bytes, not table size), `work_mem=4MB`, `max_connections=20`.
 
 ## Capabilities
 
@@ -18,12 +19,12 @@ VPS measurements show Postgres burning CPU while the app idles (237% CPU in the 
 
 ### Modified Capabilities
 
-- `platform/resource-budgets`: the "Bounded catalog cache storage" requirement moves from a 100 MB budget to 16 MB (hysteresis to 14 MB); the "Database memory fits the small-host budget" requirement moves from 64 MB to 128 MB shared buffers. Behavior (oldest-first eviction, TTL sweep preserved, no eviction under budget) is unchanged.
+- `platform/resource-budgets`: the "Bounded catalog cache storage" requirement moves from a 100 MB budget to 16 MB (hysteresis to 14 MB); the "Database memory fits the small-host budget" requirement moves from 64 MB to 128 MB shared buffers. Behavior (oldest-first eviction, TTL sweep preserved, no eviction under budget) is unchanged. The heap raise needs no spec delta: "Bounded application heap" caps the bound at 320 MB and does not pin a deployment value.
 
 ## Impact
 
 - **Code:** `src/modules/catalog/service.ts` (`TMDB_CACHE_BUDGET_BYTES`, `TMDB_CACHE_EVICT_TARGET_BYTES`).
-- **Infra:** `docker-compose.yml` — `shared_buffers=128MB` in the `db` service `command:`.
+- **Infra:** `docker-compose.yml` — `shared_buffers=128MB` in the `db` service `command:`; `--max-old-space-size=320` in the `app` service `NODE_OPTIONS`.
 - **Tests:** unit/integration cache-eviction tests that reference the budget constants or assert the 100 MB/90 MB thresholds (`tests/unit/catalog-cache-eviction.test.ts`, `tests/integration/catalog-cache-eviction.test.ts`) — expected to pass unchanged if they use the exported constants; update any hard-coded numbers.
 - **Coordination:** revises numbers frozen by `runtime-cost-trims` / `runtime-cost-trims-followup` (both must be archived first or merged at archive time — their `platform/resource-budgets` delta touches the same requirement).
 - **Measurement:** before/after comparison on the VPS (first `count(*)` in a fresh psql session, TTFB, `docker stats`) as recorded in followup task 6.2.

@@ -15,11 +15,12 @@ See proposal.md - Why. The numbers being revised were frozen by `runtime-cost-tr
 
 - Keep the `tmdb_cache` working set resident inside `shared_buffers` so first-in-session queries stop paying disk reads.
 - Raise the buffer pool using measured RAM headroom (557 MB used of 960 MB before the raise).
+- Spend part of the remaining headroom on the application heap, where a higher ceiling means fewer garbage collections per unit of traffic.
 
 **Non-Goals:**
 
 - Changing eviction order, TTL semantics, sweep cadence, or the bounded-eviction shape - all unchanged from the followup.
-- Changing `work_mem`, `max_connections`, the app heap bound, or log budgets.
+- Changing `work_mem`, `max_connections`, or log budgets.
 - Postgres-side autovacuum tuning or `pg_stat_statements` - separate concerns.
 
 ## Decisions
@@ -46,15 +47,23 @@ Same mechanism as every other Postgres tuning knob in this project (`vps-resourc
 
 Shrinking the budget needs no schema or data work: the first sweep after deploy sees usage > 16 MB and evicts down to 14 MB using the existing oldest-first path. Existing rows are untouched until then.
 
+### 4. Application heap 256 MB -> 320 MB
+
+`NODE_OPTIONS` in the `app` service gains headroom up to the ceiling the "Bounded application heap" requirement already allows (320 MB). The larger ceiling lets the runtime absorb short-lived JSON payloads instead of collecting repeatedly while serving a navigation burst; on one core, collection time is time the request is not being served. The bound stays enforced by deployment configuration, so the requirement's guarantee (reclaim and keep serving, never grow past the bound) is unchanged.
+
+**Alternative - keep 256 MB:** rejected - leaves measured free RAM unused while GC cycles remain the only remaining per-request CPU cost we can shift into memory.
+
+**Risk check:** the app and Postgres together must still fit the 1 GB host. After the `shared_buffers` raise the measured headroom was 403 MB, so a 64 MB heap increase keeps a wide margin; if memory pressure appears, both knobs revert as one-line compose changes.
+
 ## Risks / Trade-offs
 
 - [Smaller cache -> more TMDB misses] -> TTL stays 6 h and eviction stays oldest-first, so hot entries survive; at current traffic (3 users) the miss cost is a few hundred ms on search reruns only. If measured miss rate becomes a problem, revisit TTL vs budget separately.
-- [`shared_buffers` +64 MB on a 1 GB host] -> measured headroom was 403 MB available before the raise; app heap stays bounded at 256 MB. If memory pressure appears, revert is a one-line compose change.
+- [`shared_buffers` +64 MB on a 1 GB host] -> measured headroom was 403 MB available before the raise; after both raises the app heap is bounded at 320 MB and the remaining margin still covers Postgres and the OS. If memory pressure appears, revert is a one-line compose change.
 - [Two unarchived changes touch `platform/resource-budgets`] -> this delta modifies different requirement blocks than the followup's ADDED ones; archive `runtime-cost-trims` and `runtime-cost-trims-followup` first (their own coordination note requires it), then this change.
 
 ## Migration Plan
 
-1. Change the two constants in `src/modules/catalog/service.ts` and `shared_buffers` in `docker-compose.yml`; update tests only if any assert literal numbers.
+1. Change the two constants in `src/modules/catalog/service.ts`, `shared_buffers` in `docker-compose.yml`, and `NODE_OPTIONS` in the `app` service; update tests only if any assert literal numbers.
 2. Run `npm run lint`, `npm run typecheck`, `npm run deps:check`, `npm test`, `npm run test:integration`.
 3. Deploy; the first sweep evicts the cache down to 14 MB on its own - no manual step.
 4. Measure after (same commands as followup 6.2): first `count(*)` in fresh psql sessions (expect the 23-371 ms cold figure to drop toward single-digit-ms), TTFB of a page, `docker stats` for both containers.

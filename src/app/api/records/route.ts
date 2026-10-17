@@ -28,7 +28,7 @@ export async function GET(): Promise<Response> {
     return json({ error: result.message, code: result.code }, 400);
   }
 
-  return json({ items: result.value });
+  return json({ items: result.value }, 200, { 'cache-control': 'private, max-age=30' });
 }
 
 export const POST = withRoute(

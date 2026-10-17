@@ -14,6 +14,7 @@ export const GET = withRoute(
     querySchema: catalogSearchQuery,
     resolveActor: getActor,
     rateLimit: { limit: 60, windowMs: 60_000 },
+    headers: { 'cache-control': 'private, max-age=3600' },
   },
   async (_input, { query }) => {
     const genreIds = query.genre

@@ -93,6 +93,20 @@ describe('GET /api/search', () => {
       page: 2,
     });
   });
+
+  it('caches a successful search response in the browser for up to an hour', async () => {
+    getActorMock.mockResolvedValue(actor);
+    searchMock.mockResolvedValue(ok({ items: [], page: 1, hasMore: false }));
+
+    const response = await searchRoute(
+      new Request('http://localhost/api/search?kind=film', { headers: origin }),
+    );
+    expect(response.status).toBe(200);
+    const cacheControl = response.headers.get('cache-control') ?? '';
+    expect(cacheControl).toBe('private, max-age=3600');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('s-maxage');
+  });
 });
 
 describe('GET /api/genres', () => {
@@ -178,5 +192,19 @@ describe('GET /api/catalog/detail', () => {
       new Request('http://localhost/api/catalog/detail?kind=film&id=999', { headers: origin }),
     );
     expect(response.status).toBe(404);
+  });
+
+  it('caches a successful detail response in the browser for up to an hour', async () => {
+    getActorMock.mockResolvedValue(actor);
+    detailMock.mockResolvedValue(ok({ kind: 'film', externalId: '27205', title: 'Начало' }));
+
+    const response = await detailRoute(
+      new Request('http://localhost/api/catalog/detail?kind=film&id=27205', { headers: origin }),
+    );
+    expect(response.status).toBe(200);
+    const cacheControl = response.headers.get('cache-control') ?? '';
+    expect(cacheControl).toBe('private, max-age=3600');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('s-maxage');
   });
 });

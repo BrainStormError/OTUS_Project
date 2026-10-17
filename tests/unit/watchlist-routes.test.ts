@@ -63,6 +63,18 @@ describe('GET /api/watchlist', () => {
     expect(await response.json()).toEqual({ items });
     expect(listMock).toHaveBeenCalledWith(actor, 'film');
   });
+
+  it('caches the watch-later list in the browser for at most thirty seconds', async () => {
+    getActorMock.mockResolvedValue(actor);
+    listMock.mockResolvedValue(ok([]));
+
+    const response = await listRoute(get('film'));
+    expect(response.status).toBe(200);
+    const cacheControl = response.headers.get('cache-control') ?? '';
+    expect(cacheControl).toBe('private, max-age=30');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('s-maxage');
+  });
 });
 
 describe('POST /api/watchlist', () => {

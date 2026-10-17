@@ -56,6 +56,18 @@ describe('GET /api/records', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ items });
   });
+
+  it('caches the record list in the browser for at most thirty seconds', async () => {
+    getActorMock.mockResolvedValue(actor);
+    listMock.mockResolvedValue(ok([]));
+
+    const response = await listRoute();
+    expect(response.status).toBe(200);
+    const cacheControl = response.headers.get('cache-control') ?? '';
+    expect(cacheControl).toBe('private, max-age=30');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('s-maxage');
+  });
 });
 
 describe('POST /api/records', () => {
@@ -75,6 +87,16 @@ describe('POST /api/records', () => {
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: 7 });
+  });
+
+  it('leaves mutation responses without a cache policy', async () => {
+    getActorMock.mockResolvedValue(actor);
+    saveMock.mockResolvedValue(ok({ id: 7 }));
+    const response = await saveRoute(
+      save({ mediaKind: 'film', mediaRef: '27205', rating: 9, watchedAt: '2026-10-15' }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBeNull();
   });
 
   it('returns the service error when the save fails', async () => {
