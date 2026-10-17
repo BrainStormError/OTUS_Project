@@ -45,6 +45,26 @@ describe('withRoute', () => {
     expect(response.status).toBe(401);
   });
 
+  it('answers 401 for a read without an actor before the origin check', async () => {
+    const route = build(
+      { resolveActor: async () => null, isTrusted: () => false },
+      async () => ok({}),
+    );
+    const response = await route(
+      new Request('http://localhost/api/test', { method: 'GET' }),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects an untrusted mutation before checking the actor', async () => {
+    const route = build(
+      { resolveActor: async () => null, isTrusted: () => false },
+      async () => ok({}),
+    );
+    const response = await route(request({ name: 'ok' }));
+    expect(response.status).toBe(403);
+  });
+
   it('returns 400 for invalid input', async () => {
     const route = build({}, async () => ok({}));
     const response = await route(request({ name: 'too-long' }));

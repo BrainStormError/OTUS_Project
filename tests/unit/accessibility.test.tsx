@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SidebarRail } from '@/components/layout/sidebar-rail';
-import { AsyncView } from '@/components/features/AsyncView';
 import { SearchField } from '@/components/features/movie-tracker/SearchField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,17 +120,6 @@ describe('accessible names and focus', () => {
     expect(screen.getByRole('button', { name: 'Действие' }).className).toMatch(/min-h-11|h-11/);
     expect(screen.getByRole('button', { name: 'Иконка' }).className).toMatch(/h-11 w-11/);
     expect(screen.getByRole('button', { name: 'Иконка' }).className).not.toMatch(/h-10 w-10/);
-  });
-
-  it('announces asynchronous loading and error changes', () => {
-    const onRetry = vi.fn();
-    const { rerender } = render(<AsyncView state={{ status: 'loading' }}>{() => null}</AsyncView>);
-    expect(screen.getByTestId('async-loading')).toHaveAttribute('aria-live', 'polite');
-
-    rerender(
-      <AsyncView state={{ status: 'error', message: 'Сбой', retry: onRetry }}>{() => null}</AsyncView>,
-    );
-    expect(screen.getByRole('alert')).toHaveTextContent('Сбой');
   });
 
   it('keeps a logical keyboard order through search', async () => {

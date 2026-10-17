@@ -118,15 +118,24 @@ export function withRoute<TIn, TOut, TQuery = undefined>(
     const trusted = config.isTrusted
       ? config.isTrusted(request)
       : isTrustedOrigin(request, env.APP_ORIGIN);
-    if (!trusted) {
+    const isRead = request.method === 'GET' || request.method === 'HEAD';
+
+    if (!isRead && !trusted) {
       log('warn', 'mutation.origin_rejected', { requestId, operation: config.operation });
       return json({ error: 'Недопустимый источник' }, 403, responseHeaders);
     }
 
+    // Reads answer 401 for a missing session even without browser fetch
+    // metadata; mutations reject an untrusted origin first.
     const actor = config.resolveActor ? await config.resolveActor() : null;
     if (!actor) {
       log('warn', 'mutation.unauthenticated', { requestId, operation: config.operation });
       return json({ error: 'Требуется вход' }, 401, responseHeaders);
+    }
+
+    if (isRead && !trusted) {
+      log('warn', 'mutation.origin_rejected', { requestId, operation: config.operation });
+      return json({ error: 'Недопустимый источник' }, 403, responseHeaders);
     }
 
     if (config.rateLimit) {

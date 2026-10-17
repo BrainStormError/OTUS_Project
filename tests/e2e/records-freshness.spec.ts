@@ -47,7 +47,11 @@ test('record marked on home appears in My Films after client-side navigation and
         body: JSON.stringify({ id: 501 }),
       });
     }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [] }),
+    });
   });
 
   await page.getByLabel('Название').first().fill('Интерстеллар');

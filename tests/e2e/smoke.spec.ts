@@ -9,9 +9,18 @@ test('unauthenticated root redirects to login and carries security headers', asy
   await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible();
 });
 
-test('CSP nonce is present in the response headers', async ({ page }) => {
+test('the served document carries a hash-based CSP and no per-request secret', async ({ page }) => {
   const response = await page.goto('/login');
   const csp = response?.headers()['content-security-policy'] ?? '';
-  expect(csp).toContain('nonce-');
+  expect(csp).not.toContain('nonce-');
+  expect(csp).not.toContain('strict-dynamic');
   expect(csp).toContain("object-src 'none'");
+  expect(csp).toContain("frame-ancestors 'none'");
+  expect(csp).toContain('https://image.tmdb.org');
+  expect(response?.headers()['x-nonce']).toBeUndefined();
+});
+
+test('a data read without a session is refused with 401', async ({ request }) => {
+  const response = await request.get('/api/me/stats');
+  expect(response.status()).toBe(401);
 });

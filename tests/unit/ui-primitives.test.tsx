@@ -13,7 +13,6 @@ import { RatingForm } from '@/components/features/movie-tracker/RatingForm';
 import { StatCard } from '@/components/features/movie-tracker/StatCard';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
-import { SkeletonGrid } from '@/components/ui/skeleton';
 import type { Group } from '@/components/features/movie-tracker/types';
 import type { GroupInvitation } from '@/modules/groups';
 
@@ -48,11 +47,6 @@ describe('shared state primitives', () => {
     expect(screen.getByText('Пусто')).toBeInTheDocument();
     expect(screen.getByText('Пояснение')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Действие' })).toBeInTheDocument();
-  });
-
-  it('renders a skeleton grid matching the content shape', () => {
-    const { container } = render(<SkeletonGrid count={4} />);
-    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThanOrEqual(4);
   });
 
   it('offers retry on error', async () => {

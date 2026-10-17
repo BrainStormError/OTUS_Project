@@ -75,5 +75,6 @@ test('an administrator dissolves a group and it becomes not found', async ({ pag
   await page.waitForURL((url) => url.pathname === '/groups');
 
   const gone = await page.goto(`/groups/${groupId}`);
-  expect(gone?.status()).toBe(404);
+  expect(gone?.status()).toBe(200);
+  await expect(page.getByText('Группа не найдена')).toBeVisible();
 });

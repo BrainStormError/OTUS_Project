@@ -7,7 +7,6 @@ import { useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Timestamp } from '@/components/ui/timestamp';
 
 import type { FeedSource } from './feed';
@@ -22,32 +21,13 @@ const SOURCE_LABEL: Record<FeedSource, string> = {
 const SIZES = [5, 10, 25] as const;
 const ROW_HEIGHT_REM = 4.5;
 
-function FeedSkeleton() {
-  return (
-    <div
-      role="status"
-      aria-busy="true"
-      aria-label="Загрузка ленты"
-      data-testid="feed-skeleton"
-      className="space-y-3"
-    >
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="space-y-2 rounded-lg border border-border p-3">
-          <Skeleton className="h-4 w-1/3" />
-          <Skeleton className="h-3 w-2/3" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function SocialFeed() {
   const { events, connected, loading, pending, markSeen } = useFeed();
   const [size, setSize] = useState<number>(SIZES[0]);
   const listRef = useRef<HTMLUListElement>(null);
 
   if (loading && events.length === 0) {
-    return <FeedSkeleton />;
+    return null;
   }
 
   if (events.length === 0) {

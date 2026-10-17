@@ -146,4 +146,30 @@ describe('profile read', () => {
       expect(asOwner.value.stats.count).toBe(1);
     }
   });
+
+  it('returns a hidden profile in its restricted state to a stranger', async () => {
+    const owner = await makeUser('owner', `hidden-${randomUUID().slice(0, 8)}`);
+    await addRating(owner, 9);
+    await updatePrivacy(owner.id, { profileHidden: true });
+
+    const asStranger = await getProfileByHandle(
+      { id: owner.id + 100000, role: 'employee' },
+      owner.handle!,
+    );
+    expect(asStranger.ok).toBe(true);
+    if (asStranger.ok) {
+      expect(asStranger.value.profileRestricted).toBe(true);
+      expect(asStranger.value.statsRestricted).toBe(true);
+      expect(asStranger.value.stats.count).toBe(0);
+      expect(asStranger.value.recent).toHaveLength(0);
+    }
+
+    const asOwner = await getOwnProfile(owner);
+    expect(asOwner.ok).toBe(true);
+    if (asOwner.ok) {
+      expect(asOwner.value.profileRestricted).toBe(false);
+      expect(asOwner.value.stats.count).toBe(1);
+      expect(asOwner.value.recent).toHaveLength(1);
+    }
+  });
 });

@@ -1,24 +1,9 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 
-import { StatisticsView } from '@/components/features/movie-tracker/StatisticsView';
+import { OwnStatsScreen } from '@/components/features/movie-tracker/screens/auth-screens';
 import { Button } from '@/components/ui/button';
-import { getActor } from '@/modules/auth/session';
-import { getOwnProfile } from '@/modules/profiles';
 
-export const dynamic = 'force-dynamic';
-
-export default async function MyStatsPage() {
-  const actor = await getActor();
-  if (!actor) {
-    redirect('/login');
-  }
-
-  const result = await getOwnProfile(actor);
-  if (!result.ok) {
-    redirect('/login');
-  }
-
+export default function MyStatsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -27,7 +12,7 @@ export default async function MyStatsPage() {
           <Link href="/me">К профилю</Link>
         </Button>
       </header>
-      <StatisticsView stats={result.value.stats} />
+      <OwnStatsScreen />
     </div>
   );
 }

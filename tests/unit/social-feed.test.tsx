@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -196,6 +196,5 @@ describe('SocialFeed empty and loading states', () => {
     );
 
     expect(await screen.findByText('Пока нет активности')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByTestId('feed-skeleton')).not.toBeInTheDocument());
   });
 });

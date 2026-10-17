@@ -44,6 +44,31 @@ jobs:
           OAUTH_CLIENT_ID: build-client-id
           OAUTH_CLIENT_SECRET: build-client-secret
           TMDB_ACCESS_TOKEN: build-tmdb-token
+      - name: Verify CSP hashes in built documents
+        run: npm run csp:verify
+      - name: Verify CSP hash against the served document
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp .next/csp-hashes.json .next/standalone/.next/csp-hashes.json
+          mkdir -p .next/standalone/public
+          pushd .next/standalone > /dev/null
+          PORT=3100 HOSTNAME=127.0.0.1 NODE_ENV=production node server.js > /tmp/next.log 2>&1 &
+          server=$!
+          popd > /dev/null
+          for _ in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:3100/login > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/verify-csp.cjs http://127.0.0.1:3100/login
+          kill "$server"
+        env:
+          DATABASE_URL: postgres://build:build@localhost:5432/build
+          APP_ORIGIN: http://localhost:3000
+          SESSION_SECRET: build-session-secret-000000000000000000
+          REGISTRATION_TICKET_SECRET: build-ticket-secret-0000000000000000
+          OAUTH_CLIENT_ID: build-client-id
+          OAUTH_CLIENT_SECRET: build-client-secret
+          TMDB_ACCESS_TOKEN: build-tmdb-token
 
   build:
     name: Build and deliver images

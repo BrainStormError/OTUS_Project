@@ -254,6 +254,20 @@ export function ListStoreProvider({
   actorId: number;
   children: ReactNode;
 }) {
+  const previousActorId = useRef(actorId);
+
+  // The shell learns the actor after the static document loads. Slices are
+  // already keyed by actor, but a switch between two signed-in users must not
+  // leave the previous user's lists in memory; repeated answers for the same
+  // actor must keep them.
+  useEffect(() => {
+    const previous = previousActorId.current;
+    if (previous !== 0 && previous !== actorId) {
+      resetListStores();
+    }
+    previousActorId.current = actorId;
+  }, [actorId]);
+
   return createElement(ActorContext.Provider, { value: actorId }, children);
 }
 

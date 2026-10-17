@@ -3,7 +3,7 @@ name: learn-watcher-platform
 services:
   db:
     image: postgres:16-alpine
-    command: ['postgres', '-c', 'shared_buffers=64MB', '-c', 'work_mem=4MB', '-c', 'max_connections=20', '-c', 'jit=off']
+    command: ['postgres', '-c', 'shared_buffers=128MB', '-c', 'work_mem=4MB', '-c', 'max_connections=20', '-c', 'jit=off']
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}

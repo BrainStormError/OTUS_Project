@@ -3,7 +3,7 @@ import { Clapperboard } from 'lucide-react';
 
 import { AccountMenu } from './account-menu';
 
-export function TopBar({ name, tag }: { name: string; tag: string }) {
+export function TopBar({ name, tag }: { name: string | null; tag: string | null }) {
   return (
     <header className="sticky top-0 z-10 grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur">
       <div aria-hidden="true" />

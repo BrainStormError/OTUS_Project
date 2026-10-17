@@ -1,7 +1,26 @@
+import { z } from 'zod';
+
 import { withRoute } from '@/core/http/with-route';
 import { ok } from '@/core/result';
 import { identityUpdateInput, updateIdentity } from '@/modules/auth';
 import { getActor } from '@/modules/auth/session';
+
+const emptyQuery = z.object({}).strict();
+
+export const GET = withRoute(
+  {
+    operation: 'me.identity.read',
+    schema: z.undefined(),
+    querySchema: emptyQuery,
+    resolveActor: getActor,
+  },
+  async (_input, { actor }) =>
+    ok({
+      id: actor.id,
+      name: actor.name ?? actor.email ?? '',
+      handle: actor.handle ?? String(actor.id),
+    }),
+);
 
 export const PATCH = withRoute(
   {

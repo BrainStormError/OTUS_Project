@@ -1,112 +1,94 @@
-import { render, screen } from '@testing-library/react';
-import { Suspense, isValidElement, type ReactElement, type ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { ok } from '@/core/result';
-
-const { getActorMock, listCatalogMock, listWatchlistMock, redirectMock } = vi.hoisted(() => ({
-  getActorMock: vi.fn(),
-  listCatalogMock: vi.fn(),
-  listWatchlistMock: vi.fn(),
-  redirectMock: vi.fn(() => {
-    throw new Error('NEXT_REDIRECT');
-  }),
-}));
-
-vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
-vi.mock('@/modules/catalog', () => ({ listCatalog: listCatalogMock }));
-vi.mock('@/modules/watchlist', () => ({ listWatchlist: listWatchlistMock }));
-vi.mock('next/navigation', () => ({
-  redirect: redirectMock,
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
-  usePathname: () => '/',
-}));
+import { render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import FilmsPage from '@/app/(app)/films/page';
 import SeriesPage from '@/app/(app)/series/page';
-import { FilmsData, SeriesData } from '@/components/features/movie-tracker/ListSections';
+import { CatalogListScreen } from '@/components/features/movie-tracker/screens/catalog-screens';
 
-const actor = { id: 1, role: 'employee' as const };
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/films',
+}));
 
-function findAll(
-  node: ReactNode,
-  predicate: (element: ReactElement<Record<string, unknown>>) => boolean,
-): ReactElement<Record<string, unknown>>[] {
-  if (Array.isArray(node)) {
-    return node.flatMap((child) => findAll(child, predicate));
-  }
-  if (!isValidElement(node)) {
-    return [];
-  }
-  const element = node as ReactElement<Record<string, unknown>>;
-  const found = predicate(element) ? [element] : [];
-  return found.concat(findAll(element.props['children'] as ReactNode, predicate));
+const filmRecord = {
+  id: 1,
+  userId: 1,
+  mediaId: 10,
+  mediaKind: 'film' as const,
+  mediaRef: '27205',
+  title: 'Начало',
+  year: 2010,
+  genres: ['Фантастика'],
+  rating: 9,
+  comment: null,
+  watchedAt: '2024-01-01',
+  createdAt: '2024-01-01T00:00:00.000Z',
+};
+
+const seriesRecord = {
+  id: 2,
+  userId: 1,
+  mediaId: 20,
+  mediaKind: 'series' as const,
+  mediaRef: '1396',
+  title: 'Во все тяжкие',
+  year: 2008,
+  genres: ['Драма'],
+  rating: 10,
+  comment: null,
+  watchedAt: '2024-02-01',
+  createdAt: '2024-02-01T00:00:00.000Z',
+};
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  getActorMock.mockResolvedValue(actor);
-  listCatalogMock.mockResolvedValue(ok([]));
-  listWatchlistMock.mockResolvedValue(ok([]));
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      new Response(JSON.stringify({ items: [] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    ),
-  );
+const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const url = new URL(String(input), 'http://localhost');
+  if (url.pathname === '/api/records') {
+    return json({ items: [filmRecord, seriesRecord] });
+  }
+  if (url.pathname === '/api/watchlist') {
+    return json({ items: [] });
+  }
+  return json({});
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  fetchMock.mockClear();
 });
 
-describe('list sections', () => {
-  it('streams the film list for the actor', async () => {
-    render(await FilmsData({ actor }));
-    expect(screen.getByRole('navigation', { name: 'Мои фильмы' })).toBeInTheDocument();
-    expect(listCatalogMock).toHaveBeenCalledWith(1, 'film');
-    expect(listWatchlistMock).toHaveBeenCalledWith(actor, 'film');
+describe('list screens', () => {
+  it('renders the film shell immediately and fills it from the read contract', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    render(<FilmsPage />);
+
+    expect(screen.getByRole('heading', { name: 'Мои фильмы' })).toBeInTheDocument();
+
+    const list = await screen.findByTestId('my-films');
+    expect(within(list).getByText('Начало')).toBeInTheDocument();
+    expect(within(list).queryByText('Во все тяжкие')).not.toBeInTheDocument();
   });
 
-  it('streams the series list for the actor', async () => {
-    render(await SeriesData({ actor }));
-    expect(screen.getByRole('navigation', { name: 'Мои сериалы' })).toBeInTheDocument();
-    expect(listCatalogMock).toHaveBeenCalledWith(1, 'series');
-  });
-});
+  it('renders the series shell immediately and fills it from the read contract', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    render(<SeriesPage />);
 
-describe('list page shell', () => {
-  it('returns the header and a streaming skeleton before the data section', async () => {
-    const tree = await FilmsPage();
+    expect(screen.getByRole('heading', { name: 'Мои сериалы' })).toBeInTheDocument();
 
-    const headings = findAll(
-      tree,
-      (element) => element.props['className'] === 'text-2xl font-semibold tracking-tight',
-    );
-    expect(String(headings[0]!.props['children'])).toBe('Мои фильмы');
-
-    const suspenses = findAll(tree, (element) => element.type === Suspense);
-    expect(suspenses).toHaveLength(1);
-    render(suspenses[0]!.props['fallback'] as ReactNode);
-    expect(screen.getByTestId('list-skeleton')).toBeInTheDocument();
-    expect(listCatalogMock).not.toHaveBeenCalled();
+    const list = await screen.findByTestId('my-series');
+    expect(within(list).getByText('Во все тяжкие')).toBeInTheDocument();
+    expect(within(list).queryByText('Начало')).not.toBeInTheDocument();
   });
 
-  it('redirects to login without an actor', async () => {
-    getActorMock.mockResolvedValue(null);
-    await expect(FilmsPage()).rejects.toThrow('NEXT_REDIRECT');
-    expect(redirectMock).toHaveBeenCalledWith('/login');
-  });
-
-  it('returns the series shell header', async () => {
-    const tree = await SeriesPage();
-    const headings = findAll(
-      tree,
-      (element) => element.props['className'] === 'text-2xl font-semibold tracking-tight',
-    );
-    expect(String(headings[0]!.props['children'])).toBe('Мои сериалы');
+  it('leaves the reserved area empty while the reads are pending', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+    const { container } = render(<CatalogListScreen kind="film" />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

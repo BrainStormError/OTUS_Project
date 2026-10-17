@@ -33,8 +33,8 @@ export const CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Storage budget for the TMDB response cache, with a lower hysteresis target so
 // eviction stops before the budget boundary and avoids per-sweep churn.
-export const TMDB_CACHE_BUDGET_BYTES = 100 * 1024 * 1024;
-export const TMDB_CACHE_EVICT_TARGET_BYTES = 90 * 1024 * 1024;
+export const TMDB_CACHE_BUDGET_BYTES = 16 * 1024 * 1024;
+export const TMDB_CACHE_EVICT_TARGET_BYTES = 14 * 1024 * 1024;
 
 export async function sweepCache(now: Date): Promise<void> {
   await deleteExpiredCache(now);

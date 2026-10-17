@@ -19,11 +19,13 @@ test('a non-member gets not-found for a restricted group and no member list', as
   await login(page, 'employee@demo.local');
 
   const response = await page.goto(`/groups/${RESTRICTED_GROUP_ID}`);
-  expect(response?.status()).toBe(404);
+  expect(response?.status()).toBe(200);
+  await expect(page.getByText('Группа не найдена')).toBeVisible();
   await expect(page.getByTestId('group-members')).toHaveCount(0);
 
   const adminResponse = await page.goto(`/groups/${RESTRICTED_GROUP_ID}/admin`);
-  expect(adminResponse?.status()).toBe(404);
+  expect(adminResponse?.status()).toBe(200);
+  await expect(page.getByText('Группа не найдена')).toBeVisible();
   await expect(page.getByTestId('admin-member-panel')).toHaveCount(0);
 });
 

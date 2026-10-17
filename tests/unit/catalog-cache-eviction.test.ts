@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const MB = 1024 * 1024;
-
 type Row = { key: string; size: number; updatedAt: number; expiresAt: Date };
 
 const { store, spies, control } = vi.hoisted(() => ({
@@ -65,10 +63,13 @@ describe('catalog cache budget sweep', () => {
     spies.deleteExpired.mockClear();
   });
 
+  const quarterBudget = TMDB_CACHE_BUDGET_BYTES / 4;
+  const halfBudget = TMDB_CACHE_BUDGET_BYTES / 2;
+
   it('keeps every entry while usage stays under budget', async () => {
     store.rows = [
-      { key: 'old', size: 30 * MB, updatedAt: 1, expiresAt: future },
-      { key: 'new', size: 30 * MB, updatedAt: 2, expiresAt: future },
+      { key: 'old', size: quarterBudget, updatedAt: 1, expiresAt: future },
+      { key: 'new', size: quarterBudget, updatedAt: 2, expiresAt: future },
     ];
 
     await sweepCache(new Date());
@@ -79,23 +80,30 @@ describe('catalog cache budget sweep', () => {
 
   it('evicts the oldest entries and halts at the hysteresis threshold when over budget', async () => {
     store.rows = [
-      { key: 'oldest', size: 60 * MB, updatedAt: 1, expiresAt: future },
-      { key: 'middle', size: 60 * MB, updatedAt: 2, expiresAt: future },
-      { key: 'newest', size: 60 * MB, updatedAt: 3, expiresAt: future },
+      { key: 'oldest', size: halfBudget, updatedAt: 1, expiresAt: future },
+      { key: 'middle', size: halfBudget, updatedAt: 2, expiresAt: future },
+      { key: 'newest', size: halfBudget, updatedAt: 3, expiresAt: future },
     ];
 
     await sweepCache(new Date());
 
-    expect(spies.deleteOldest).toHaveBeenCalledWith(180 * MB - TMDB_CACHE_EVICT_TARGET_BYTES);
+    expect(spies.deleteOldest).toHaveBeenCalledWith(
+      3 * halfBudget - TMDB_CACHE_EVICT_TARGET_BYTES,
+    );
     expect(store.rows.map((row) => row.key)).toEqual(['newest']);
     expect(usage()).toBeLessThanOrEqual(TMDB_CACHE_EVICT_TARGET_BYTES);
   });
 
   it('still sweeps expired entries when it also evicts for size', async () => {
     store.rows = [
-      { key: 'expired', size: 60 * MB, updatedAt: 0, expiresAt: new Date('2000-01-01T00:00:00Z') },
-      { key: 'old', size: 60 * MB, updatedAt: 1, expiresAt: future },
-      { key: 'new', size: 60 * MB, updatedAt: 2, expiresAt: future },
+      {
+        key: 'expired',
+        size: TMDB_CACHE_BUDGET_BYTES,
+        updatedAt: 0,
+        expiresAt: new Date('2000-01-01T00:00:00Z'),
+      },
+      { key: 'old', size: TMDB_CACHE_BUDGET_BYTES, updatedAt: 1, expiresAt: future },
+      { key: 'new', size: TMDB_CACHE_EVICT_TARGET_BYTES, updatedAt: 2, expiresAt: future },
     ];
 
     await sweepCache(new Date('2026-01-01T00:00:00Z'));

@@ -49,6 +49,8 @@ RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Build-time inline-script digests consumed by proxy.ts at runtime.
+COPY --from=build /app/.next/csp-hashes.json ./.next/csp-hashes.json
 # The runtime only runs `node server.js`, so drop the npm/yarn payload bundled
 # with the base image (and their caches) to slim the runner layer.
 RUN rm -rf \

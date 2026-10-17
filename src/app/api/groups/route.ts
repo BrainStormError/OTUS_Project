@@ -1,7 +1,47 @@
+import { z } from 'zod';
+
 import { withRoute } from '@/core/http/with-route';
 import { ok } from '@/core/result';
 import { getActor } from '@/modules/auth/session';
-import { createGroup, createGroupInput } from '@/modules/groups';
+import {
+  createGroup,
+  createGroupInput,
+  getDiscoverableGroups,
+  getGroups,
+  listMyInvitations,
+} from '@/modules/groups';
+
+const emptyQuery = z.object({}).strict();
+
+export const GET = withRoute(
+  {
+    operation: 'groups.read',
+    schema: z.undefined(),
+    querySchema: emptyQuery,
+    resolveActor: getActor,
+  },
+  async (_input, { actor }) => {
+    const [groups, discover, invitations] = await Promise.all([
+      getGroups(actor),
+      getDiscoverableGroups(actor),
+      listMyInvitations(actor),
+    ]);
+    if (!groups.ok) {
+      return groups;
+    }
+    if (!discover.ok) {
+      return discover;
+    }
+    if (!invitations.ok) {
+      return invitations;
+    }
+    return ok({
+      groups: groups.value,
+      discover: discover.value,
+      invitations: invitations.value,
+    });
+  },
+);
 
 export const POST = withRoute(
   {

@@ -1,28 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ok } from '@/core/result';
+import { HomeScreen } from '@/components/features/movie-tracker/screens/home-screen';
 
-const { getActorMock, listWatchedRecordsMock, listWatchlistMock, searchCatalogMock, listGenresMock } =
-  vi.hoisted(() => ({
-    getActorMock: vi.fn(),
-    listWatchedRecordsMock: vi.fn(),
-    listWatchlistMock: vi.fn(),
-    searchCatalogMock: vi.fn(),
-    listGenresMock: vi.fn(),
-  }));
-
-vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
-vi.mock('@/modules/records', () => ({ listWatchedRecords: listWatchedRecordsMock }));
-vi.mock('@/modules/watchlist', () => ({ listWatchlist: listWatchlistMock }));
-vi.mock('@/modules/catalog', () => ({
-  searchCatalog: searchCatalogMock,
-  listGenres: listGenresMock,
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/',
 }));
-
-import HomePage from '@/app/(app)/page';
-import type { WatchedRecord } from '@/components/features/movie-tracker/types';
-
-const actor = { id: 1, role: 'employee' as const };
 
 const filmRecord = {
   id: 1,
@@ -54,28 +38,52 @@ const seriesRecord = {
   createdAt: '2024-02-01T00:00:00.000Z',
 };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  getActorMock.mockResolvedValue(actor);
-  listWatchedRecordsMock.mockResolvedValue(ok([filmRecord, seriesRecord]));
-  listWatchlistMock.mockResolvedValue(ok([]));
-  searchCatalogMock.mockResolvedValue(ok({ items: [], page: 1, hasMore: false }));
-  listGenresMock.mockResolvedValue(ok([]));
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const url = new URL(String(input), 'http://localhost');
+  if (url.pathname === '/api/genres') {
+    return json({ items: [{ id: 1, name: 'Драма' }] });
+  }
+  if (url.pathname === '/api/records') {
+    return json({ items: [filmRecord, seriesRecord] });
+  }
+  if (url.pathname === '/api/watchlist') {
+    return json({ items: [] });
+  }
+  if (url.pathname === '/api/search') {
+    return json({ items: [], page: 1, hasMore: false });
+  }
+  return json({});
 });
 
-describe('HomePage records', () => {
-  it('passes both film and series watched records to the view', async () => {
-    const tree = await HomePage();
-    const records = tree.props['initialRecords'] as WatchedRecord[];
+afterEach(() => {
+  vi.unstubAllGlobals();
+  fetchMock.mockClear();
+});
 
-    expect(records.map((record) => record.movie.kind)).toEqual(['film', 'series']);
-    expect(records[1]!.rating).toBe(10);
+describe('HomeScreen data', () => {
+  it('reads both film and series records and the watchlist of both kinds', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    render(<HomeScreen />);
+
+    expect(await screen.findByRole('heading', { name: 'Главная' })).toBeInTheDocument();
+
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls).toContain('/api/records');
+    expect(urls).toContain('/api/watchlist?kind=film');
+    expect(urls).toContain('/api/watchlist?kind=series');
+    expect(urls).toContain('/api/search?kind=film');
   });
 
-  it('loads the watchlist for both kinds so series state is correct', async () => {
-    await HomePage();
-
-    expect(listWatchlistMock).toHaveBeenCalledWith(actor, 'film');
-    expect(listWatchlistMock).toHaveBeenCalledWith(actor, 'series');
+  it('renders nothing before the reads answer', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+    const { container } = render(<HomeScreen />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -65,6 +65,10 @@ test('keeps the group shell in place and switches tabs without a server round tr
   const rscRequests: string[] = [];
   page.on('request', (request) => {
     const url = request.url();
+    // Background prefetches of the "Управление" link are not a tab round trip.
+    if (request.headers()['next-router-prefetch']) {
+      return;
+    }
     if (url.includes(`/groups/${GROUP_ID}`) && url.includes('_rsc')) {
       rscRequests.push(url);
     }

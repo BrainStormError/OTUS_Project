@@ -9,10 +9,10 @@ import { cn } from '@/components/ui/utils';
 
 import { useIdentityDisplay } from './preferences';
 
-export function AccountMenu({ name, tag }: { name: string; tag: string }) {
+export function AccountMenu({ name, tag }: { name: string | null; tag: string | null }) {
   const [identity] = useIdentityDisplay();
-  const showName = identity !== 'tag';
-  const showTag = identity !== 'name';
+  const showName = identity !== 'tag' && Boolean(name);
+  const showTag = identity !== 'name' && Boolean(tag);
 
   return (
     <details className="relative min-w-0">
@@ -20,7 +20,7 @@ export function AccountMenu({ name, tag }: { name: string; tag: string }) {
         aria-label="Меню аккаунта"
         className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden"
       >
-        <Avatar seed={tag} size={32} />
+        {tag ? <Avatar seed={tag} size={32} /> : null}
         <span className="flex min-w-0 flex-col items-start leading-tight">
           {showName ? (
             <span className="w-full min-w-0 max-w-40 truncate font-medium text-foreground">
@@ -37,6 +37,7 @@ export function AccountMenu({ name, tag }: { name: string; tag: string }) {
               @{tag}
             </span>
           ) : null}
+          {!showName && !showTag ? <span className="truncate">Аккаунт</span> : null}
         </span>
         <ChevronDown aria-hidden="true" className="h-4 w-4" />
       </summary>

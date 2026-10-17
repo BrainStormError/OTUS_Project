@@ -1,7 +1,24 @@
+import { z } from 'zod';
+
 import { withRoute } from '@/core/http/with-route';
 import { ok } from '@/core/result';
-import { privacyInput, updatePrivacy } from '@/modules/auth';
+import { getPrivacy, privacyInput, updatePrivacy } from '@/modules/auth';
 import { getActor } from '@/modules/auth/session';
+
+const emptyQuery = z.object({}).strict();
+
+export const GET = withRoute(
+  {
+    operation: 'me.privacy.read',
+    schema: z.undefined(),
+    querySchema: emptyQuery,
+    resolveActor: getActor,
+  },
+  async (_input, { actor }) => {
+    const result = await getPrivacy(actor);
+    return result.ok ? ok(result.value) : result;
+  },
+);
 
 export const PATCH = withRoute(
   {

@@ -1,33 +1,16 @@
 import { render, screen } from '@testing-library/react';
-import { Suspense, isValidElement, type ReactElement, type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { err, ok } from '@/core/result';
+const { pathname } = vi.hoisted(() => ({ pathname: { value: '/' } }));
 
-const { resolveDetailMock, getActorMock, listWatchedRecordsMock, listWatchlistMock, notFoundMock } =
-  vi.hoisted(() => ({
-    resolveDetailMock: vi.fn(),
-    getActorMock: vi.fn(),
-    listWatchedRecordsMock: vi.fn(),
-    listWatchlistMock: vi.fn(),
-    notFoundMock: vi.fn(() => {
-      throw new Error('NEXT_NOT_FOUND');
-    }),
-  }));
-
-vi.mock('@/modules/catalog', () => ({ resolveDetail: resolveDetailMock }));
-vi.mock('@/modules/auth/session', () => ({ getActor: getActorMock }));
-vi.mock('@/modules/records', () => ({ listWatchedRecords: listWatchedRecordsMock }));
-vi.mock('@/modules/watchlist', () => ({ listWatchlist: listWatchlistMock }));
 vi.mock('next/navigation', () => ({
-  notFound: notFoundMock,
+  usePathname: () => pathname.value,
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
-  usePathname: () => '/',
 }));
 
-import FilmPage from '@/app/(app)/film/[tmdbId]/page';
-import SeriesDetailPage from '@/app/(app)/series/[tmdbId]/page';
-import { FilmDetailSection } from '@/components/features/movie-tracker/FilmDetailSection';
+import FilmShellPage from '@/app/(app)/shell/film/page';
+import SeriesShellPage from '@/app/(app)/shell/series/page';
+import { CatalogDetailScreen } from '@/components/features/movie-tracker/screens/catalog-screens';
 
 const filmDetail = {
   kind: 'film' as const,
@@ -55,72 +38,89 @@ const seriesDetail = {
   director: 'Винс Гиллиган',
 };
 
-function findAll(
-  node: ReactNode,
-  predicate: (element: ReactElement<Record<string, unknown>>) => boolean,
-): ReactElement<Record<string, unknown>>[] {
-  if (Array.isArray(node)) {
-    return node.flatMap((child) => findAll(child, predicate));
-  }
-  if (!isValidElement(node)) {
-    return [];
-  }
-  const element = node as ReactElement<Record<string, unknown>>;
-  const found = predicate(element) ? [element] : [];
-  return found.concat(findAll(element.props['children'] as ReactNode, predicate));
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  getActorMock.mockResolvedValue(null);
+function stubCatalog(detail: unknown) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/api/catalog/detail') {
+      return json({ item: detail });
+    }
+    if (url.pathname === '/api/records' || url.pathname === '/api/watchlist') {
+      return json({ items: [] });
+    }
+    return json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
-describe('Film detail section', () => {
-  it('renders the resolved detail for a known film', async () => {
-    resolveDetailMock.mockResolvedValue(ok(filmDetail));
-    const ui = await FilmDetailSection({ kind: 'film', tmdbId: '603' });
-    render(ui);
+describe('Catalog detail screen', () => {
+  it('renders the resolved film detail from the read contract', async () => {
+    stubCatalog(filmDetail);
+    render(<CatalogDetailScreen kind="film" tmdbId="603" />);
 
-    expect(resolveDetailMock).toHaveBeenCalledWith('film', '603');
-    expect(screen.getByRole('heading', { name: 'Матрица' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Матрица' })).toBeInTheDocument();
   });
 
-  it('raises not-found inside the section for an unknown id', async () => {
-    resolveDetailMock.mockResolvedValue(err('NOT_FOUND', 'unknown'));
-    await expect(FilmDetailSection({ kind: 'film', tmdbId: '0' })).rejects.toThrow(
-      'NEXT_NOT_FOUND',
-    );
-    expect(notFoundMock).toHaveBeenCalled();
-  });
+  it('renders the resolved series detail from the read contract', async () => {
+    stubCatalog(seriesDetail);
+    render(<CatalogDetailScreen kind="series" tmdbId="1396" />);
 
-  it('renders the resolved series detail', async () => {
-    resolveDetailMock.mockResolvedValue(ok(seriesDetail));
-    const ui = await FilmDetailSection({ kind: 'series', tmdbId: '1396' });
-    render(ui);
-    expect(screen.getByRole('heading', { name: 'Во все тяжкие' })).toBeInTheDocument();
-  });
-});
-
-describe('Detail page shell', () => {
-  it('returns the container with a back link and a streaming skeleton before the section', async () => {
-    const tree = await FilmPage({ params: Promise.resolve({ tmdbId: '603' }) });
-
-    const links = findAll(tree, (element) => typeof element.props['href'] === 'string');
     expect(
-      links.some((link) => String(link.props['children']).includes('Назад к поиску')),
-    ).toBe(true);
+      await screen.findByRole('heading', { name: 'Во все тяжкие' }),
+    ).toBeInTheDocument();
+  });
 
-    const suspenses = findAll(tree, (element) => element.type === Suspense);
-    expect(suspenses).toHaveLength(1);
-    const fallback = suspenses[0]!.props['fallback'] as ReactNode;
-    render(fallback);
-    expect(screen.getByTestId('detail-skeleton')).toBeInTheDocument();
-    expect(resolveDetailMock).not.toHaveBeenCalled();
+  it('shows an empty state for a resource the read refuses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: 'Не найдено', code: 'NOT_FOUND' }, 404)),
+    );
+    render(<CatalogDetailScreen kind="film" tmdbId="0" />);
+
+    expect(await screen.findByText('Не найдено')).toBeInTheDocument();
+  });
+});
+
+describe('Detail shell pages', () => {
+  it('reads the film id from the browser path after hydration', async () => {
+    pathname.value = '/film/603';
+    stubCatalog(filmDetail);
+    render(<FilmShellPage />);
+
+    expect(screen.getByRole('link', { name: /Назад к поиску/ })).toHaveAttribute('href', '/');
+    expect(await screen.findByRole('heading', { name: 'Матрица' })).toBeInTheDocument();
   });
 
   it('points the series shell back to the series list', async () => {
-    const tree = await SeriesDetailPage({ params: Promise.resolve({ tmdbId: '1396' }) });
-    const links = findAll(tree, (element) => typeof element.props['href'] === 'string');
-    expect(links.some((link) => link.props['href'] === '/series')).toBe(true);
+    pathname.value = '/series/1396';
+    stubCatalog(seriesDetail);
+    render(<SeriesShellPage />);
+
+    expect(screen.getByRole('link', { name: /Назад к поиску/ })).toHaveAttribute(
+      'href',
+      '/series',
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Во все тяжкие' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders only the shell before the path is known', () => {
+    pathname.value = '/film/603';
+    stubCatalog(filmDetail);
+    render(<FilmShellPage />);
+    expect(screen.getByRole('link', { name: /Назад к поиску/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Матрица' })).not.toBeInTheDocument();
   });
 });
