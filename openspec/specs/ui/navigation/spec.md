@@ -202,20 +202,6 @@ Moving between sections SHALL reuse the state already loaded for a previously vi
 - **WHEN** the user moves back or forward in history between recently visited sections
 - **THEN** the target section is shown from already-loaded state
 
-### Requirement: Shell links prefetch their destination
-
-Navigation shell links SHALL prefetch their destination so an activation begins with the destination already being prepared, and title-card links inside result grids SHALL NOT prefetch every card destination.
-
-#### Scenario: Shell link prefetches
-
-- **WHEN** a navigation shell link is displayed and can be activated
-- **THEN** the destination for that link is prefetched before activation
-
-#### Scenario: Catalog cards are not prefetched
-
-- **WHEN** a grid of title cards is displayed
-- **THEN** displaying the grid does not prefetch every card's destination
-
 ### Requirement: Personal lists reflect mutations without a manual reload
 
 After a successful mutation of the signed-in user's watched records or watch-later list — saving, editing, or deleting a record, and adding or removing a watch-later title — the affected sections SHALL reflect the change without a manual page reload. The section where the mutation was made SHALL reflect it immediately, and every other affected section SHALL reflect it on its next visit. A mutation that fails SHALL NOT remain visible as if it had succeeded.
@@ -243,3 +229,27 @@ After a successful mutation of the signed-in user's watched records or watch-lat
 #### Scenario: Cross-section value is consistent
 - **WHEN** a watched record or watch-later title is saved in one section and viewed in another
 - **THEN** both sections present the same rating, comment, watch date, and watch-later state
+
+### Requirement: Shell links do not prefetch
+
+Navigation shell links SHALL NOT prefetch their destinations — neither on pointer hover, keyboard focus, touch, nor during browser idle time — and activating a shell link SHALL be the only request a section navigation makes. Title-card links inside result grids SHALL NOT prefetch every card destination.
+
+#### Scenario: Hover and focus issue no request
+
+- **WHEN** the user hovers over or focuses a navigation shell link without activating it
+- **THEN** no request for that link's destination is issued
+
+#### Scenario: Idle time issues no request
+
+- **WHEN** the browser is idle while the navigation shell is displayed
+- **THEN** no shell link destination is requested in the background
+
+#### Scenario: Activation issues a single request
+
+- **WHEN** the user activates a navigation shell link
+- **THEN** the destination is loaded by one navigation request and no prefetch request precedes it
+
+#### Scenario: Catalog cards are not prefetched
+
+- **WHEN** a grid of title cards is displayed
+- **THEN** displaying the grid does not prefetch every card's destination

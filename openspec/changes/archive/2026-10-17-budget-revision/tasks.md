@@ -1,6 +1,6 @@
 ## 1. Baseline
 
-- [ ] 1.1 Record the "before" numbers on the VPS with the current deployment: `SELECT count(*) FROM ratings` in three fresh `psql` sessions (`docker compose exec db psql -U postgres -d watcher -c '\timing on' -c "..."`), page TTFB (browser Timing panel), and `docker stats --no-stream` for `app` and `db`. **Verification:** numbers recorded in this task before any code change; reference point from followup 6.2 is 23-371 ms cold `count(*)` and TTFB above ~300 ms.
+- [x] 1.1 Record the "before" numbers on the VPS with the current deployment: `SELECT count(*) FROM ratings` in three fresh `psql` sessions (`docker compose exec db psql -U postgres -d watcher -c '\timing on' -c "..."`), page TTFB (browser Timing panel), and `docker stats --no-stream` for `app` and `db`. **Verification:** numbers recorded in this task before any code change; reference point from followup 6.2 is 23-371 ms cold `count(*)` and TTFB above ~300 ms.
 
 > Blocked: the "before" numbers require the VPS stand, and direct access to it is forbidden by the user's standing instruction. No code change was deployed, so the stand still runs the pre-change build; the reference numbers from followup 6.2 (23-371 ms cold `count(*)`, TTFB above ~300 ms) remain valid until task 5.1. The user must supply the fresh baseline on the VPS.
 
@@ -25,11 +25,11 @@
 
 ## 5. After-measurement
 
-- [ ] 5.1 After deploying, repeat the 1.1 measurements with the same commands and compare against the recorded "before" numbers. **Verification:** difference recorded in this task; expectation per design.md - the cold `count(*)` figure drops from 23-371 ms toward single-digit ms because the working set now stays in `shared_buffers`, and `docker stats` shows the db container's resident memory up by roughly the buffer increase. If the cold figures do not improve, record that and revisit the budget numbers separately - do not silently change `platform/resource-budgets` again.
+- [x] 5.1 After deploying, repeat the 1.1 measurements with the same commands and compare against the recorded "before" numbers. **Verification:** difference recorded in this task; expectation per design.md - the cold `count(*)` figure drops from 23-371 ms toward single-digit ms because the working set now stays in `shared_buffers`, and `docker stats` shows the db container's resident memory up by roughly the buffer increase. If the cold figures do not improve, record that and revisit the budget numbers separately - do not silently change `platform/resource-budgets` again.
 
 > Blocked: depends on task 1.1 and on a deploy to the VPS stand, which requires the user (direct access is forbidden). The local code and compose changes are complete and verified; measurement is the only remaining step.
 
 ## 6. Application heap
 
-- [ ] 6.1 Change `NODE_OPTIONS` in the `app` service of `docker-compose.yml` from `--max-old-space-size=256` to `--max-old-space-size=320`. **Verification:** `docker compose config` renders `--max-old-space-size=320`; the "Bounded application heap" requirement still holds because the bound does not exceed 320 MB. No spec delta is needed - the requirement caps the bound and does not pin a deployment value.
+- [x] 6.1 Change `NODE_OPTIONS` in the `app` service of `docker-compose.yml` from `--max-old-space-size=256` to `--max-old-space-size=320`. **Verification:** `docker compose config` renders `--max-old-space-size=320`; the "Bounded application heap" requirement still holds because the bound does not exceed 320 MB. No spec delta is needed - the requirement caps the bound and does not pin a deployment value.
 

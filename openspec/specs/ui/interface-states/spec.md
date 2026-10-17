@@ -5,30 +5,6 @@ Defines the loading, empty, error, and privacy-restricted interface states that 
 
 ## Requirements
 
-### Requirement: Loading state
-
-Any screen or section that depends on asynchronous data SHALL present a loading state as a skeleton that matches the shape of the expected content. The skeleton SHALL replace only the part of the interface that is waiting, leaving the surrounding shell in place. When switching between the tabs of a section, the section's header and its tab list SHALL remain visible while the skeleton of the selected tab is shown until that tab's content arrives.
-
-#### Scenario: Loading content
-
-- **WHEN** a screen or section is waiting for data
-- **THEN** a skeleton placeholder matching the expected content shape is shown
-
-#### Scenario: Loading completes
-
-- **WHEN** the data arrives
-- **THEN** the skeleton is replaced by the content without a full-page reload
-
-#### Scenario: Switching tabs shows the tab's skeleton
-
-- **WHEN** a user switches to another tab of a section
-- **THEN** the section's header and tab list stay visible and the selected tab shows its own skeleton until its content loads
-
-#### Scenario: Surrounding shell is not replaced
-
-- **WHEN** a section that is part of a larger screen is loading
-- **THEN** only that section shows a skeleton and the rest of the screen remains rendered
-
 ### Requirement: Empty state
 Any list or collection that has no items SHALL present an empty state with a short explanation and, where the user can act, a call to action.
 
@@ -67,44 +43,65 @@ The application SHALL present distinct restricted states for a hidden profile, h
 - **THEN** the screen shows a no-permission state instead of the restricted controls
 
 ### Requirement: Consistent state coverage
-Every screen listed in the interface SHALL define its loading, empty (where applicable), and error states, and SHALL reuse the same shared state components across screens.
+
+Every screen listed in the interface SHALL define its empty (where applicable) and error states, and SHALL reuse the same shared state components across screens.
 
 #### Scenario: Screen defines states
-- **WHEN** a screen can be loading, empty, or in error
+
+- **WHEN** a screen can be empty or in error
 - **THEN** it renders the corresponding shared state component rather than a screen-specific variant
 
-### Requirement: Route navigation loading state
+### Requirement: Reserved content area while loading
 
-During a client-side navigation to another route, the application SHALL keep the surrounding shell of the destination screen rendered and SHALL show a content skeleton in the content area until that route's content arrives. The skeleton SHALL be exposed to assistive technology as a busy loading status.
+A screen or section that depends on asynchronous data SHALL reserve the area its content will occupy and SHALL leave that area empty while the data is pending. The surrounding shell SHALL remain rendered and surrounding content SHALL NOT shift when the content arrives.
 
-#### Scenario: Skeleton shown during navigation
+#### Scenario: Area stays empty while pending
+
+- **WHEN** a screen or section is waiting for data
+- **THEN** its reserved area is empty and no placeholder is shown
+
+#### Scenario: Content renders without layout shift
+
+- **WHEN** the data arrives
+- **THEN** the content renders in the reserved area and surrounding content does not move
+
+#### Scenario: Surrounding shell is not replaced
+
+- **WHEN** a section that is part of a larger screen is waiting
+- **THEN** the rest of the screen remains rendered and only that section's area is empty
+
+#### Scenario: Switching tabs keeps the section chrome
+
+- **WHEN** a user switches to another tab of a section
+- **THEN** the section's header and tab list stay visible and the selected tab's area stays empty until its content loads
+
+### Requirement: Route navigation content area
+
+During a client-side navigation to another route, the application SHALL keep the surrounding shell of the destination screen rendered and SHALL leave the destination's content area empty until that route's content arrives.
+
+#### Scenario: Content area stays empty during navigation
 
 - **WHEN** a user activates a link to another route whose content is still being prepared
-- **THEN** the surrounding shell remains visible and a content skeleton is shown in the content area
+- **THEN** the surrounding shell remains visible and the content area is empty
 
-#### Scenario: Skeleton replaced by content
+#### Scenario: Content replaces the empty area
 
 - **WHEN** the destination route's content arrives
-- **THEN** the skeleton is replaced by the content without a full-page reload
+- **THEN** it renders in the content area without a full-page reload
 
-#### Scenario: Loading is announced
+### Requirement: Progressive section rendering without placeholders
 
-- **WHEN** the content skeleton is shown during navigation
-- **THEN** the loading region is exposed to assistive technology as a busy status
-
-### Requirement: Progressive section rendering
-
-A screen whose content depends on a slow or remote source SHALL render its shell before that content is ready, and SHALL stream each slow section into a skeleton placeholder in the content area when its data arrives. The shell MUST NOT be withheld while a slow section is still loading.
+A screen whose content depends on a slow or remote source SHALL render its shell before that content is ready and SHALL render each slow section into its reserved area when its data arrives. The shell MUST NOT be withheld while a slow section is still loading.
 
 #### Scenario: Shell renders before a slow section
 
 - **WHEN** a screen includes a section that waits on a slow or remote source
-- **THEN** the screen shell is rendered immediately and that section shows a skeleton
+- **THEN** the screen shell is rendered immediately and that section's area is empty
 
-#### Scenario: Section streams in
+#### Scenario: Section renders when ready
 
 - **WHEN** a slow section's data arrives
-- **THEN** the skeleton is replaced by the section content without a full-page reload
+- **THEN** the section content renders in its reserved area without a full-page reload
 
 #### Scenario: Slow section fails
 
