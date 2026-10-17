@@ -9,7 +9,7 @@ export default function MyStatsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Статистика</h1>
         <Button asChild variant="outline" size="sm">
-          <Link href="/me">К профилю</Link>
+          <Link href="/me" prefetch={false}>К профилю</Link>
         </Button>
       </header>
       <OwnStatsScreen />

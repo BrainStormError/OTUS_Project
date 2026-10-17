@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 
+import { groupRead, invalidateReads, SOCIAL_READS } from './read-invalidation';
+
 export function LeaveGroupButton({ groupId }: { groupId: number }) {
   const router = useRouter();
   const toast = useToast();
@@ -16,9 +18,9 @@ export function LeaveGroupButton({ groupId }: { groupId: number }) {
     try {
       const response = await fetch(`/api/groups/${groupId}/membership`, { method: 'DELETE' });
       if (response.ok) {
+        void invalidateReads([...SOCIAL_READS, groupRead(groupId)]);
         toast.success('Вы покинули группу');
         router.push('/groups');
-        router.refresh();
         return;
       }
       toast.error('Не удалось покинуть группу');

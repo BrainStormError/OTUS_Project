@@ -27,14 +27,14 @@ describe('GET /api/feed', () => {
     expect(response.status).toBe(401);
   });
 
-  it('caches the feed in the browser for at most thirty seconds', async () => {
+  it('caches the feed in the browser for at most sixty seconds', async () => {
     getActorMock.mockResolvedValue(actor);
     listMock.mockResolvedValue(ok({ items: [], nextCursor: null }));
 
     const response = await feedRoute(new Request('http://localhost/api/feed'));
     expect(response.status).toBe(200);
     const cacheControl = response.headers.get('cache-control') ?? '';
-    expect(cacheControl).toBe('private, max-age=30');
+    expect(cacheControl).toBe('private, max-age=60');
     expect(cacheControl).not.toContain('public');
     expect(cacheControl).not.toContain('s-maxage');
   });

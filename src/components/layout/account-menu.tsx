@@ -44,12 +44,14 @@ export function AccountMenu({ name, tag }: { name: string | null; tag: string | 
       <div className="animate-slide absolute right-0 z-20 mt-2 w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground elevation-raised">
         <Link
           href="/me"
+          prefetch={false}
           className="block min-h-11 rounded-sm px-3 py-3 text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Профиль
         </Link>
         <Link
           href="/settings"
+          prefetch={false}
           className="block min-h-11 rounded-sm px-3 py-3 text-sm transition-hover hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Настройки

@@ -100,7 +100,7 @@ describe('FilmDetail record feedback', () => {
     await waitFor(() => expect(screen.getByTestId('my-rating')).toBeInTheDocument());
   });
 
-  it('refreshes the router after a record is removed so the previous list updates', async () => {
+  it('does not re-render the document after a record is removed', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) })),
@@ -111,7 +111,7 @@ describe('FilmDetail record feedback', () => {
 
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveTextContent('Запись удалена');
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 
   it('removes a freshly rated title using the server-assigned id', async () => {

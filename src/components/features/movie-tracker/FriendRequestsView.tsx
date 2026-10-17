@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,6 @@ export function FriendRequestsView({
   const [pending, setPending] = useState<FriendRequest[]>(incoming);
   const [sent, setSent] = useState<FriendRequest[]>(outgoing);
   const toast = useToast();
-  const router = useRouter();
 
   async function decide(userId: number, decision: 'accept' | 'decline') {
     const request = pending.find((item) => item.user.id === userId);
@@ -33,7 +31,6 @@ export function FriendRequestsView({
     const ok = await decideFriendship(request.id, decision);
     if (ok) {
       toast.success(decision === 'accept' ? 'Заявка принята' : 'Заявка отклонена');
-      router.refresh();
       return;
     }
     setPending(previousPending);

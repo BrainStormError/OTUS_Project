@@ -43,7 +43,7 @@ function renderView() {
 }
 
 describe('FriendRequestsView feedback', () => {
-  it('accepts a request with a success toast, a refetch, and an optimistic removal', async () => {
+  it('accepts a request with a success toast and an optimistic removal', async () => {
     stubFetch(true);
     renderView();
 
@@ -52,7 +52,7 @@ describe('FriendRequestsView feedback', () => {
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveAttribute('data-tone', 'success');
     expect(toast).toHaveTextContent('Заявка принята');
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Принять заявку от Иван' })).not.toBeInTheDocument();
   });
 
@@ -71,7 +71,7 @@ describe('FriendRequestsView feedback', () => {
     );
   });
 
-  it('declines a request with a success toast and a refetch', async () => {
+  it('declines a request with a success toast', async () => {
     stubFetch(true);
     renderView();
 
@@ -80,6 +80,6 @@ describe('FriendRequestsView feedback', () => {
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveAttribute('data-tone', 'success');
     expect(toast).toHaveTextContent('Заявка отклонена');
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });

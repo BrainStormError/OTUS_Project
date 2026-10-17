@@ -10,6 +10,7 @@ import type {
   FeedItem,
   ListFeedResult,
   NewActivityEvent,
+  SignalKind,
 } from './types';
 
 const KIND_CODE: Record<ActivityKind, number> = {
@@ -19,6 +20,10 @@ const KIND_CODE: Record<ActivityKind, number> = {
   group_joined: 3,
   post_created: 4,
   comment_created: 5,
+  friend_removed: 6,
+  group_left: 7,
+  group_removed: 8,
+  group_dissolved: 9,
 };
 
 const KIND_NAME: Record<number, ActivityKind> = {
@@ -28,9 +33,23 @@ const KIND_NAME: Record<number, ActivityKind> = {
   3: 'group_joined',
   4: 'post_created',
   5: 'comment_created',
+  6: 'friend_removed',
+  7: 'group_left',
+  8: 'group_removed',
+  9: 'group_dissolved',
 };
 
 const COMMENT_KIND_CODE = KIND_CODE.comment_created;
+const SIGNAL_KIND_CODES = [
+  KIND_CODE.friend_removed,
+  KIND_CODE.group_left,
+  KIND_CODE.group_removed,
+  KIND_CODE.group_dissolved,
+];
+
+const LISTED_KINDS_ONLY = `e.kind <> ${COMMENT_KIND_CODE}
+  AND e.kind NOT IN (${SIGNAL_KIND_CODES.join(', ')})
+  AND e.target_user_id IS NULL`;
 
 // Feed retention: events survive at most one day. The delete runs lazily on
 // read, throttled to once a minute per process so frequent reads do not each
@@ -63,6 +82,7 @@ type EventRow = {
   group_id: number | null;
   media_id: number | null;
   discussion_id: number | null;
+  target_user_id: number | null;
   created_at: Date;
 };
 
@@ -78,7 +98,8 @@ type FeedRow = EventRow & {
   linked_discussion_title: string | null;
 };
 
-const EVENT_COLUMNS = 'id, actor_id, kind, group_id, media_id, discussion_id, created_at';
+const EVENT_COLUMNS =
+  'id, actor_id, kind, group_id, media_id, discussion_id, target_user_id, created_at';
 
 const FEED_COLUMNS = `e.id, e.actor_id, e.kind, e.group_id, e.media_id,
   COALESCE(e.discussion_id, dm.id) AS discussion_id, e.created_at,
@@ -129,6 +150,7 @@ function mapActivityEvent(row: EventRow): ActivityEvent {
     groupId: row.group_id,
     mediaId: row.media_id,
     discussionId: row.discussion_id,
+    targetUserId: row.target_user_id,
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -193,8 +215,8 @@ export async function insertActivityEvent(
   event: NewActivityEvent,
 ): Promise<ActivityEvent> {
   const result = await tx.query<EventRow>(
-    `INSERT INTO activity_events (actor_id, kind, group_id, media_id, discussion_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO activity_events (actor_id, kind, group_id, media_id, discussion_id, target_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${EVENT_COLUMNS}`,
     [
       event.actorId,
@@ -202,6 +224,7 @@ export async function insertActivityEvent(
       event.groupId ?? null,
       event.mediaId ?? null,
       event.discussionId ?? null,
+      event.targetUserId ?? null,
     ],
   );
   const row = result.rows[0];
@@ -223,7 +246,7 @@ export async function listFeedEvents(params: {
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE ${VIEWER_VISIBILITY}
-        AND e.kind <> ${COMMENT_KIND_CODE}
+        AND ${LISTED_KINDS_ONLY}
         AND e.created_at > now() - interval '1 day'
         AND ($2::timestamptz IS NULL OR (e.created_at, e.id) < ($2::timestamptz, $3::bigint))
         AND ($4::timestamptz IS NULL OR (e.created_at, e.id) > ($4::timestamptz, $5::bigint))
@@ -258,12 +281,28 @@ export async function findVisibleEvent(
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE ${VIEWER_VISIBILITY}
-        AND e.kind <> ${COMMENT_KIND_CODE}
+        AND ${LISTED_KINDS_ONLY}
         AND e.id = $2`,
     [viewerId, eventId],
   );
   const row = rows[0];
   return row ? mapFeedItem(row) : null;
+}
+
+export async function findSignalForUser(
+  viewerId: number,
+  eventId: number,
+): Promise<SignalKind | null> {
+  const rows = await query<{ kind: number }>(
+    `SELECT kind FROM activity_events
+      WHERE id = $2 AND target_user_id = $1`,
+    [viewerId, eventId],
+  );
+  const code = rows[0]?.kind;
+  if (code === undefined || !SIGNAL_KIND_CODES.includes(code)) {
+    return null;
+  }
+  return KIND_NAME[code] as SignalKind;
 }
 
 export async function isGroupMember(groupId: number, userId: number): Promise<boolean> {
@@ -288,7 +327,7 @@ export async function listGroupFeedEvents(params: {
     `SELECT ${FEED_COLUMNS}
        ${FEED_FROM}
       WHERE e.group_id = $2
-        AND e.kind <> ${COMMENT_KIND_CODE}
+        AND ${LISTED_KINDS_ONLY}
         AND e.created_at > now() - interval '1 day'
         AND (e.actor_id = $1 OR u.profile_hidden = false)
         AND ($3::timestamptz IS NULL OR (e.created_at, e.id) < ($3::timestamptz, $4::bigint))

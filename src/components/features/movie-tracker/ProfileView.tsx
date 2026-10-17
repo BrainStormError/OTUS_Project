@@ -56,7 +56,7 @@ export function ProfileView({ user, isOwn }: { user: PublicUser; isOwn: boolean 
           <ul className="divide-y divide-border rounded-lg border border-border">
             {user.recent.map((record) => (
               <li key={record.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <Link href={`/film/${record.movie.tmdbId}`} className="text-sm font-medium underline-offset-4 hover:underline">
+                <Link href={`/film/${record.movie.tmdbId}`} prefetch={false} className="text-sm font-medium underline-offset-4 hover:underline">
                   {record.movie.title}
                 </Link>
                 <span className="text-sm text-muted-foreground tabular-nums">

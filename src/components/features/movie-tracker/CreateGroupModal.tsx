@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/modal';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/toast';
 
+import { invalidateReads, SOCIAL_READS } from './read-invalidation';
 import { TagInput } from './TagInput';
 
 function CreateGroupForm({ onClose }: { onClose: () => void }) {
@@ -40,7 +41,8 @@ function CreateGroupForm({ onClose }: { onClose: () => void }) {
         toast.error(message);
         return;
       }
-      const data = (await response.json()) as { id: number };
+        const data = (await response.json()) as { id: number };
+        void invalidateReads(SOCIAL_READS);
       toast.success('Группа создана');
       onClose();
       router.push(`/groups/${data.id}`);

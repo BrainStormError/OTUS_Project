@@ -1,7 +1,5 @@
 import { useCallback, useMemo } from 'react';
 
-import { useRouter } from 'next/navigation';
-
 import { useToast } from '@/components/ui/toast';
 
 import { mediaKey } from './catalog-view';
@@ -27,7 +25,6 @@ function recordsSignature(records: WatchedRecord[]): string {
 
 function useRecordMutations(handle: ListHandle<WatchedRecord>) {
   const toast = useToast();
-  const router = useRouter();
 
   const finishDelete = useCallback(
     (key: string, record: WatchedRecord) => {
@@ -35,7 +32,6 @@ function useRecordMutations(handle: ListHandle<WatchedRecord>) {
         .then((ok) => {
           if (ok) {
             handle.confirmRemove(key);
-            router.refresh();
             toast.success('Запись удалена');
           } else {
             handle.failRemove(key, record);
@@ -47,7 +43,7 @@ function useRecordMutations(handle: ListHandle<WatchedRecord>) {
           toast.error('Не удалось удалить запись');
         });
     },
-    [handle, router, toast],
+    [handle, toast],
   );
 
   const upsert = useCallback(
@@ -71,7 +67,6 @@ function useRecordMutations(handle: ListHandle<WatchedRecord>) {
             finishDelete(key, { ...record, id });
             return;
           }
-          router.refresh();
           toast.success('Запись сохранена');
         })
         .catch(() => {
@@ -79,7 +74,7 @@ function useRecordMutations(handle: ListHandle<WatchedRecord>) {
           toast.error('Не удалось сохранить запись');
         });
     },
-    [finishDelete, handle, router, toast],
+    [finishDelete, handle, toast],
   );
 
   const remove = useCallback(

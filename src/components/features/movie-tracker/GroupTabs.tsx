@@ -175,6 +175,7 @@ export function GroupTabs({
               >
                 <Link
                   href={`/u/${member.handle}`}
+                  prefetch={false}
                   className="text-sm font-medium underline-offset-4 hover:underline"
                 >
                   {member.name}

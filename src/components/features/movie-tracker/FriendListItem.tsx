@@ -24,6 +24,7 @@ export function FriendListItem({
     >
       <Link
         href={`/u/${user.handle}`}
+        prefetch={false}
         className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <Avatar seed={user.handle} size={40} />

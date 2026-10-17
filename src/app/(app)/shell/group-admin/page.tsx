@@ -14,6 +14,7 @@ export default function GroupAdminShellPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <Link
         href={groupId !== null ? `/groups/${groupId}` : '/groups'}
+        prefetch={false}
         className="text-sm text-muted-foreground underline-offset-4 hover:underline"
       >
         ← К группе

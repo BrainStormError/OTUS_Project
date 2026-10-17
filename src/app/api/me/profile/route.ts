@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CACHE_SINGLE_AUTHOR } from '@/core/http/responses';
 import { withRoute } from '@/core/http/with-route';
 import { ok } from '@/core/result';
 import { getActor } from '@/modules/auth/session';
@@ -13,6 +14,7 @@ export const GET = withRoute(
     schema: z.undefined(),
     querySchema: emptyQuery,
     resolveActor: getActor,
+    headers: { 'cache-control': CACHE_SINGLE_AUTHOR },
   },
   async (_input, { actor }) => {
     const profile = await getOwnProfile(actor);

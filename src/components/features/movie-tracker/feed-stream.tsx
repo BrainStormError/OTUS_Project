@@ -10,6 +10,13 @@ import {
 } from 'react';
 
 import type { FeedEvent } from './feed';
+import {
+  invalidateReads,
+  PERSONAL_READS,
+  readsForActivity,
+  readsForSignal,
+  type SignalKind,
+} from './read-invalidation';
 
 export const RETRY_BASE_MS = 1_000;
 export const RETRY_MAX_MS = 30_000;
@@ -87,6 +94,22 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
             previous.some((item) => item.id === incoming.id) ? previous : [incoming, ...previous],
           );
           setPending((count) => count + 1);
+          const reads = readsForActivity(incoming.kind, incoming.source);
+          if (reads.length > 0) {
+            void invalidateReads(reads);
+          }
+        } catch {
+          // Ignore malformed payloads.
+        }
+      });
+      next.addEventListener('signal', (event) => {
+        try {
+          const incoming = JSON.parse((event as MessageEvent).data) as { kind?: string };
+          if (cancelled || !incoming.kind) return;
+          const reads = readsForSignal(incoming.kind as SignalKind);
+          if (reads.length > 0) {
+            void invalidateReads(reads);
+          }
         } catch {
           // Ignore malformed payloads.
         }
@@ -112,13 +135,21 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
       };
     };
 
+    const recover = () => {
+      if (cancelled) return;
+      void invalidateReads(PERSONAL_READS);
+    };
+
     void refetch().finally(() => {
       if (!cancelled) setLoading(false);
     });
+    recover();
+    window.addEventListener('online', recover);
     connect();
 
     return () => {
       cancelled = true;
+      window.removeEventListener('online', recover);
       if (retry) clearTimeout(retry);
       source?.close();
     };

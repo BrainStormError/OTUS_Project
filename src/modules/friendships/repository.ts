@@ -197,16 +197,17 @@ export async function deletePendingRequest(
 }
 
 export async function deleteAcceptedFriendship(
+  tx: PoolClient,
   id: number,
   actorId: number,
 ): Promise<Friendship | null> {
-  const rows = await query<FriendshipRow>(
+  const result = await tx.query<FriendshipRow>(
     `DELETE FROM friendships
       WHERE id = $1 AND status = $2 AND (requester_id = $3 OR addressee_id = $3)
       RETURNING ${COLUMNS}`,
     [id, STATUS_CODE.accepted, actorId],
   );
-  const row = rows[0];
+  const row = result.rows[0];
   return row ? mapFriendship(row) : null;
 }
 

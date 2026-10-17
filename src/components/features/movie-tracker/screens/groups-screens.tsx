@@ -19,7 +19,8 @@ import { GroupSettingsForm } from '../GroupSettingsForm';
 import { GroupsView } from '../GroupsView';
 import { GroupTabs } from '../GroupTabs';
 import { LeaveGroupButton } from '../LeaveGroupButton';
-import { useApi } from './use-api';
+import { groupRead } from '../read-invalidation';
+import { useRead } from '../read-store';
 
 type GroupsRead = {
   groups: GroupSummary[];
@@ -38,13 +39,15 @@ type GroupRead = {
 
 export function GroupsScreen() {
   const identity = useShellIdentity();
-  const state = useApi<GroupsRead>('/api/groups');
+  const state = useRead<GroupsRead>('/api/groups');
 
   if (state.status === 'loading') {
     return null;
   }
   if (state.status === 'error') {
-    return <ErrorState message="Не удалось загрузить группы." />;
+    return (
+      <ErrorState message="Не удалось загрузить группы." retry={state.retry} />
+    );
   }
 
   return (
@@ -70,7 +73,7 @@ export function GroupsScreen() {
 export function GroupScreen({ groupId }: { groupId: number }) {
   const identity = useShellIdentity();
   const params = useSearchParams();
-  const state = useApi<GroupRead>(`/api/groups/${groupId}`);
+  const state = useRead<GroupRead>(groupRead(groupId));
 
   if (state.status === 'loading') {
     return null;
@@ -79,7 +82,7 @@ export function GroupScreen({ groupId }: { groupId: number }) {
     return state.code === 404 ? (
       <EmptyState title="Группа не найдена" />
     ) : (
-      <ErrorState message="Не удалось загрузить группу." />
+      <ErrorState message="Не удалось загрузить группу." retry={state.retry} />
     );
   }
 
@@ -105,7 +108,7 @@ export function GroupScreen({ groupId }: { groupId: number }) {
         </div>
         {isAdmin ? (
           <Button asChild size="sm">
-            <Link href={`/groups/${group.id}/admin`}>Управление</Link>
+            <Link href={`/groups/${group.id}/admin`} prefetch={false}>Управление</Link>
           </Button>
         ) : isMember ? (
           <LeaveGroupButton groupId={group.id} />
@@ -131,7 +134,7 @@ export function GroupScreen({ groupId }: { groupId: number }) {
 
 export function GroupAdminScreen({ groupId }: { groupId: number }) {
   const identity = useShellIdentity();
-  const state = useApi<GroupRead>(`/api/groups/${groupId}`);
+  const state = useRead<GroupRead>(groupRead(groupId));
 
   if (state.status === 'loading') {
     return null;
@@ -140,7 +143,7 @@ export function GroupAdminScreen({ groupId }: { groupId: number }) {
     return state.code === 404 ? (
       <EmptyState title="Группа не найдена" />
     ) : (
-      <ErrorState message="Не удалось загрузить управление группой." />
+      <ErrorState message="Не удалось загрузить управление группой." retry={state.retry} />
     );
   }
 

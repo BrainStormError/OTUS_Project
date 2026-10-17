@@ -1,7 +1,5 @@
 import { useCallback, useMemo } from 'react';
 
-import { useRouter } from 'next/navigation';
-
 import { useToast } from '@/components/ui/toast';
 
 import { mediaKey } from './catalog-view';
@@ -31,7 +29,6 @@ function watchlistSignature(items: WatchlistItem[]): string {
 
 function useWatchlistMutations(handle: ListHandle<WatchlistItem>) {
   const toast = useToast();
-  const router = useRouter();
 
   const finishDelete = useCallback(
     (key: string, item: WatchlistItem) => {
@@ -39,7 +36,6 @@ function useWatchlistMutations(handle: ListHandle<WatchlistItem>) {
         .then((ok) => {
           if (ok) {
             handle.confirmRemove(key);
-            router.refresh();
             toast.success('Удалено из «Буду смотреть»');
           } else {
             handle.failRemove(key, item);
@@ -51,7 +47,7 @@ function useWatchlistMutations(handle: ListHandle<WatchlistItem>) {
           toast.error('Не удалось удалить запись');
         });
     },
-    [handle, router, toast],
+    [handle, toast],
   );
 
   const add = useCallback(
@@ -77,7 +73,6 @@ function useWatchlistMutations(handle: ListHandle<WatchlistItem>) {
             finishDelete(key, { id, movie, addedAt: today() });
             return;
           }
-          router.refresh();
           toast.success('Добавлено в «Буду смотреть»');
         })
         .catch(() => {
@@ -85,7 +80,7 @@ function useWatchlistMutations(handle: ListHandle<WatchlistItem>) {
           toast.error('Не удалось добавить в «Буду смотреть»');
         });
     },
-    [finishDelete, handle, router, toast],
+    [finishDelete, handle, toast],
   );
 
   const remove = useCallback(

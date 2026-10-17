@@ -3,7 +3,7 @@ import { subscribeToActivity } from '@/core/db/activity-channel';
 import { getSharedRateLimiter } from '@/core/http/rate-limit';
 import { json } from '@/core/http/responses';
 import { acquireStreamSlot, releaseStreamSlot } from '@/core/http/stream-guard';
-import { getVisibleEvent, listFeed, MAX_FEED_LIMIT } from '@/modules/activity';
+import { getSignalForUser, getVisibleEvent, listFeed, MAX_FEED_LIMIT } from '@/modules/activity';
 import { getActor } from '@/modules/auth/session';
 
 export const dynamic = 'force-dynamic';
@@ -59,6 +59,15 @@ export async function GET(request: Request): Promise<Response> {
         send(`event: activity\nid: ${event.cursor}\ndata: ${JSON.stringify(event)}\n\n`);
       };
 
+      const deliver = async (eventId: number) => {
+        const signal = await getSignalForUser(identity, eventId);
+        if (signal) {
+          send(`event: signal\ndata: ${JSON.stringify({ kind: signal })}\n\n`);
+          return;
+        }
+        sendItem(await getVisibleEvent(identity, eventId));
+      };
+
       request.signal.addEventListener('abort', () => {
         if (heartbeat) clearInterval(heartbeat);
         unsubscribe?.();
@@ -73,7 +82,7 @@ export async function GET(request: Request): Promise<Response> {
       unsubscribe = await subscribeToActivity((eventId) => {
         const parsedId = Number(eventId);
         if (!Number.isInteger(parsedId)) return;
-        void getVisibleEvent(actor.id, parsedId).then(sendItem);
+        void deliver(parsedId);
       });
 
       send(': connected\n\n');

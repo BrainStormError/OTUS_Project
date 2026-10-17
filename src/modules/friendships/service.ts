@@ -155,11 +155,23 @@ export async function removeFriend(
   if (friendship.status !== 'accepted') {
     return err('CONFLICT', 'Дружба не принята');
   }
-  const deleted = await deleteAcceptedFriendship(friendship.id, actor.id);
-  if (!deleted) {
-    return err('CONFLICT', 'Дружба уже удалена');
-  }
-  return ok(deleted);
+  return withTransaction(async (tx) => {
+    const deleted = await deleteAcceptedFriendship(tx, friendship.id, actor.id);
+    if (!deleted) {
+      return err('CONFLICT', 'Дружба уже удалена');
+    }
+    await recordEvent(tx, {
+      actorId: actor.id,
+      kind: 'friend_removed',
+      targetUserId: friendship.requesterId,
+    });
+    await recordEvent(tx, {
+      actorId: actor.id,
+      kind: 'friend_removed',
+      targetUserId: friendship.addresseeId,
+    });
+    return ok(deleted);
+  });
 }
 
 export async function getRelationship(

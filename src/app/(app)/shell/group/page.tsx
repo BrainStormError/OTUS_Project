@@ -14,6 +14,7 @@ export default function GroupShellPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <Link
         href="/groups"
+        prefetch={false}
         className="text-sm text-muted-foreground underline-offset-4 hover:underline"
       >
         ← Группы

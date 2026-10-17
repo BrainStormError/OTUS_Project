@@ -31,6 +31,7 @@ import {
   insertGroupMember,
   isGroupMember,
   listDiscoverableGroups,
+  listGroupMemberIds,
   listGroupsForUser,
   listPendingInvitationsForGroup,
   listPendingInvitationsForUser,
@@ -172,6 +173,11 @@ export async function leaveGroup(
     if (!removed) {
       return err('NOT_FOUND', 'Участник не найден');
     }
+    await recordEvent(tx, {
+      actorId: actor.id,
+      kind: 'group_left',
+      targetUserId: actor.id,
+    });
     return ok(null);
   });
 }
@@ -288,6 +294,11 @@ export async function removeGroupMember(
     if (!removed) {
       return err('NOT_FOUND', 'Участник не найден');
     }
+    await recordEvent(tx, {
+      actorId: actor.id,
+      kind: 'group_removed',
+      targetUserId: input.userId,
+    });
     return ok(null);
   });
 }
@@ -302,10 +313,18 @@ export async function dissolveGroup(
   }
 
   return withTransaction(async (tx) => {
+    const memberIds = await listGroupMemberIds(tx, input.groupId);
     await deleteGroupActivity(tx, input.groupId);
     const removed = await deleteGroup(tx, input.groupId);
     if (!removed) {
       return err('NOT_FOUND', 'Группа не найдена');
+    }
+    for (const memberId of memberIds) {
+      await recordEvent(tx, {
+        actorId: actor.id,
+        kind: 'group_dissolved',
+        targetUserId: memberId,
+      });
     }
     return ok(null);
   });

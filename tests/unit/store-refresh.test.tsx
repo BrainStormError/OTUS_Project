@@ -64,21 +64,53 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('client cache invalidation after mutations', () => {
-  it('refreshes the router once a record is saved', async () => {
+describe('mutations refresh through the read store, not the document', () => {
+  it('does not re-render the document when a record is saved', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      void init;
+      return new Response(JSON.stringify({ id: 5 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
     render(<RecordHarness />);
 
     await userEvent.click(screen.getByRole('button', { name: 'save record' }));
 
-    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (init as RequestInit | undefined)?.cache === 'reload',
+        ),
+      ).not.toHaveLength(0),
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 
-  it('refreshes the router once a watchlist item is added', async () => {
+  it('does not re-render the document when a watchlist item is added', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      void init;
+      return new Response(JSON.stringify({ id: 5 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
     render(<WatchlistHarness />);
 
     await userEvent.click(screen.getByRole('button', { name: 'add watchlist' }));
 
-    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (init as RequestInit | undefined)?.cache === 'reload',
+        ),
+      ).not.toHaveLength(0),
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });
 

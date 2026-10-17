@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 
+import { invalidateReads, SOCIAL_READS } from './read-invalidation';
+
 export function DissolveGroupButton({ groupId }: { groupId: number }) {
   const router = useRouter();
   const toast = useToast();
@@ -17,9 +19,9 @@ export function DissolveGroupButton({ groupId }: { groupId: number }) {
     try {
       const response = await fetch(`/api/groups/${groupId}`, { method: 'DELETE' });
       if (response.ok) {
+        void invalidateReads(SOCIAL_READS);
         toast.success('Группа распущена');
         router.push('/groups');
-        router.refresh();
         return;
       }
       toast.error('Не удалось распустить группу');

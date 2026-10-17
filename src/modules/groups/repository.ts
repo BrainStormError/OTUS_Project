@@ -324,6 +324,17 @@ export async function deleteGroupMember(
   return (result.rowCount ?? 0) > 0;
 }
 
+export async function listGroupMemberIds(
+  tx: PoolClient,
+  groupId: number,
+): Promise<number[]> {
+  const result = await tx.query<{ user_id: number }>(
+    `SELECT user_id FROM group_members WHERE group_id = $1`,
+    [groupId],
+  );
+  return result.rows.map((row) => row.user_id);
+}
+
 // Removes the group's activity explicitly: activity_events.group_id is
 // ON DELETE SET NULL, so deleting the group alone would leave its events behind
 // reclassified as personal/friend activity.

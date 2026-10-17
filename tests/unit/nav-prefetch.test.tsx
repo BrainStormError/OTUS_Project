@@ -30,8 +30,12 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+import { FriendListItem } from '@/components/features/movie-tracker/FriendListItem';
+import { GroupCard } from '@/components/features/movie-tracker/GroupCard';
 import { MovieCard } from '@/components/features/movie-tracker/MovieCard';
+import { WatchlistTable } from '@/components/features/movie-tracker/WatchlistTable';
 import { NavLinks } from '@/components/layout/nav-links';
+import { TopBar } from '@/components/layout/top-bar';
 
 describe('shell link prefetching', () => {
   beforeEach(() => {
@@ -88,6 +92,65 @@ describe('shell link prefetching', () => {
       />,
     );
     expect(screen.getByRole('link')).toHaveAttribute('data-prefetch', 'false');
+    expect(prefetchMock).not.toHaveBeenCalled();
+  });
+});
+
+const movie = {
+  tmdbId: 27205,
+  kind: 'film' as const,
+  title: 'Начало',
+  year: 2010,
+  rating: 8.4,
+  genres: [],
+  posterUrl: null,
+};
+
+describe('chrome and list links never prefetch', () => {
+  it('marks the top-bar brand and account-menu links as non-prefetching and stays quiet on hover', () => {
+    render(<TopBar name="Алексей" tag="me" />);
+
+    const links = screen.getAllByRole('link');
+    expect(links.length).toBeGreaterThanOrEqual(3);
+    for (const link of links) {
+      expect(link).toHaveAttribute('data-prefetch', 'false');
+      fireEvent.pointerEnter(link);
+      fireEvent.focus(link);
+    }
+    expect(prefetchMock).not.toHaveBeenCalled();
+  });
+
+  it('issues no prefetch when a list of friends, groups, and watch-later rows is rendered or hovered', () => {
+    render(
+      <>
+        <ul>
+          <FriendListItem user={{ id: 1, name: 'Иван', handle: 'ivan' }} />
+        </ul>
+        <GroupCard
+          group={{
+            id: 3,
+            name: 'Клуб',
+            tags: [],
+            members: [],
+            stats: { count: 0, genres: [], years: [] },
+          }}
+        />
+        <WatchlistTable
+          testId="watchlist"
+          items={[{ id: 7, movie, addedAt: '2024-01-01' }]}
+          onRate={() => undefined}
+          onRemove={() => undefined}
+        />
+      </>,
+    );
+
+    const links = screen.getAllByRole('link');
+    expect(links.length).toBeGreaterThanOrEqual(3);
+    for (const link of links) {
+      expect(link).toHaveAttribute('data-prefetch', 'false');
+      fireEvent.pointerEnter(link);
+      fireEvent.focus(link);
+    }
     expect(prefetchMock).not.toHaveBeenCalled();
   });
 });

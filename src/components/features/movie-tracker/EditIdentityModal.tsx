@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 
+import { IDENTITY_READS, invalidateReads } from './read-invalidation';
+
 export type IdentityField = 'name' | 'handle';
 
 const FIELDS: Record<
@@ -66,12 +68,11 @@ function IdentityForm({
         setError(data.error ?? 'Не удалось сохранить');
         return;
       }
+      void invalidateReads(IDENTITY_READS);
       onSaved?.(value);
       onClose();
       if (field === 'handle' && pathname.startsWith('/u/')) {
         router.push('/me');
-      } else {
-        router.refresh();
       }
     } catch {
       setError('Не удалось сохранить');

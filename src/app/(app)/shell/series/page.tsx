@@ -12,6 +12,7 @@ export default function SeriesShellPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <Link
         href="/series"
+        prefetch={false}
         className="text-sm text-muted-foreground underline-offset-4 hover:underline"
       >
         ← Назад к поиску

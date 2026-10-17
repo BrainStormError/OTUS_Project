@@ -1,5 +1,5 @@
 import { toFeedEvent } from '@/components/features/movie-tracker/feed';
-import { json } from '@/core/http/responses';
+import { CACHE_LIVE_FEED, json } from '@/core/http/responses';
 import { listFeed, listFeedInput } from '@/modules/activity';
 import { getActor } from '@/modules/auth/session';
 
@@ -32,6 +32,6 @@ export async function GET(request: Request): Promise<Response> {
       nextCursor: result.value.nextCursor,
     },
     200,
-    { 'cache-control': 'private, max-age=30' },
+    { 'cache-control': CACHE_LIVE_FEED },
   );
 }

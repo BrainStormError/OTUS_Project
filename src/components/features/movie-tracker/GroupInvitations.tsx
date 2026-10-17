@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
+
+import { invalidateReads, SOCIAL_READS } from './read-invalidation';
 
 export type GroupInvitationItem = {
   id: number;
@@ -17,7 +18,6 @@ export type GroupInvitationItem = {
 export function GroupInvitations({ invitations }: { invitations: GroupInvitationItem[] }) {
   const [items, setItems] = useState(invitations);
   const toast = useToast();
-  const router = useRouter();
 
   async function decide(id: number, decision: 'accept' | 'decline') {
     const previous = items;
@@ -28,9 +28,9 @@ export function GroupInvitations({ invitations }: { invitations: GroupInvitation
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ decision }),
       });
-      if (response.ok) {
+        if (response.ok) {
+          void invalidateReads(SOCIAL_READS);
         toast.success(decision === 'accept' ? 'Приглашение принято' : 'Приглашение отклонено');
-        router.refresh();
         return;
       }
     } catch {

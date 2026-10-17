@@ -528,7 +528,7 @@ describe('GroupRatings', () => {
     expect(screen.getByRole('button', { name: 'Изменить' })).toBeInTheDocument();
   });
 
-  it('saves a rating from the row action and refreshes the tab', async () => {
+  it('saves a rating from the row action and reloads the group read', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ userId: 1 }) });
     vi.stubGlobal('fetch', fetchMock);
     render(
@@ -551,7 +551,13 @@ describe('GroupRatings', () => {
       '/api/groups/1/ratings',
       expect.objectContaining({ method: 'POST' }),
     );
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/groups/1',
+        expect.objectContaining({ cache: 'reload' }),
+      ),
+    );
+    expect(refresh).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
@@ -627,7 +633,13 @@ describe('GroupRatings', () => {
       alsoPersonal: true,
       confirmOverwrite: true,
     });
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/groups/1',
+        expect.objectContaining({ cache: 'reload' }),
+      ),
+    );
+    expect(refresh).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 

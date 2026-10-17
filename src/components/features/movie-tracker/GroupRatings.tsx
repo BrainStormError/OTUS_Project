@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { Fragment, useEffect, useId, useState } from 'react';
 
 import { currentDateInTimeZone, useTimeFormat } from '@/components/layout/preferences';
@@ -13,6 +12,7 @@ import type { CatalogSearchResult } from '@/modules/catalog';
 import type { GroupRatingMember, GroupRatingSummary } from '@/modules/groups';
 
 import { genreOptionsFromCatalog } from './catalog-view';
+import { groupRead, invalidateReads, RECORDS_READS } from './read-invalidation';
 import { RatingForm, type RatingPayload } from './RatingForm';
 import { SearchField } from './SearchField';
 import type { FilterOption, MediaKind, SearchFilters } from './types';
@@ -51,7 +51,6 @@ export function GroupRatings({
   ratings: GroupRatingSummary[];
   onOpenDiscussion: (id: number) => void;
 }) {
-  const router = useRouter();
   const toast = useToast();
   const attachTitleId = useId();
   const { timeZone } = useTimeFormat();
@@ -156,12 +155,15 @@ export function GroupRatings({
         toast.error('Не удалось сохранить оценку');
         return;
       }
+      if (options?.alsoPersonal) {
+        void invalidateReads(RECORDS_READS);
+      }
       setSelected(null);
       setRateTarget(null);
       setAlsoPersonal(false);
       setPendingSave(null);
       toast.success('Оценка сохранена');
-      router.refresh();
+      void invalidateReads([groupRead(groupId)]);
     } catch {
       setError('Не удалось сохранить оценку');
       toast.error('Не удалось сохранить оценку');
@@ -210,7 +212,7 @@ export function GroupRatings({
       setAttachTarget(null);
       setAttachTitle('');
       toast.success('Обсуждение прикреплено');
-      router.refresh();
+      void invalidateReads([groupRead(groupId)]);
     } catch {
       setError('Не удалось прикрепить обсуждение');
       toast.error('Не удалось прикрепить обсуждение');

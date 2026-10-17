@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,7 +50,6 @@ export function FriendsView({
     null,
   );
   const toast = useToast();
-  const router = useRouter();
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -82,7 +80,6 @@ export function FriendsView({
     const ok = await decideFriendship(request.id, 'accept');
     if (ok) {
       toast.success('Заявка принята');
-      router.refresh();
       return;
     }
     setFriends(previousFriends);
@@ -98,7 +95,6 @@ export function FriendsView({
     const ok = await decideFriendship(request.id, 'decline');
     if (ok) {
       toast.success('Заявка отклонена');
-      router.refresh();
       return;
     }
     setRequests(previousRequests);

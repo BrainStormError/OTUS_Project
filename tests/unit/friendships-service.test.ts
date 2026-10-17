@@ -6,13 +6,23 @@ const {
   findFriendshipByIdMock,
   deleteAcceptedFriendshipMock,
   findFriendshipBetweenMock,
+  recordEventMock,
+  tx,
 } = vi.hoisted(() => ({
   listOutgoingMock: vi.fn(),
   listFriendsMock: vi.fn(),
   findFriendshipByIdMock: vi.fn(),
   deleteAcceptedFriendshipMock: vi.fn(),
   findFriendshipBetweenMock: vi.fn(),
+  recordEventMock: vi.fn(),
+  tx: { query: vi.fn() },
 }));
+
+vi.mock('@/core/db/transaction', () => ({
+  withTransaction: (fn: (client: unknown) => Promise<unknown>) => fn(tx),
+}));
+
+vi.mock('@/modules/activity', () => ({ recordEvent: recordEventMock }));
 
 vi.mock('@/modules/friendships/repository', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/modules/friendships/repository')>()),
@@ -82,7 +92,7 @@ describe('getFriends', () => {
 });
 
 describe('removeFriend', () => {
-  it('removes an accepted friendship the actor belongs to', async () => {
+  it('removes an accepted friendship the actor belongs to and signals both users', async () => {
     const row = friendship({ requesterId: actor.id, addresseeId: 2, status: 'accepted' });
     findFriendshipByIdMock.mockResolvedValue(row);
     deleteAcceptedFriendshipMock.mockResolvedValue(row);
@@ -90,7 +100,29 @@ describe('removeFriend', () => {
     const result = await removeFriend(actor, { friendshipId: row.id });
 
     expect(result).toEqual({ ok: true, value: row });
-    expect(deleteAcceptedFriendshipMock).toHaveBeenCalledWith(row.id, actor.id);
+    expect(deleteAcceptedFriendshipMock).toHaveBeenCalledWith(tx, row.id, actor.id);
+    expect(recordEventMock).toHaveBeenCalledTimes(2);
+    expect(recordEventMock).toHaveBeenCalledWith(tx, {
+      actorId: actor.id,
+      kind: 'friend_removed',
+      targetUserId: row.requesterId,
+    });
+    expect(recordEventMock).toHaveBeenCalledWith(tx, {
+      actorId: actor.id,
+      kind: 'friend_removed',
+      targetUserId: row.addresseeId,
+    });
+  });
+
+  it('records no signal when the removal fails', async () => {
+    const row = friendship({ requesterId: actor.id, addresseeId: 2, status: 'accepted' });
+    findFriendshipByIdMock.mockResolvedValue(row);
+    deleteAcceptedFriendshipMock.mockResolvedValue(null);
+
+    const result = await removeFriend(actor, { friendshipId: row.id });
+
+    expect(result).toMatchObject({ ok: false, code: 'CONFLICT' });
+    expect(recordEventMock).not.toHaveBeenCalled();
   });
 
   it('reports a missing friendship as not found', async () => {

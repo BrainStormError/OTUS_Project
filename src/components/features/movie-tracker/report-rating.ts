@@ -1,5 +1,6 @@
 import type { MediaKind } from '@/modules/ratings';
 
+import { invalidateReads, RECORDS_READS } from './read-invalidation';
 import type { Movie } from './types';
 
 export type RemoteRatingInput = {
@@ -23,6 +24,7 @@ export async function saveRemoteRating(input: RemoteRatingInput): Promise<number
   if (!response.ok) {
     return null;
   }
+  void invalidateReads(RECORDS_READS);
   const data = (await response.json().catch(() => null)) as { id?: number } | null;
   return typeof data?.id === 'number' ? data.id : null;
 }
@@ -32,6 +34,9 @@ export async function deleteRemoteRecord(id: number): Promise<boolean> {
     return false;
   }
   const response = await fetch(`/api/records?id=${id}`, { method: 'DELETE' });
+  if (response.ok) {
+    void invalidateReads(RECORDS_READS);
+  }
   return response.ok;
 }
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Timestamp } from '@/components/ui/timestamp';
 import { useToast } from '@/components/ui/toast';
 import type { DiscussionDetail, DiscussionSummary } from '@/modules/discussions';
+
+import { groupRead, invalidateReads } from './read-invalidation';
 
 function authorLabel(name: string | null, handle: string | null): string {
   return name ?? handle ?? 'Пользователь';
@@ -33,7 +34,6 @@ export function GroupDiscussions({
   onOpenDiscussion: (id: number) => void;
   onCloseDiscussion: () => void;
 }) {
-  const router = useRouter();
   const toast = useToast();
   const titleId = useId();
   const commentId = useId();
@@ -66,7 +66,7 @@ export function GroupDiscussions({
       setTitle('');
       setCreating(false);
       toast.success('Обсуждение создано');
-      router.refresh();
+      void invalidateReads([groupRead(groupId)]);
     } catch {
       setError('Не удалось создать обсуждение');
       toast.error('Не удалось создать обсуждение');
@@ -95,7 +95,7 @@ export function GroupDiscussions({
       }
       setComment('');
       toast.success('Комментарий отправлен');
-      router.refresh();
+      void invalidateReads([groupRead(groupId)]);
     } catch {
       setError('Не удалось отправить комментарий');
       toast.error('Не удалось отправить комментарий');

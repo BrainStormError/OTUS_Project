@@ -23,6 +23,7 @@ export function GroupCard({
     >
       <Link
         href={`/groups/${group.id}`}
+        prefetch={false}
         className="flex flex-col gap-2 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <span className="text-base font-semibold">{group.name}</span>

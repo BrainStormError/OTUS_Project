@@ -1,5 +1,7 @@
 import type { UserSearchResult } from '@/modules/friendships';
 
+import { invalidateReads, SOCIAL_READS } from './read-invalidation';
+
 export type { UserSearchResult };
 
 type Decision = 'accept' | 'decline';
@@ -14,6 +16,9 @@ async function requestJson(url: string, method: string, body?: unknown): Promise
       headers: body === undefined ? undefined : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    if (response.ok) {
+      void invalidateReads(SOCIAL_READS);
+    }
     return response.ok;
   } catch {
     return false;

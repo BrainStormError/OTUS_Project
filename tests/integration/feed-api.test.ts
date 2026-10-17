@@ -268,6 +268,55 @@ describe('GET /api/feed/stream', () => {
     resumeController.abort();
   });
 
+  it('delivers a targeted signal only to its recipient', async () => {
+    const first = await makeUser(`api-sig-1-${randomUUID().slice(0, 8)}`);
+    const second = await makeUser(`api-sig-2-${randomUUID().slice(0, 8)}`);
+
+    state.actor = first;
+    const firstController = new AbortController();
+    const firstResponse = await getStream(
+      new Request(`${TRUSTED}/api/feed/stream`, {
+        headers: { origin: TRUSTED },
+        signal: firstController.signal,
+      }),
+    );
+    const firstReader = firstResponse.body!.getReader();
+    await readUntil(firstReader, ': connected');
+
+    state.actor = second;
+    const secondController = new AbortController();
+    const secondResponse = await getStream(
+      new Request(`${TRUSTED}/api/feed/stream`, {
+        headers: { origin: TRUSTED },
+        signal: secondController.signal,
+      }),
+    );
+    const secondReader = secondResponse.body!.getReader();
+    await readUntil(secondReader, ': connected');
+
+    try {
+      await withTransaction((tx) =>
+        recordEvent(tx, {
+          actorId: second.id,
+          kind: 'friend_removed',
+          targetUserId: first.id,
+        }),
+      );
+
+      const delivered = await readUntil(firstReader, 'event: signal');
+      expect(delivered).toContain('friend_removed');
+
+      const leak = await Promise.race([
+        readUntil(secondReader, 'event: signal', 700).then(() => true, () => false),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 800)),
+      ]);
+      expect(leak).toBe(false);
+    } finally {
+      firstController.abort();
+      secondController.abort();
+    }
+  });
+
   it('refuses a connection past the per-identity cap and frees a slot on disconnect', async () => {
     const viewer = await makeUser(`api-cap-${randomUUID().slice(0, 8)}`);
     state.actor = viewer;

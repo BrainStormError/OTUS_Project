@@ -10,19 +10,28 @@ import { RestrictedState } from '@/components/ui/restricted-state';
 import { useToast } from '@/components/ui/toast';
 import type { GroupInvitation } from '@/modules/groups';
 
+import { groupRead, invalidateReads, SOCIAL_READS } from './read-invalidation';
 import { searchUsers } from './social-actions';
 import type { UserSearchResult } from './social-actions';
 import type { Group, GroupMember } from './types';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-async function postJson(url: string, method: string, body?: unknown): Promise<boolean> {
+async function postJson(
+  url: string,
+  method: string,
+  body: unknown,
+  reads: readonly string[],
+): Promise<boolean> {
   try {
     const response = await fetch(url, {
       method,
       headers: body === undefined ? undefined : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    if (response.ok) {
+      void invalidateReads(reads);
+    }
     return response.ok;
   } catch {
     return false;
@@ -75,7 +84,10 @@ export function AdminMemberPanel({
   async function changeRole(id: number, role: GroupMember['role']) {
     const previous = members;
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, role } : member)));
-    const ok = await postJson(`/api/groups/${group.id}/members/${id}`, 'PATCH', { role });
+    const ok = await postJson(`/api/groups/${group.id}/members/${id}`, 'PATCH', { role }, [
+      ...SOCIAL_READS,
+      groupRead(group.id),
+    ]);
     if (ok) {
       toast.success('Роль обновлена');
       return;
@@ -87,7 +99,10 @@ export function AdminMemberPanel({
   async function removeMember(id: number) {
     const previous = members;
     setMembers((prev) => prev.filter((member) => member.id !== id));
-    const ok = await postJson(`/api/groups/${group.id}/members/${id}`, 'DELETE');
+    const ok = await postJson(`/api/groups/${group.id}/members/${id}`, 'DELETE', undefined, [
+      ...SOCIAL_READS,
+      groupRead(group.id),
+    ]);
     if (ok) {
       toast.success('Участник удалён');
       return;
@@ -116,7 +131,12 @@ export function AdminMemberPanel({
         createdAt: new Date().toISOString(),
       },
     ]);
-    const ok = await postJson(`/api/groups/${group.id}/invitations`, 'POST', { inviteeId: user.id });
+    const ok = await postJson(
+      `/api/groups/${group.id}/invitations`,
+      'POST',
+      { inviteeId: user.id },
+      [...SOCIAL_READS, groupRead(group.id)],
+    );
     if (ok) {
       toast.success('Приглашение отправлено');
       return;
@@ -135,7 +155,10 @@ export function AdminMemberPanel({
       next.delete(invitation.inviteeId);
       return next;
     });
-    const ok = await postJson(`/api/groups/invitations/${invitation.id}`, 'DELETE');
+    const ok = await postJson(`/api/groups/invitations/${invitation.id}`, 'DELETE', undefined, [
+      ...SOCIAL_READS,
+      groupRead(group.id),
+    ]);
     if (ok) {
       toast.success('Приглашение отозвано');
       return;

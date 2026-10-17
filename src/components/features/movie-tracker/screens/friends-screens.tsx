@@ -6,7 +6,7 @@ import type { FriendEntry, FriendRequestSummary } from '@/modules/friendships';
 import { toFriendContact, toFriendRequest } from '../adapters';
 import { FriendRequestsView } from '../FriendRequestsView';
 import { FriendsView } from '../FriendsView';
-import { useApi } from './use-api';
+import { useRead } from '../read-store';
 
 type FriendsRead = {
   friends: FriendEntry[];
@@ -17,13 +17,15 @@ type FriendsRead = {
 const FRIENDS_URL = '/api/friendships';
 
 export function FriendsScreen() {
-  const state = useApi<FriendsRead>(FRIENDS_URL);
+  const state = useRead<FriendsRead>(FRIENDS_URL);
 
   if (state.status === 'loading') {
     return null;
   }
   if (state.status === 'error') {
-    return <ErrorState message="Не удалось загрузить друзей." />;
+    return (
+      <ErrorState message="Не удалось загрузить друзей." retry={state.retry} />
+    );
   }
 
   return (
@@ -36,13 +38,15 @@ export function FriendsScreen() {
 }
 
 export function FriendRequestsScreen() {
-  const state = useApi<FriendsRead>(FRIENDS_URL);
+  const state = useRead<FriendsRead>(FRIENDS_URL);
 
   if (state.status === 'loading') {
     return null;
   }
   if (state.status === 'error') {
-    return <ErrorState message="Не удалось загрузить заявки." />;
+    return (
+      <ErrorState message="Не удалось загрузить заявки." retry={state.retry} />
+    );
   }
 
   return (

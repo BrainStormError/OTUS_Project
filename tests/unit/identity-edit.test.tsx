@@ -32,7 +32,7 @@ describe('EditIdentityModal', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('submits a new display name and refreshes the profile', async () => {
+  it('submits a new display name and closes the modal', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ name: 'Новое', handle: 'old-tag' }),
@@ -58,7 +58,7 @@ describe('EditIdentityModal', () => {
       }),
     );
     expect(onClose).toHaveBeenCalled();
-    expect(refresh).toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
   });
 

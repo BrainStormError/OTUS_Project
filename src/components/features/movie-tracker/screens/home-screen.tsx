@@ -8,7 +8,7 @@ import type { WatchlistEntry } from '@/modules/watchlist';
 import { toWatchedRecord, toWatchlistItem } from '../adapters';
 import { genreOptionsFromCatalog } from '../catalog-view';
 import { HomeView } from '../HomeView';
-import { useApi, useApiAll } from './use-api';
+import { useRead, useReadAll } from '../read-store';
 
 type GenresRead = { items: Genre[] };
 type RecordsRead = { items: RatingEntry[] };
@@ -16,7 +16,7 @@ type WatchlistRead = { items: WatchlistEntry[] };
 type SearchRead = { items: CatalogSearchResult[] };
 
 export function HomeScreen() {
-  const core = useApiAll<[GenresRead, RecordsRead, WatchlistRead, WatchlistRead]>([
+  const core = useReadAll<[GenresRead, RecordsRead, WatchlistRead, WatchlistRead]>([
     '/api/genres',
     '/api/records',
     '/api/watchlist?kind=film',
@@ -24,13 +24,15 @@ export function HomeScreen() {
   ]);
   // The popular shelf depends on a remote source; its failure must not take the
   // whole screen down. It renders its own empty state when unavailable.
-  const popular = useApi<SearchRead>('/api/search?kind=film');
+  const popular = useRead<SearchRead>('/api/search?kind=film');
 
   if (core.status === 'loading') {
     return null;
   }
   if (core.status === 'error') {
-    return <ErrorState message="Не удалось загрузить главную страницу." />;
+    return (
+      <ErrorState message="Не удалось загрузить главную страницу." retry={core.retry} />
+    );
   }
 
   const [genres, records, filmWatchlist, seriesWatchlist] = core.data;

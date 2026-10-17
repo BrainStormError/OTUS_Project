@@ -9,6 +9,7 @@ import { EditIdentityModal, type IdentityField } from './EditIdentityModal';
 import { HourCycleSelect } from './HourCycleSelect';
 import { IdentitySelect } from './IdentitySelect';
 import { PrivacyToggle, type SaveStatus } from './PrivacyToggle';
+import { invalidateReads, IDENTITY_READS } from './read-invalidation';
 import { ThemeSelect } from './ThemeSelect';
 import { TimezoneSelect } from './TimezoneSelect';
 
@@ -59,6 +60,7 @@ export function SettingsView({
         statsHidden: data.statsHidden ?? nextFlags.statsHidden,
       });
       setStatus((current) => ({ ...current, [key]: 'saved' }));
+      void invalidateReads(IDENTITY_READS);
       toast.success('Настройки приватности сохранены');
     } catch {
       setFlags(previous);

@@ -10,8 +10,15 @@ import { closePool, query } from '@/core/db/pool';
 import { withTransaction } from '@/core/db/transaction';
 import { listFeed, pruneStaleActivityEvents, recordEvent } from '@/modules/activity';
 import { insertUser } from '@/modules/auth/repository';
-import { acceptFriendship } from '@/modules/friendships';
-import { joinGroup } from '@/modules/groups';
+import { acceptFriendship, removeFriend } from '@/modules/friendships';
+import {
+  createGroup,
+  dissolveGroup,
+  joinGroup,
+  leaveGroup,
+  removeGroupMember,
+} from '@/modules/groups';
+import { deleteGroupActivity } from '@/modules/groups/repository';
 import { saveWatchedRecord } from '@/modules/records';
 
 import { installTmdbFetch } from './tmdb-stub';
@@ -332,5 +339,155 @@ describe('real write paths', () => {
     if (!refused.ok) {
       expect(refused.code).toBe('FORBIDDEN');
     }
+  });
+});
+
+const FRIEND_REMOVED = 6;
+const GROUP_LEFT = 7;
+const GROUP_REMOVED = 8;
+const GROUP_DISSOLVED = 9;
+
+async function signalsFor(userIds: number[]): Promise<
+  { kind: number; target_user_id: number | null; group_id: number | null }[]
+> {
+  return query(
+    `SELECT kind, target_user_id, group_id FROM activity_events
+      WHERE target_user_id = ANY($1::bigint[]) ORDER BY id`,
+    [userIds],
+  );
+}
+
+describe('invalidation signals', () => {
+  it('records one friend_removed signal per user when an accepted friendship is removed', async () => {
+    const one = await makeUser(`sig-a-${randomUUID().slice(0, 8)}`);
+    const two = await makeUser(`sig-b-${randomUUID().slice(0, 8)}`);
+    const rows = await query<{ id: number }>(
+      `INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 1) RETURNING id`,
+      [one.id, two.id],
+    );
+
+    const result = await removeFriend(one, { friendshipId: rows[0]!.id });
+    expect(result.ok).toBe(true);
+
+    const signals = (await signalsFor([one.id, two.id])).filter(
+      (row) => row.kind === FRIEND_REMOVED,
+    );
+    expect(signals.map((row) => row.target_user_id).sort()).toEqual([one.id, two.id].sort());
+  });
+
+  it('records no signal when the friendship removal fails', async () => {
+    const one = await makeUser(`sig-fa-${randomUUID().slice(0, 8)}`);
+    const two = await makeUser(`sig-fb-${randomUUID().slice(0, 8)}`);
+    const rows = await query<{ id: number }>(
+      `INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 0) RETURNING id`,
+      [one.id, two.id],
+    );
+
+    const result = await removeFriend(one, { friendshipId: rows[0]!.id });
+    expect(result.ok).toBe(false);
+
+    const signals = (await signalsFor([one.id, two.id])).filter(
+      (row) => row.kind === FRIEND_REMOVED,
+    );
+    expect(signals).toHaveLength(0);
+  });
+
+  it('records group_left, group_removed and one group_dissolved per member', async () => {
+    const admin = await makeUser(`sig-admin-${randomUUID().slice(0, 8)}`);
+    const leaving = await makeUser(`sig-leave-${randomUUID().slice(0, 8)}`);
+    const removed = await makeUser(`sig-removed-${randomUUID().slice(0, 8)}`);
+    const staying = await makeUser(`sig-stay-${randomUUID().slice(0, 8)}`);
+
+    const created = await createGroup(admin, {
+      name: `signals-${randomUUID().slice(0, 8)}`,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const groupId = created.value.id;
+
+    for (const actor of [leaving, removed, staying]) {
+      const joined = await joinGroup(actor, { groupId });
+      expect(joined.ok).toBe(true);
+    }
+
+    const left = await leaveGroup(leaving, { groupId });
+    expect(left.ok).toBe(true);
+    const leftSignals = (await signalsFor([leaving.id])).filter(
+      (row) => row.kind === GROUP_LEFT,
+    );
+    expect(leftSignals).toHaveLength(1);
+    expect(leftSignals[0]!.target_user_id).toBe(leaving.id);
+    expect(leftSignals[0]!.group_id).toBeNull();
+
+    const dropped = await removeGroupMember(admin, { groupId, userId: removed.id });
+    expect(dropped.ok).toBe(true);
+    const removedSignals = (await signalsFor([removed.id])).filter(
+      (row) => row.kind === GROUP_REMOVED,
+    );
+    expect(removedSignals).toHaveLength(1);
+    expect(removedSignals[0]!.target_user_id).toBe(removed.id);
+    expect(removedSignals[0]!.group_id).toBeNull();
+
+    const dissolved = await dissolveGroup(admin, { groupId });
+    expect(dissolved.ok).toBe(true);
+    const dissolvedSignals = (await signalsFor([admin.id, staying.id])).filter(
+      (row) => row.kind === GROUP_DISSOLVED,
+    );
+    expect(dissolvedSignals.map((row) => row.target_user_id).sort()).toEqual(
+      [admin.id, staying.id].sort(),
+    );
+    for (const row of dissolvedSignals) {
+      expect(row.group_id).toBeNull();
+    }
+  });
+
+  it('keeps signals with a NULL group through the group-deletion cleanup', async () => {
+    const admin = await makeUser(`sig-keep-${randomUUID().slice(0, 8)}`);
+    const created = await createGroup(admin, {
+      name: `keep-${randomUUID().slice(0, 8)}`,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const groupId = created.value.id;
+
+    const signal = await withTransaction(async (tx) => {
+      const inserted = await recordEvent(tx, {
+        actorId: admin.id,
+        kind: 'group_dissolved',
+        targetUserId: admin.id,
+      });
+      await recordEvent(tx, { actorId: admin.id, kind: 'group_joined', groupId });
+      await deleteGroupActivity(tx, groupId);
+      return inserted;
+    });
+
+    const signals = await signalsFor([admin.id]);
+    expect(signals.map((row) => row.kind)).toContain(GROUP_DISSOLVED);
+    const leftovers = await query<{ id: number }>(
+      'SELECT id FROM activity_events WHERE group_id = $1',
+      [groupId],
+    );
+    expect(leftovers).toHaveLength(0);
+
+    const feed = await listFeed({ id: admin.id, role: 'employee' }, { limit: 50 });
+    expect(feed.ok).toBe(true);
+    if (!feed.ok) return;
+    expect(feed.value.items.map((item) => item.id)).not.toContain(signal.id);
+  });
+
+  it('never lists invalidation signals in the feed', async () => {
+    const viewer = await makeUser(`sig-feed-${randomUUID().slice(0, 8)}`);
+    const signal = await withTransaction((tx) =>
+      recordEvent(tx, {
+        actorId: viewer.id,
+        kind: 'friend_removed',
+        targetUserId: viewer.id,
+      }),
+    );
+
+    const result = await listFeed({ id: viewer.id, role: 'employee' }, { limit: 50 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.items.map((item) => item.id)).not.toContain(signal.id);
   });
 });

@@ -210,6 +210,29 @@ describe('compact domain migrations', () => {
     expect(await dataType('activity_events', 'kind')).toBe('smallint');
   });
 
+  it('adds invalidation signals with a per-recipient target and a partial index', async () => {
+    expect(await columns('activity_events')).toEqual(expect.arrayContaining(['target_user_id']));
+    expect(await dataType('activity_events', 'target_user_id')).toBe('bigint');
+
+    const indexDefs = await indexes('activity_events');
+    expect(
+      indexDefs.some((def) => def.includes('activity_events_target_idx') && def.includes('WHERE')),
+    ).toBe(true);
+
+    const client = new Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      const constraint = await client.query<{ def: string }>(
+        `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+          WHERE conrelid = 'activity_events'::regclass AND conname = 'activity_events_kind_check'`,
+      );
+      expect(constraint.rows[0]?.def ?? '').toContain('6');
+      expect(constraint.rows[0]?.def ?? '').toContain('9');
+    } finally {
+      await client.end();
+    }
+  });
+
   it('reverses every migration on a dedicated database', async () => {
     const adminUrl = new URL(databaseUrl);
     adminUrl.pathname = '/postgres';

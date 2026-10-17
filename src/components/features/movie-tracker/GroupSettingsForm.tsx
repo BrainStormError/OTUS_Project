@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/toast';
 
+import { groupReads, invalidateReads } from './read-invalidation';
 import { TagInput } from './TagInput';
 
 export function GroupSettingsForm({
@@ -21,7 +21,6 @@ export function GroupSettingsForm({
     restricted?: boolean;
   };
 }) {
-  const router = useRouter();
   const toast = useToast();
   const nameId = useId();
   const descriptionId = useId();
@@ -48,8 +47,8 @@ export function GroupSettingsForm({
         return;
       }
       setStatus('saved');
+      void invalidateReads(groupReads(group.id));
       toast.success('Настройки сохранены');
-      router.refresh();
     } catch {
       setStatus('error');
       toast.error('Не удалось сохранить');

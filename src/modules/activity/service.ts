@@ -5,6 +5,7 @@ import { err, ok, type Result } from '@/core/result';
 
 import { decodeCursor } from './domain';
 import {
+  findSignalForUser,
   findVisibleEvent,
   insertActivityEvent,
   isGroupMember,
@@ -12,7 +13,13 @@ import {
   listGroupFeedEvents,
 } from './repository';
 import type { ListFeedInput } from './schema';
-import type { ActivityEvent, FeedItem, ListFeedResult, NewActivityEvent } from './types';
+import type {
+  ActivityEvent,
+  FeedItem,
+  ListFeedResult,
+  NewActivityEvent,
+  SignalKind,
+} from './types';
 
 export async function recordEvent(
   tx: PoolClient,
@@ -55,6 +62,13 @@ export async function getVisibleEvent(
   eventId: number,
 ): Promise<FeedItem | null> {
   return findVisibleEvent(viewerId, eventId);
+}
+
+export async function getSignalForUser(
+  viewerId: number,
+  eventId: number,
+): Promise<SignalKind | null> {
+  return findSignalForUser(viewerId, eventId);
 }
 
 export async function listGroupFeed(

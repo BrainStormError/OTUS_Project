@@ -79,7 +79,7 @@ describe('GroupInvitations feedback', () => {
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveAttribute('data-tone', 'success');
     expect(toast).toHaveTextContent('Приглашение принято');
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 
   it('restores the invitation and shows an error toast when the decision fails', async () => {

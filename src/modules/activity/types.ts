@@ -1,10 +1,17 @@
+export type SignalKind =
+  | 'friend_removed'
+  | 'group_left'
+  | 'group_removed'
+  | 'group_dissolved';
+
 export type ActivityKind =
   | 'film_rated'
   | 'series_rated'
   | 'friendship_accepted'
   | 'group_joined'
   | 'post_created'
-  | 'comment_created';
+  | 'comment_created'
+  | SignalKind;
 
 export type ActivityEvent = {
   id: number;
@@ -13,6 +20,7 @@ export type ActivityEvent = {
   groupId: number | null;
   mediaId: number | null;
   discussionId: number | null;
+  targetUserId?: number | null;
   createdAt: string;
 };
 
@@ -41,4 +49,5 @@ export type NewActivityEvent = {
   groupId?: number | null;
   mediaId?: number | null;
   discussionId?: number | null;
+  targetUserId?: number | null;
 };

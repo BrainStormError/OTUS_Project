@@ -57,14 +57,14 @@ describe('GET /api/records', () => {
     expect(await response.json()).toEqual({ items });
   });
 
-  it('caches the record list in the browser for at most thirty seconds', async () => {
+  it('keeps the record list cacheable until a mutation invalidates it', async () => {
     getActorMock.mockResolvedValue(actor);
     listMock.mockResolvedValue(ok([]));
 
     const response = await listRoute();
     expect(response.status).toBe(200);
     const cacheControl = response.headers.get('cache-control') ?? '';
-    expect(cacheControl).toBe('private, max-age=30');
+    expect(cacheControl).toBe('private, max-age=31536000');
     expect(cacheControl).not.toContain('public');
     expect(cacheControl).not.toContain('s-maxage');
   });

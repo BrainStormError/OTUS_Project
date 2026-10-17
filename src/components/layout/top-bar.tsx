@@ -9,6 +9,7 @@ export function TopBar({ name, tag }: { name: string | null; tag: string | null 
       <div aria-hidden="true" />
       <Link
         href="/"
+        prefetch={false}
         aria-label="Смотровик — на главную"
         className="flex min-h-11 items-center justify-center gap-2 rounded-md px-2 text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >

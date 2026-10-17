@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { json } from '@/core/http/responses';
+import { CACHE_SINGLE_AUTHOR, json } from '@/core/http/responses';
 import { withRoute } from '@/core/http/with-route';
 import { ok } from '@/core/result';
 import { getActor } from '@/modules/auth/session';
@@ -28,7 +28,7 @@ export async function GET(): Promise<Response> {
     return json({ error: result.message, code: result.code }, 400);
   }
 
-  return json({ items: result.value }, 200, { 'cache-control': 'private, max-age=30' });
+  return json({ items: result.value }, 200, { 'cache-control': CACHE_SINGLE_AUTHOR });
 }
 
 export const POST = withRoute(

@@ -42,6 +42,7 @@ export function WatchlistTable({
               <th scope="row" className="px-4 py-3 font-medium">
                 <Link
                   href={`/${item.movie.kind === 'series' ? 'series' : 'film'}/${item.movie.tmdbId}`}
+                  prefetch={false}
                   className="rounded-md underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {item.movie.title}

@@ -13,7 +13,7 @@ export function RecordView({ record }: { record: WatchedRecord | null }) {
         title="Запись не найдена"
         description="Возможно, она была удалена."
         action={
-          <Link href="/films" className="text-sm underline">
+          <Link href="/films" prefetch={false} className="text-sm underline">
             К моим фильмам
           </Link>
         }
@@ -23,12 +23,12 @@ export function RecordView({ record }: { record: WatchedRecord | null }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/films" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+      <Link href="/films" prefetch={false} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
         ← Мои фильмы
       </Link>
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">
-          <Link href={`/film/${record.movie.tmdbId}`} className="underline-offset-4 hover:underline">
+          <Link href={`/film/${record.movie.tmdbId}`} prefetch={false} className="underline-offset-4 hover:underline">
             {record.movie.title}
           </Link>
         </h1>

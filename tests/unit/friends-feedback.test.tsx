@@ -65,7 +65,7 @@ describe('FriendsView feedback', () => {
     const toast = await screen.findByTestId('toast');
     expect(toast).toHaveAttribute('data-tone', 'success');
     expect(toast).toHaveTextContent('Заявка принята');
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Принять заявку от Иван' })).not.toBeInTheDocument();
   });
 

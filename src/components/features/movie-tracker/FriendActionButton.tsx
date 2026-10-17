@@ -1,7 +1,6 @@
 'use client';
 
 import { UserMinus, UserPlus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +27,6 @@ export function FriendActionButton({
   onAdd?: (userId: number) => void;
   onRemove?: (friendshipId: number) => void;
 }) {
-  const router = useRouter();
   const toast = useToast();
   const [status, setStatus] = useState<RelationshipStatus>(relationship);
   const [prevRelationship, setPrevRelationship] = useState<RelationshipStatus>(relationship);
@@ -73,7 +71,6 @@ export function FriendActionButton({
     if (success) {
       setStatus('none');
       toast.success('Друг удалён');
-      router.refresh();
       return;
     }
     toast.error('Не удалось удалить друга');
