@@ -9,7 +9,8 @@ vi.mock('@/modules/catalog/repository', () => ({
 }));
 
 vi.mock('@/modules/catalog/cache-repository', () => ({
-  selectCacheEntry: vi.fn(async () => null),
+  selectCacheExpiry: vi.fn(async () => null),
+  selectCachePayload: vi.fn(async () => undefined),
   upsertCacheEntry: vi.fn(async () => undefined),
   deleteExpiredCache: vi.fn(async () => 0),
   selectCacheUsageBytes: vi.fn(async () => 0),

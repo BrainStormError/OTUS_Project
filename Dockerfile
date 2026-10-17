@@ -18,6 +18,7 @@ COPY package.json ./
 COPY src/core/db/migrations ./src/core/db/migrations
 COPY scripts/migrate.cjs ./scripts/migrate.cjs
 COPY scripts/sync-genres.cjs ./scripts/sync-genres.cjs
+COPY scripts/vacuum-analyze.cjs ./scripts/vacuum-analyze.cjs
 USER node
 CMD ["node", "scripts/migrate.cjs"]
 

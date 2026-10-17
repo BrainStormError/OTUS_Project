@@ -14,7 +14,8 @@ const { cacheStore } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/modules/catalog/cache-repository', () => ({
-  selectCacheEntry: vi.fn(async (key: string) => cacheStore.get(key) ?? null),
+  selectCacheExpiry: vi.fn(async (key: string) => cacheStore.get(key)?.expiresAt ?? null),
+  selectCachePayload: vi.fn(async (key: string) => cacheStore.get(key)?.payload),
   upsertCacheEntry: vi.fn(async (key: string, payload: unknown, expiresAt: Date) => {
     cacheStore.set(key, { payload, expiresAt });
   }),

@@ -1,16 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { cacheStore, upsertMock } = vi.hoisted(() => ({
-  cacheStore: new Map<string, { payload: unknown; expiresAt: Date }>(),
-  upsertMock: vi.fn(async (key: string, payload: unknown, expiresAt: Date) => {
-    cacheStore.set(key, { payload, expiresAt });
-  }),
-}));
+const { cacheStore, upsertMock, selectPayloadMock, deleteExpiredMock, deleteOldestMock } =
+  vi.hoisted(() => ({
+    cacheStore: new Map<string, { payload: unknown; expiresAt: Date }>(),
+    upsertMock: vi.fn(async (key: string, payload: unknown, expiresAt: Date) => {
+      cacheStore.set(key, { payload, expiresAt });
+    }),
+    selectPayloadMock: vi.fn(async (key: string) => cacheStore.get(key)?.payload),
+    deleteExpiredMock: vi.fn(async () => 0),
+    deleteOldestMock: vi.fn(async () => 0),
+  }));
 
 vi.mock('@/modules/catalog/cache-repository', () => ({
-  selectCacheEntry: vi.fn(async (key: string) => cacheStore.get(key) ?? null),
+  selectCacheExpiry: vi.fn(async (key: string) => cacheStore.get(key)?.expiresAt ?? null),
+  selectCachePayload: selectPayloadMock,
   upsertCacheEntry: upsertMock,
-  deleteExpiredCache: vi.fn(async () => 0),
+  deleteExpiredCache: deleteExpiredMock,
+  selectCacheUsageBytes: vi.fn(async () => 0),
+  deleteOldestCache: deleteOldestMock,
 }));
 
 vi.mock('@/modules/catalog/repository', () => ({
@@ -46,6 +53,9 @@ describe('catalog read-through cache', () => {
   beforeEach(() => {
     cacheStore.clear();
     upsertMock.mockClear();
+    selectPayloadMock.mockClear();
+    deleteExpiredMock.mockClear();
+    deleteOldestMock.mockClear();
   });
 
   afterEach(() => {
@@ -65,6 +75,7 @@ describe('catalog read-through cache', () => {
     if (!result.ok) return;
     expect(result.value.items[0]?.externalId).toBe('27205');
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(selectPayloadMock).toHaveBeenCalledTimes(1);
   });
 
   it('fetches on a miss and writes the raw payload back to the store', async () => {
@@ -93,6 +104,31 @@ describe('catalog read-through cache', () => {
     expect(cacheStore.get(searchCacheKey('film', {}))?.expiresAt.getTime()).toBeGreaterThan(
       Date.now(),
     );
+  });
+
+  it('does not transfer an expired payload when the refetch succeeds', async () => {
+    installFetch();
+    cacheStore.set(searchCacheKey('film', {}), {
+      payload: RAW_SEARCH,
+      expiresAt: new Date(Date.now() - 1),
+    });
+
+    const result = await searchCatalog({ kind: 'film' });
+    expect(result.ok).toBe(true);
+    expect(selectPayloadMock).not.toHaveBeenCalled();
+  });
+
+  it('runs no cache maintenance as part of serving a request', async () => {
+    installFetch();
+    await searchCatalog({ kind: 'film' });
+    cacheStore.set(searchCacheKey('film', {}), {
+      payload: { items: [], page: 1, totalPages: 1 },
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await searchCatalog({ kind: 'film' });
+
+    expect(deleteExpiredMock).not.toHaveBeenCalled();
+    expect(deleteOldestMock).not.toHaveBeenCalled();
   });
 
   it('falls back to the last known value when TMDB fails and a stale row exists', async () => {

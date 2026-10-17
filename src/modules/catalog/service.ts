@@ -5,7 +5,8 @@ import { detailCacheKey, searchCacheKey } from './cache-key';
 import {
   deleteExpiredCache,
   deleteOldestCache,
-  selectCacheEntry,
+  selectCacheExpiry,
+  selectCachePayload,
   selectCacheUsageBytes,
   upsertCacheEntry,
 } from './cache-repository';
@@ -28,14 +29,12 @@ import type {
 
 export const TMDB_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-const CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+export const CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Storage budget for the TMDB response cache, with a lower hysteresis target so
 // eviction stops before the budget boundary and avoids per-sweep churn.
 export const TMDB_CACHE_BUDGET_BYTES = 100 * 1024 * 1024;
 export const TMDB_CACHE_EVICT_TARGET_BYTES = 90 * 1024 * 1024;
-
-let lastSweepAt = 0;
 
 export async function sweepCache(now: Date): Promise<void> {
   await deleteExpiredCache(now);
@@ -46,12 +45,43 @@ export async function sweepCache(now: Date): Promise<void> {
   await deleteOldestCache(usage - TMDB_CACHE_EVICT_TARGET_BYTES);
 }
 
-function sweepExpiredIfDue(now: number): void {
-  if (now - lastSweepAt < CACHE_SWEEP_INTERVAL_MS) {
+let sweepTimer: ReturnType<typeof setInterval> | undefined;
+let sweepInFlight = false;
+
+// Cache maintenance runs on its own timer instead of inline with a request, so
+// rendered pages never wait for a sweep. Overlap protection keeps a slow pass
+// from stacking behind the interval.
+async function runCacheSweep(now: Date): Promise<void> {
+  if (sweepInFlight) {
     return;
   }
-  lastSweepAt = now;
-  void sweepCache(new Date(now)).catch(() => undefined);
+  sweepInFlight = true;
+  try {
+    await sweepCache(now);
+  } catch {
+    // Maintenance must not crash the process; the next pass retries.
+  } finally {
+    sweepInFlight = false;
+  }
+}
+
+export function startCacheSweep(): void {
+  if (sweepTimer) {
+    return;
+  }
+  sweepTimer = setInterval(() => {
+    void runCacheSweep(new Date());
+  }, CACHE_SWEEP_INTERVAL_MS);
+  // Never hold the process open just for a maintenance timer.
+  sweepTimer.unref?.();
+}
+
+export function stopCacheSweep(): void {
+  if (!sweepTimer) {
+    return;
+  }
+  clearInterval(sweepTimer);
+  sweepTimer = undefined;
 }
 
 // Read-through: fresh hit returns the stored payload without touching TMDB;
@@ -62,19 +92,26 @@ async function readThrough<T>(
   fetcher: () => Promise<Result<T>>,
 ): Promise<Result<T>> {
   const now = Date.now();
-  const cached = await selectCacheEntry(cacheKey);
-  if (cached && cached.expiresAt.getTime() > now) {
-    return ok(cached.payload as T);
+  // Freshness is decided from the expiry alone; the payload is only lifted for
+  // an entry we are about to serve.
+  const expiresAt = await selectCacheExpiry(cacheKey);
+  if (expiresAt && expiresAt.getTime() > now) {
+    const payload = await selectCachePayload(cacheKey);
+    if (payload !== undefined) {
+      return ok(payload as T);
+    }
   }
 
   const fresh = await fetcher();
   if (fresh.ok) {
     await upsertCacheEntry(cacheKey, fresh.value, new Date(now + TMDB_CACHE_TTL_MS));
-    sweepExpiredIfDue(now);
     return fresh;
   }
-  if (cached) {
-    return ok(cached.payload as T);
+  if (expiresAt) {
+    const payload = await selectCachePayload(cacheKey);
+    if (payload !== undefined) {
+      return ok(payload as T);
+    }
   }
   return fresh;
 }

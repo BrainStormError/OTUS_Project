@@ -1,18 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const MB = 1024 * 1024;
 
 type Row = { key: string; size: number; updatedAt: number; expiresAt: Date };
 
-const { store, spies } = vi.hoisted(() => ({
+const { store, spies, control } = vi.hoisted(() => ({
   store: { rows: [] as Row[] },
   spies: { deleteOldest: vi.fn<(maxBytes: number) => void>(), deleteExpired: vi.fn() },
+  control: { expireGate: null as Promise<void> | null },
 }));
 
 vi.mock('@/modules/catalog/cache-repository', () => ({
-  selectCacheEntry: vi.fn(async () => null),
+  selectCacheExpiry: vi.fn(async () => null),
+  selectCachePayload: vi.fn(async () => undefined),
   upsertCacheEntry: vi.fn(async () => undefined),
   deleteExpiredCache: vi.fn(async (now: Date) => {
+    spies.deleteExpired();
+    if (control.expireGate) {
+      await control.expireGate;
+    }
     let removed = 0;
     for (let i = store.rows.length - 1; i >= 0; i -= 1) {
       if (store.rows[i]!.expiresAt.getTime() < now.getTime()) {
@@ -20,7 +26,6 @@ vi.mock('@/modules/catalog/cache-repository', () => ({
         removed += 1;
       }
     }
-    spies.deleteExpired();
     return removed;
   }),
   selectCacheUsageBytes: vi.fn(async () =>
@@ -42,8 +47,11 @@ vi.mock('@/modules/catalog/cache-repository', () => ({
 }));
 
 import {
+  CACHE_SWEEP_INTERVAL_MS,
   TMDB_CACHE_BUDGET_BYTES,
   TMDB_CACHE_EVICT_TARGET_BYTES,
+  startCacheSweep,
+  stopCacheSweep,
   sweepCache,
 } from '@/modules/catalog/service';
 
@@ -103,5 +111,62 @@ describe('catalog cache budget sweep', () => {
 
     expect(spies.deleteOldest).not.toHaveBeenCalled();
     expect(store.rows.map((row) => row.key)).toEqual(['a']);
+  });
+});
+
+describe('catalog cache sweep timer', () => {
+  beforeEach(() => {
+    store.rows = [];
+    control.expireGate = null;
+    spies.deleteOldest.mockClear();
+    spies.deleteExpired.mockClear();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    stopCacheSweep();
+    vi.useRealTimers();
+  });
+
+  it('runs maintenance on its own cadence', async () => {
+    store.rows = [{ key: 'expired', size: 1, updatedAt: 0, expiresAt: new Date(0) }];
+
+    startCacheSweep();
+    expect(spies.deleteExpired).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(CACHE_SWEEP_INTERVAL_MS);
+
+    expect(spies.deleteExpired).toHaveBeenCalledTimes(1);
+    expect(store.rows).toEqual([]);
+  });
+
+  it('does not start a second pass while the first is still running', async () => {
+    store.rows = [{ key: 'expired', size: 1, updatedAt: 0, expiresAt: new Date(0) }];
+    let release!: () => void;
+    control.expireGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    startCacheSweep();
+    await vi.advanceTimersByTimeAsync(CACHE_SWEEP_INTERVAL_MS);
+    expect(spies.deleteExpired).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(CACHE_SWEEP_INTERVAL_MS);
+    expect(spies.deleteExpired).toHaveBeenCalledTimes(1);
+
+    release();
+    control.expireGate = null;
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(CACHE_SWEEP_INTERVAL_MS);
+    expect(spies.deleteExpired).toHaveBeenCalledTimes(2);
+  });
+
+  it('stopCacheSweep halts the timer', async () => {
+    startCacheSweep();
+    stopCacheSweep();
+
+    await vi.advanceTimersByTimeAsync(CACHE_SWEEP_INTERVAL_MS * 2);
+
+    expect(spies.deleteExpired).not.toHaveBeenCalled();
   });
 });

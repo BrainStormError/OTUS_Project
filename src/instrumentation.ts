@@ -10,5 +10,8 @@ export async function register() {
       );
       process.exit(1);
     }
+    // Cache maintenance runs on a background timer, decoupled from requests.
+    const { startCacheSweep } = await import('@/modules/catalog/service');
+    startCacheSweep();
   }
 }

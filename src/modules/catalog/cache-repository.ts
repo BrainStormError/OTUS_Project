@@ -1,27 +1,23 @@
 import { query } from '@/core/db/pool';
 
-export type CacheEntry = {
-  payload: unknown;
-  expiresAt: Date;
-};
-
-type CacheRow = {
-  payload: unknown;
-  expires_at: Date;
-};
-
-export async function selectCacheEntry(
-  cacheKey: string,
-): Promise<CacheEntry | null> {
-  const rows = await query<CacheRow>(
-    'SELECT payload, expires_at FROM tmdb_cache WHERE cache_key = $1',
+// Freshness is a single-column read so an expired entry never transfers its
+// stored payload over the wire.
+export async function selectCacheExpiry(cacheKey: string): Promise<Date | null> {
+  const rows = await query<{ expires_at: Date }>(
+    'SELECT expires_at FROM tmdb_cache WHERE cache_key = $1',
     [cacheKey],
   );
-  const row = rows[0];
-  if (!row) {
-    return null;
-  }
-  return { payload: row.payload, expiresAt: row.expires_at };
+  return rows[0]?.expires_at ?? null;
+}
+
+// Read separately from the expiry check: only a caller about to serve the
+// entry pays for lifting the payload.
+export async function selectCachePayload(cacheKey: string): Promise<unknown> {
+  const rows = await query<{ payload: unknown }>(
+    'SELECT payload FROM tmdb_cache WHERE cache_key = $1',
+    [cacheKey],
+  );
+  return rows[0]?.payload;
 }
 
 export async function upsertCacheEntry(
@@ -56,28 +52,61 @@ export async function selectCacheUsageBytes(): Promise<number> {
   return Number(rows[0]?.usage ?? 0);
 }
 
-// Deletes the oldest rows (by updated_at, then id) until the payload bytes
-// removed reach maxBytes, so the caller's usage target is guaranteed met. The
-// running total excludes the current row, so the row that crosses the threshold
-// is removed too.
+// Rows are scanned oldest-first (updated_at, id) in bounded batches, stopping
+// as soon as the accumulated payload bytes reach maxBytes; only the rows that
+// were actually inspected are deleted. Work therefore scales with the reclaim
+// target rather than with the size of the cache. The row that crosses the
+// threshold is removed too, matching the previous windowed-sum behaviour.
+const EVICT_SCAN_BATCH = 256;
+
+type EvictRow = { id: number; payload_bytes: number; updated_at: Date };
+
 export async function deleteOldestCache(maxBytes: number): Promise<number> {
   if (maxBytes <= 0) {
     return 0;
   }
-  const rows = await query<{ id: number }>(
-    `DELETE FROM tmdb_cache
-      WHERE id IN (
-        SELECT id FROM (
-          SELECT id,
-                 SUM(payload_bytes)
-                   OVER (ORDER BY updated_at ASC, id ASC)
-                   - payload_bytes AS removed_before
-            FROM tmdb_cache
-        ) ordered
-        WHERE removed_before < $1
-      )
-      RETURNING id`,
-    [maxBytes],
+  const doomed: number[] = [];
+  let removedBytes = 0;
+  let cursor: { updatedAt: Date; id: number } | null = null;
+
+  while (removedBytes < maxBytes) {
+    const rows: EvictRow[] = cursor
+      ? await query<EvictRow>(
+          `SELECT id, payload_bytes, updated_at FROM tmdb_cache
+            WHERE (updated_at, id) > ($1, $2)
+            ORDER BY updated_at ASC, id ASC
+            LIMIT $3`,
+          [cursor.updatedAt, cursor.id, EVICT_SCAN_BATCH],
+        )
+      : await query<EvictRow>(
+          `SELECT id, payload_bytes, updated_at FROM tmdb_cache
+            ORDER BY updated_at ASC, id ASC
+            LIMIT $1`,
+          [EVICT_SCAN_BATCH],
+        );
+
+    if (rows.length === 0) {
+      break;
+    }
+    for (const row of rows) {
+      if (removedBytes >= maxBytes) {
+        break;
+      }
+      doomed.push(row.id);
+      removedBytes += row.payload_bytes;
+      cursor = { updatedAt: row.updated_at, id: row.id };
+    }
+    if (rows.length < EVICT_SCAN_BATCH || removedBytes >= maxBytes) {
+      break;
+    }
+  }
+
+  if (doomed.length === 0) {
+    return 0;
+  }
+  const deleted = await query<{ id: number }>(
+    'DELETE FROM tmdb_cache WHERE id = ANY($1::bigint[]) RETURNING id',
+    [doomed],
   );
-  return rows.length;
+  return deleted.length;
 }
