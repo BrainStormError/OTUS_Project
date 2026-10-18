@@ -1,14 +1,24 @@
 import { act, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { writeHour12, writeTimezone } from '@/components/layout/preferences';
+import { writeHour12 } from '@/components/layout/preferences';
 import { Timestamp } from '@/components/ui/timestamp';
 
 const ISO = '2024-01-05T14:07:00.000Z';
 
+function stubTimeZone(timeZone: string): void {
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+    timeZone,
+  } as Intl.ResolvedDateTimeFormatOptions);
+}
+
 beforeEach(() => {
   window.localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('Timestamp', () => {
@@ -19,22 +29,23 @@ describe('Timestamp', () => {
     expect(html).not.toContain('05.01.24');
   });
 
-  it('renders the formatted moment after mounting', async () => {
-    writeTimezone('UTC');
+  it('renders the formatted moment in the browser timezone after mounting', async () => {
+    stubTimeZone('UTC');
     writeHour12(false);
     render(<Timestamp value={ISO} />);
     expect(await screen.findByText('14:07 05.01.24')).toBeInTheDocument();
   });
 
-  it('updates the output when the timezone preference changes', async () => {
-    writeTimezone('UTC');
+  it('updates the output when the hour cycle changes', async () => {
+    stubTimeZone('UTC');
+    writeHour12(false);
     render(<Timestamp value={ISO} />);
     await screen.findByText('14:07 05.01.24');
 
     act(() => {
-      writeTimezone('Europe/Moscow');
+      writeHour12(true);
     });
 
-    expect(await screen.findByText('17:07 05.01.24')).toBeInTheDocument();
+    expect(await screen.findByText(/2:07\s?(AM|PM) 05\.01\.24/)).toBeInTheDocument();
   });
 });

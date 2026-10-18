@@ -103,7 +103,7 @@ const profile = {
   profileRestricted: false,
   statsRestricted: false,
   relationship: null,
-  stats: { count: 0, genres: [], years: [] },
+  stats: { films: 0, series: 0, genres: [], years: [] },
   recent: [],
 };
 

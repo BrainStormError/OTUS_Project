@@ -1,29 +1,37 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   HOUR_CYCLE_KEY,
   IDENTITY_DISPLAY_KEY,
   RAIL_COLLAPSED_KEY,
   THEME_KEY,
-  TIMEZONE_KEY,
   currentDateInTimeZone,
   readHour12,
   readIdentityDisplay,
   readRailCollapsed,
   readTheme,
-  readTimezone,
+  resolveTimeZone,
   useTimeFormat,
   writeHour12,
   writeIdentityDisplay,
   writeRailCollapsed,
   writeTheme,
-  writeTimezone,
 } from '@/components/layout/preferences';
+
+function stubTimeZone(timeZone: string): void {
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+    timeZone,
+  } as Intl.ResolvedDateTimeFormatOptions);
+}
 
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('preferences defaults', () => {
@@ -72,55 +80,57 @@ describe('preferences round-trips', () => {
 });
 
 describe('currentDateInTimeZone', () => {
-  it('formats the instant as YYYY-MM-DD in the given time zone', () => {
-    const instant = new Date('2026-05-20T10:30:00.000Z');
-    expect(currentDateInTimeZone('UTC', instant)).toBe('2026-05-20');
+  it('formats the instant as YYYY-MM-DD in the browser time zone', () => {
+    stubTimeZone('UTC');
+    expect(currentDateInTimeZone(new Date('2026-05-20T10:30:00.000Z'))).toBe('2026-05-20');
   });
 
-  it('uses the local day when the zone differs from UTC', () => {
+  it('uses the local day when the browser zone differs from UTC', () => {
     const lateUtc = new Date('2026-01-01T00:30:00.000Z');
-    expect(currentDateInTimeZone('UTC', lateUtc)).toBe('2026-01-01');
-    expect(currentDateInTimeZone('America/New_York', lateUtc)).toBe('2025-12-31');
+    stubTimeZone('UTC');
+    expect(currentDateInTimeZone(lateUtc)).toBe('2026-01-01');
 
-    const earlyUtc = new Date('2025-12-31T20:30:00.000Z');
-    expect(currentDateInTimeZone('UTC', earlyUtc)).toBe('2025-12-31');
-    expect(currentDateInTimeZone('Asia/Tokyo', earlyUtc)).toBe('2026-01-01');
+    vi.restoreAllMocks();
+    stubTimeZone('America/New_York');
+    expect(currentDateInTimeZone(lateUtc)).toBe('2025-12-31');
   });
 
-  it('falls back to the browser time zone for an unavailable zone', () => {
-    const instant = new Date('2026-05-20T10:30:00.000Z');
-    expect(currentDateInTimeZone('Not/AZone', instant)).toBe(
-      currentDateInTimeZone(undefined, instant),
-    );
+  it('falls back to UTC when the browser zone cannot be resolved', () => {
+    stubTimeZone('Not/AZone');
+    expect(resolveTimeZone()).toBe('UTC');
+    expect(currentDateInTimeZone(new Date('2026-05-20T10:30:00.000Z'))).toBe('2026-05-20');
+  });
+
+  it('ignores a timezone value stored by an earlier version', () => {
+    stubTimeZone('UTC');
+    window.localStorage.setItem('timezone', 'Europe/Moscow');
+    expect(currentDateInTimeZone(new Date('2026-01-01T00:30:00.000Z'))).toBe('2026-01-01');
   });
 });
 
 describe('time format preferences', () => {
-  it('defaults to the browser timezone and a 24-hour clock', () => {
-    expect(readTimezone()).toBe('');
+  it('defaults to a 24-hour clock', () => {
     expect(readHour12()).toBe(false);
   });
 
-  it('round-trips the timezone and the hour cycle', () => {
-    writeTimezone('Europe/Moscow');
+  it('round-trips the hour cycle', () => {
     writeHour12(true);
-    expect(readTimezone()).toBe('Europe/Moscow');
     expect(readHour12()).toBe(true);
-    expect(window.localStorage.getItem(TIMEZONE_KEY)).toBe('Europe/Moscow');
     expect(window.localStorage.getItem(HOUR_CYCLE_KEY)).toBe('12');
+
+    writeHour12(false);
+    expect(readHour12()).toBe(false);
+    expect(window.localStorage.getItem(HOUR_CYCLE_KEY)).toBe('24');
   });
 
   it('syncs the hook through the preferences event', () => {
     const { result } = renderHook(() => useTimeFormat());
-    expect(result.current.timeZone).toBe('');
     expect(result.current.hour12).toBe(false);
 
     act(() => {
-      writeTimezone('America/New_York');
       writeHour12(true);
     });
 
-    expect(result.current.timeZone).toBe('America/New_York');
     expect(result.current.hour12).toBe(true);
 
     act(() => {

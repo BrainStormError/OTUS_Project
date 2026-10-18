@@ -40,7 +40,8 @@ import { GET as publicProfileRead } from '@/app/api/profiles/[handle]/route';
 const actor = { id: 1, role: 'employee' as const, name: 'Алексей', handle: 'me' };
 
 const stats = {
-  count: 2,
+  films: 1,
+  series: 1,
   genres: [{ genre: 'драма', count: 2 }],
   years: [{ year: 2010, count: 1 }],
 };

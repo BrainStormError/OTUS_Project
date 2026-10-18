@@ -94,12 +94,16 @@ test('switching tabs does not add browser history entries', async ({ page }) => 
   await expect(page).toHaveURL(/\/groups$/);
 });
 
-test('changing the timezone and clock format changes a comment moment', async ({ page }) => {
+test('settings offers no timezone selector and the clock format changes a comment moment', async ({
+  page,
+}) => {
   await login(page);
 
-  // Pin a zero-offset zone and the 24-hour clock.
+  // The manual timezone control was removed; only the clock format remains.
   await page.goto('/settings');
-  await page.getByLabel('Тайм-зона').first().selectOption('Africa/Abidjan');
+  await expect(page.getByLabel('Тайм-зона')).toHaveCount(0);
+
+  // Pin the 24-hour clock.
   await page.getByRole('radio', { name: '24 часа' }).first().click();
 
   const discussionUrl = `/groups/${GROUP_ID}?tab=discussions&discussion=1`;
@@ -110,16 +114,6 @@ test('changing the timezone and clock format changes a comment moment', async ({
   const firstTime = posts.locator('time').first();
   const baseline = await firstTime.textContent();
   expect(baseline).toMatch(/^\d{2}:\d{2} \d{2}\.\d{2}\.\d{2}$/);
-  const baselineHour = Number(baseline?.slice(0, 2));
-
-  // A +14 zone moves the hour by 14 while keeping the same format.
-  await page.goto('/settings');
-  await page.getByLabel('Тайм-зона').first().selectOption('Pacific/Kiritimati');
-  await page.goto(discussionUrl);
-  const shifted = await posts.locator('time').first().textContent();
-  expect(shifted).not.toBe(baseline);
-  const shiftedHour = Number(shifted?.slice(0, 2));
-  expect((shiftedHour - baselineHour + 24) % 24).toBe(14);
 
   // The 12-hour clock switches the hour to a 1–12 value.
   await page.goto('/settings');
@@ -129,5 +123,5 @@ test('changing the timezone and clock format changes a comment moment', async ({
   const parsedHour = Number(/^(\d{1,2}):/.exec(twelveHour ?? '')?.[1]);
   expect(parsedHour).toBeGreaterThanOrEqual(1);
   expect(parsedHour).toBeLessThanOrEqual(12);
-  expect(twelveHour).not.toBe(shifted);
+  expect(twelveHour).not.toBe(baseline);
 });

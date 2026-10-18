@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeedProvider } from '@/components/features/movie-tracker/feed-stream';
 import { SocialFeed } from '@/components/features/movie-tracker/SocialFeed';
 import type { FeedEvent } from '@/components/features/movie-tracker/feed';
-import { writeTimezone } from '@/components/layout/preferences';
+
+function stubTimeZone(timeZone: string): void {
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+    timeZone,
+  } as Intl.ResolvedDateTimeFormatOptions);
+}
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -124,8 +129,8 @@ describe('SocialFeed live updates', () => {
 });
 
 describe('SocialFeed timestamps', () => {
-  it('shows the event moment in the selected timezone and format', async () => {
-    writeTimezone('Europe/Moscow');
+  it('shows the event moment in the browser timezone and format', async () => {
+    stubTimeZone('Europe/Moscow');
     stubFeed([event(1, 'Начало')]);
     render(
       <FeedProvider>

@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const catalogKinds = ['film', 'series'] as const;
 
 export const catalogGenresQuery = z.object({
-  kind: z.enum(catalogKinds).optional(),
+  kind: z.enum(catalogKinds),
 });
 
 export type CatalogGenresQuery = z.infer<typeof catalogGenresQuery>;

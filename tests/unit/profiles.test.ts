@@ -25,7 +25,8 @@ vi.mock('@/modules/friendships', async (importOriginal) => ({
 }));
 
 import type { UserRow } from '@/modules/auth/types';
-import { getOwnProfile, getProfileByHandle } from '@/modules/profiles/service';
+import type { RatingEntry } from '@/modules/ratings';
+import { computeProfileStats, getOwnProfile, getProfileByHandle } from '@/modules/profiles/service';
 
 function user(overrides: Partial<UserRow> = {}): UserRow {
   return {
@@ -92,5 +93,44 @@ describe('profile relationship', () => {
     if (!result.ok) return;
     expect(result.value.relationship).toBeNull();
     expect(getRelationshipMock).not.toHaveBeenCalled();
+  });
+});
+
+function entry(overrides: Partial<RatingEntry>): RatingEntry {
+  return {
+    id: 1,
+    userId: 1,
+    mediaId: 1,
+    mediaKind: 'film',
+    mediaRef: '1',
+    title: 'Фильм',
+    year: 2010,
+    genres: [],
+    rating: 8,
+    comment: null,
+    watchedAt: '2026-08-12',
+    createdAt: '2026-08-12T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('computeProfileStats', () => {
+  it('counts films and series separately', () => {
+    const stats = computeProfileStats([
+      entry({ id: 1, mediaKind: 'film' }),
+      entry({ id: 2, mediaKind: 'film' }),
+      entry({ id: 3, mediaKind: 'series' }),
+    ]);
+    expect(stats.films).toBe(2);
+    expect(stats.series).toBe(1);
+  });
+
+  it('picks the most watched release year over a newer, less watched one', () => {
+    const stats = computeProfileStats([
+      entry({ id: 1, year: 2010 }),
+      entry({ id: 2, year: 2010 }),
+      entry({ id: 3, year: 2020 }),
+    ]);
+    expect(stats.years[0]).toEqual({ year: 2010, count: 2 });
   });
 });

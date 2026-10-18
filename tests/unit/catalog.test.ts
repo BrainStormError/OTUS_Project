@@ -39,7 +39,9 @@ vi.mock('@/modules/catalog/repository', () => ({
     { id: 878, name: 'Фантастика' },
     { id: 18, name: 'Драма' },
   ]),
-  listKnownGenreIds: vi.fn(async () => [18, 878]),
+  listKnownGenreIds: vi.fn(async (kind: 'film' | 'series') =>
+    kind === 'series' ? [10765] : [14, 18, 878],
+  ),
   listRatedTitles: vi.fn(async () => []),
 }));
 
@@ -373,6 +375,25 @@ describe('catalog save metadata', () => {
 
   it('maps known ids and drops unknown ids in the pure helper', () => {
     expect(selectKnownGenreIds([18, 999999, 878, 18], [18, 878])).toEqual([18, 878]);
+  });
+
+  it('drops an id that only exists in the other kind catalog', async () => {
+    installFetch({
+      '/tv/1396': {
+        id: 1396,
+        name: 'Во все тяжкие',
+        first_air_date: '2008-01-20',
+        genres: [
+          { id: 14, name: 'Фэнтези' },
+          { id: 10765, name: 'Научная фантастика и фэнтези' },
+        ],
+        created_by: [],
+      },
+    });
+    const result = await resolveSaveMetadata('series', '1396');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.genreIds).toEqual([10765]);
   });
 });
 

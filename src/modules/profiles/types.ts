@@ -1,10 +1,14 @@
 import type { Relationship } from '@/modules/friendships';
 import type { RatingEntry } from '@/modules/ratings';
 
+export type GenreCount = { genre: string; count: number };
+export type YearCount = { year: number; count: number };
+
 export type ProfileStats = {
-  count: number;
-  genres: { genre: string; count: number }[];
-  years: { year: number; count: number }[];
+  films: number;
+  series: number;
+  genres: GenreCount[];
+  years: YearCount[];
 };
 
 export type ProfileIdentity = {

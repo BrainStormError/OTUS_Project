@@ -49,6 +49,7 @@ describe('RecordsTable expanded content', () => {
     const comment = within(list).getByText(longComment);
     expect(comment).toHaveClass('break-words');
     expect(comment).toHaveClass('[overflow-wrap:anywhere]');
+    expect(comment.closest('td')).toHaveClass('pt-3');
 
     const actions = within(list).getByRole('button', { name: 'Изменить' }).parentElement!;
     expect(actions).toHaveClass('flex-wrap');

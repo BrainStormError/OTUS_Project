@@ -39,7 +39,8 @@ function json(body: unknown, status = 200): Response {
 }
 
 const BODIES: Record<string, unknown> = {
-  '/api/genres': { items: [] },
+  '/api/genres?kind=film': { items: [] },
+  '/api/genres?kind=series': { items: [] },
   '/api/records': { items: [filmRecord] },
   '/api/watchlist?kind=film': { items: [] },
   '/api/watchlist?kind=series': { items: [] },
@@ -54,7 +55,7 @@ const BODIES: Record<string, unknown> = {
       statsHidden: false,
     },
     relationship: null,
-    stats: { count: 1, genres: [], years: [] },
+    stats: { films: 1, series: 0, genres: [], years: [] },
     recent: [filmRecord],
   },
 };
@@ -101,7 +102,8 @@ describe('store-backed screens fetch once per session', () => {
     await screen.findByText('Популярное');
 
     for (const url of [
-      '/api/genres',
+      '/api/genres?kind=film',
+      '/api/genres?kind=series',
       '/api/records',
       '/api/watchlist?kind=film',
       '/api/watchlist?kind=series',
@@ -140,7 +142,7 @@ describe('store-backed screens fetch once per session', () => {
         id: 3,
         name: 'Клуб',
         tags: [],
-        stats: { count: 0, genres: [], years: [] },
+        stats: { films: 0, series: 0, genres: [], years: [] },
         members: [],
       },
       role: 'admin',

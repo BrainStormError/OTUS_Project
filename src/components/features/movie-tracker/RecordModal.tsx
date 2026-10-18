@@ -1,7 +1,7 @@
 'use client';
 
 import { Modal } from '@/components/ui/modal';
-import { currentDateInTimeZone, useTimeFormat } from '@/components/layout/preferences';
+import { currentDateInTimeZone } from '@/components/layout/preferences';
 
 import { RatingForm, type RatingPayload } from './RatingForm';
 import type { Movie, WatchedRecord } from './types';
@@ -17,7 +17,6 @@ export function RecordModal({
   onClose: () => void;
   onSubmit: (movie: Movie, payload: RatingPayload) => void;
 }) {
-  const { timeZone } = useTimeFormat();
   return (
     <Modal
       open={Boolean(movie)}
@@ -28,7 +27,7 @@ export function RecordModal({
         <RatingForm
           initialRating={record && record.rating > 0 ? record.rating : undefined}
           initialComment={record?.comment}
-          initialDate={record?.watchedAt ?? currentDateInTimeZone(timeZone)}
+          initialDate={record?.watchedAt ?? currentDateInTimeZone()}
           submitLabel={record ? 'Сохранить' : 'Добавить'}
           onSubmit={(payload) => onSubmit(movie, payload)}
           onCancel={onClose}

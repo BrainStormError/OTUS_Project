@@ -17,20 +17,27 @@ vi.mock('@/modules/catalog/cache-repository', () => ({
   deleteOldestCache: vi.fn(async () => 0),
 }));
 
-import { listGenres } from '@/modules/catalog/service';
-
 beforeEach(() => {
+  vi.resetModules();
   listGenresMock.mockReset();
 });
+
+// A fresh module registry per test keeps the in-process cache from leaking
+// between cases.
+async function loadService() {
+  return await import('@/modules/catalog/service');
+}
 
 describe('genre catalog cache', () => {
   it('serves repeated reads within the TTL from the in-process cache', async () => {
     listGenresMock.mockResolvedValue([{ id: 18, name: 'Драма' }]);
+    const { listGenres } = await loadService();
 
-    const first = await listGenres();
-    const second = await listGenres();
+    const first = await listGenres('film');
+    const second = await listGenres('film');
 
     expect(listGenresMock).toHaveBeenCalledTimes(1);
+    expect(listGenresMock).toHaveBeenCalledWith('film');
     expect(second).toEqual(first);
     expect(second.ok && second.value).toEqual([{ id: 18, name: 'Драма' }]);
   });
@@ -41,6 +48,7 @@ describe('genre catalog cache', () => {
         ? [{ id: 10765, name: 'Научная фантастика и фэнтези' }]
         : [{ id: 14, name: 'Фэнтези' }],
     );
+    const { listGenres } = await loadService();
 
     await listGenres('film');
     await listGenres('film');

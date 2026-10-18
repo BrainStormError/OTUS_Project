@@ -1,8 +1,8 @@
 'use client';
 
-import { Fragment, useEffect, useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 
-import { currentDateInTimeZone, useTimeFormat } from '@/components/layout/preferences';
+import { currentDateInTimeZone } from '@/components/layout/preferences';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,6 @@ import { useToast } from '@/components/ui/toast';
 import type { CatalogSearchResult } from '@/modules/catalog';
 import type { GroupRatingMember, GroupRatingSummary } from '@/modules/groups';
 
-import { genreOptionsFromCatalog } from './catalog-view';
 import { groupRead, invalidateReads, RECORDS_READS } from './read-invalidation';
 import { RatingForm, type RatingPayload } from './RatingForm';
 import { SearchField } from './SearchField';
@@ -42,6 +41,7 @@ export function GroupRatings({
   isAdmin,
   currentUserId,
   ratings,
+  genresByKind = { film: [], series: [] },
   onOpenDiscussion,
 }: {
   groupId: number;
@@ -49,20 +49,16 @@ export function GroupRatings({
   isAdmin: boolean;
   currentUserId?: number;
   ratings: GroupRatingSummary[];
+  genresByKind?: Record<MediaKind, FilterOption[]>;
   onOpenDiscussion: (id: number) => void;
 }) {
   const toast = useToast();
   const attachTitleId = useId();
-  const { timeZone } = useTimeFormat();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [kind, setKind] = useState<MediaKind>('film');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [search, setSearch] = useState<SearchState>({ status: 'idle' });
-  const [genresByKind, setGenresByKind] = useState<Record<MediaKind, FilterOption[]>>({
-    film: [],
-    series: [],
-  });
   const [selected, setSelected] = useState<CatalogSearchResult | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [rateTarget, setRateTarget] = useState<GroupRatingSummary | null>(null);
@@ -80,28 +76,10 @@ export function GroupRatings({
       : undefined;
   }
 
-  function loadGenres(next: MediaKind) {
-    void fetch(`/api/genres?kind=${next}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { items?: { id: number; name: string }[] } | null) => {
-        if (data?.items) {
-          setGenresByKind((previous) => ({ ...previous, [next]: genreOptionsFromCatalog(data.items!) }));
-        }
-      })
-      .catch(() => undefined);
-  }
-
-  useEffect(() => {
-    loadGenres('film');
-  }, []);
-
   function changeKind(next: MediaKind) {
     setKind(next);
     setFilters({});
     setSearch({ status: 'idle' });
-    if (genresByKind[next].length === 0) {
-      loadGenres(next);
-    }
   }
 
   async function runSearch(active: SearchFilters) {
@@ -419,7 +397,7 @@ export function GroupRatings({
       >
         {selected ? (
           <RatingForm
-            initialDate={currentDateInTimeZone(timeZone)}
+            initialDate={currentDateInTimeZone()}
             submitLabel="Сохранить"
             alsoPersonal={alsoPersonal}
             onAlsoPersonalChange={setAlsoPersonal}
@@ -448,7 +426,7 @@ export function GroupRatings({
           <RatingForm
             initialRating={mineOf(rateTarget)?.rating}
             initialComment={mineOf(rateTarget)?.comment ?? undefined}
-            initialDate={mineOf(rateTarget)?.watchedAt ?? currentDateInTimeZone(timeZone)}
+            initialDate={mineOf(rateTarget)?.watchedAt ?? currentDateInTimeZone()}
             submitLabel="Сохранить"
             alsoPersonal={alsoPersonal}
             onAlsoPersonalChange={setAlsoPersonal}

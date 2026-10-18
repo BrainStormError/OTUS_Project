@@ -118,20 +118,13 @@ describe('GET /api/genres', () => {
     expect(response.status).toBe(401);
   });
 
-  it('returns the stored genres without a kind', async () => {
+  it('rejects a request without a kind', async () => {
     getActorMock.mockResolvedValue(actor);
-    const items = [
-      { id: 18, name: 'Драма' },
-      { id: 878, name: 'Фантастика' },
-    ];
-    genresMock.mockResolvedValue(ok(items));
-
     const response = await genresRoute(
       new Request('http://localhost/api/genres', { headers: origin }),
     );
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ items });
-    expect(genresMock).toHaveBeenCalledWith(undefined);
+    expect(response.status).toBe(400);
+    expect(genresMock).not.toHaveBeenCalled();
   });
 
   it('marks the genre response cacheable for the client only', async () => {
@@ -139,7 +132,7 @@ describe('GET /api/genres', () => {
     genresMock.mockResolvedValue(ok([{ id: 18, name: 'Драма' }]));
 
     const response = await genresRoute(
-      new Request('http://localhost/api/genres', { headers: origin }),
+      new Request('http://localhost/api/genres?kind=film', { headers: origin }),
     );
     expect(response.status).toBe(200);
     const cacheControl = response.headers.get('cache-control') ?? '';

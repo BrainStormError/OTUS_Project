@@ -17,7 +17,7 @@ const ivan: PublicUser = {
   handle: 'ivan',
   name: 'Иван',
   isFriend: false,
-  stats: { count: 0, genres: [], years: [] },
+  stats: { films: 0, series: 0, genres: [], years: [] },
   recent: [],
 };
 

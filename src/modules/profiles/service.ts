@@ -16,7 +16,14 @@ function withinRecentWindow(entry: RatingEntry, now: number): boolean {
 export function computeProfileStats(entries: RatingEntry[]): ProfileStats {
   const genreMap = new Map<string, number>();
   const yearMap = new Map<number, number>();
+  let films = 0;
+  let series = 0;
   for (const entry of entries) {
+    if (entry.mediaKind === 'series') {
+      series += 1;
+    } else {
+      films += 1;
+    }
     if (entry.year !== null) {
       yearMap.set(entry.year, (yearMap.get(entry.year) ?? 0) + 1);
     }
@@ -25,12 +32,13 @@ export function computeProfileStats(entries: RatingEntry[]): ProfileStats {
     }
   }
   return {
-    count: entries.length,
+    films,
+    series,
     genres: Array.from(genreMap, ([genre, count]) => ({ genre, count })).sort(
       (a, b) => b.count - a.count,
     ),
     years: Array.from(yearMap, ([year, count]) => ({ year, count })).sort(
-      (a, b) => b.year - a.year,
+      (a, b) => b.count - a.count || b.year - a.year,
     ),
   };
 }

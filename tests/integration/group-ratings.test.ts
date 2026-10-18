@@ -7,7 +7,7 @@ import { closePool, query } from '@/core/db/pool';
 import { withTransaction } from '@/core/db/transaction';
 import { insertUser } from '@/modules/auth/repository';
 import { attachDiscussion } from '@/modules/discussions';
-import { listGroupRatings, saveGroupRating } from '@/modules/groups';
+import { getGroup, listGroupRatings, saveGroupRating } from '@/modules/groups';
 import { hasGroupRatingTx } from '@/modules/ratings/repository';
 import { saveWatchedRecord } from '@/modules/records';
 import { addWatchlist } from '@/modules/watchlist';
@@ -311,6 +311,48 @@ describe('listGroupRatings', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value[0]?.average).toBe(9.5);
+  });
+});
+
+function seriesRating(groupId: number, value: number) {
+  return {
+    groupId,
+    mediaKind: 'series' as const,
+    mediaRef: '1396',
+    rating: value,
+    watchedAt: '2026-08-12',
+  };
+}
+
+describe('group statistics', () => {
+  it('aggregates the rated media into per-kind counters', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+    await saveGroupRating(admin, rating(groupId, 8));
+    await saveGroupRating(admin, seriesRating(groupId, 7));
+
+    const group = await getGroup(admin, groupId);
+    expect(group.ok).toBe(true);
+    if (!group.ok) return;
+    expect(group.value.stats.films).toBe(1);
+    expect(group.value.stats.series).toBe(1);
+  });
+
+  it('recomputes the statistics after a new rating is saved', async () => {
+    const admin = await makeUser('admin');
+    const groupId = await makeGroup(admin);
+
+    const before = await getGroup(admin, groupId);
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+    expect(before.value.stats.films).toBe(0);
+
+    await saveGroupRating(admin, rating(groupId, 8));
+
+    const after = await getGroup(admin, groupId);
+    expect(after.ok).toBe(true);
+    if (!after.ok) return;
+    expect(after.value.stats.films).toBe(1);
   });
 });
 

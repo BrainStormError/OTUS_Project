@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { CatalogSearchResult } from '@/modules/catalog';
 
-import { genreOptionsFromCatalog, toMovie } from './catalog-view';
+import { toMovie } from './catalog-view';
 import { SearchField } from './SearchField';
 import type { FilterOption, MediaKind, Movie, SearchFilters } from './types';
 
@@ -22,12 +22,14 @@ const IDLE: SearchState = { status: 'idle', items: [], page: 1, hasMore: false }
 export function AddRecordModal({
   open,
   kind,
+  genres,
   watchedRefs,
   onClose,
   onSelect,
 }: {
   open: boolean;
   kind: MediaKind;
+  genres: FilterOption[];
   watchedRefs: string[];
   onClose: () => void;
   onSelect: (movie: Movie) => void;
@@ -35,23 +37,6 @@ export function AddRecordModal({
   const [filters, setFilters] = useState<SearchFilters>({});
   const [submitted, setSubmitted] = useState<SearchFilters>({});
   const [state, setState] = useState<SearchState>(IDLE);
-  const [genres, setGenres] = useState<FilterOption[]>([]);
-
-  useEffect(() => {
-    if (!open) return;
-    let active = true;
-    void fetch(`/api/genres?kind=${kind}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { items?: { id: number; name: string }[] } | null) => {
-        if (active && data?.items) {
-          setGenres(genreOptionsFromCatalog(data.items));
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [open, kind]);
 
   function keepSelectable(item: CatalogSearchResult): boolean {
     const watched = new Set(watchedRefs);

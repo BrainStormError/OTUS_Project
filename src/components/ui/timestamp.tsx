@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { formatTimestamp, useTimeFormat } from '@/components/layout/preferences';
 
 export function Timestamp({ value, className }: { value: string; className?: string }) {
-  const { timeZone, hour12 } = useTimeFormat();
+  const { hour12 } = useTimeFormat();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function Timestamp({ value, className }: { value: string; className?: str
 
   return (
     <time dateTime={value} className={className}>
-      {mounted ? formatTimestamp(value, { timeZone, hour12 }) : ''}
+      {mounted ? formatTimestamp(value, { hour12 }) : ''}
     </time>
   );
 }

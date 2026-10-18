@@ -1,9 +1,10 @@
 const { Client } = require('pg');
 
-// Fetches every film and TV genre from TMDB and upserts it into the local
-// `genres` table, so screens can offer the full catalog without a live TMDB
-// genre call. CommonJS + the global fetch (Node 22), matching scripts/migrate.cjs,
-// so the migrator image can run it as a one-off deploy step.
+// Fetches every film and TV genre from TMDB and upserts each list into its own
+// kind-scoped catalog (`film_genres`, `series_genres`), so screens can offer the
+// full catalog without a live TMDB genre call and no genre is dropped for a
+// cross-kind name collision. CommonJS + the global fetch (Node 22), matching
+// scripts/migrate.cjs, so the migrator image can run it as a one-off deploy step.
 
 const API_BASE = 'https://api.themoviedb.org/3';
 const TMDB_TIMEOUT_MS = 10000;
@@ -44,76 +45,37 @@ async function main() {
     fetchGenres('tv', token),
   ]);
 
-  // Film and TV genres share ids; keep one localized name per id, film first,
-  // and record which kinds each id belongs to (kind 0 = film, kind 1 = TV).
-  const byId = new Map();
-  const kindsById = new Map();
-  function record(genre, kind) {
-    if (typeof genre?.id !== 'number' || typeof genre?.name !== 'string') {
-      return;
-    }
-    byId.set(genre.id, genre.name);
-    const kinds = kindsById.get(genre.id) ?? new Set();
-    kinds.add(kind);
-    kindsById.set(genre.id, kinds);
-  }
-  for (const genre of filmGenres) {
-    record(genre, 0);
-  }
-  for (const genre of tvGenres) {
-    record(genre, 1);
+  function valid(genre) {
+    return typeof genre?.id === 'number' && typeof genre?.name === 'string';
   }
 
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
   let upserted = 0;
-  let skipped = 0;
-  const skippedIds = new Set();
-  let links = 0;
   try {
-    // Each upsert autocommits so one row that violates UNIQUE(name) can be
-    // skipped and logged without aborting the rest of the sync.
-    for (const [id, name] of byId) {
-      try {
-        await client.query(
-          `INSERT INTO genres (id, name) VALUES ($1, $2)
-           ON CONFLICT (id) DO UPDATE SET name = excluded.name`,
-          [id, name],
-        );
-        upserted += 1;
-      } catch (error) {
-        if (error && error.code === '23505') {
-          skipped += 1;
-          skippedIds.add(id);
-          console.warn(`warning: skipping genre ${id} "${name}" (duplicate name)`);
+    // Each list writes into its own table, so the two TMDB namespaces never
+    // contend on a shared name and no id is skipped.
+    for (const [table, genres] of [
+      ['film_genres', filmGenres],
+      ['series_genres', tvGenres],
+    ]) {
+      for (const genre of genres) {
+        if (!valid(genre)) {
           continue;
         }
-        throw error;
-      }
-    }
-
-    // Kind membership is idempotent: an existing link is left untouched, so a
-    // second run adds nothing and the row count stays the same.
-    for (const [id, kinds] of kindsById) {
-      if (skippedIds.has(id)) {
-        continue;
-      }
-      for (const kind of kinds) {
-        const result = await client.query(
-          `INSERT INTO genre_kinds (genre_id, kind) VALUES ($1, $2)
-           ON CONFLICT (genre_id, kind) DO NOTHING`,
-          [id, kind],
+        await client.query(
+          `INSERT INTO ${table} (id, name) VALUES ($1, $2)
+           ON CONFLICT (id) DO UPDATE SET name = excluded.name`,
+          [genre.id, genre.name],
         );
-        links += result.rowCount ?? 0;
+        upserted += 1;
       }
     }
   } finally {
     await client.end();
   }
 
-  console.log(
-    `Genre sync complete: ${upserted} upserted, ${skipped} skipped, ${links} kind links added.`,
-  );
+  console.log(`Genre sync complete: ${upserted} upserted.`);
 }
 
 main().catch((error) => {

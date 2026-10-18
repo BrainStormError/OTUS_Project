@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GroupDiscussions } from '@/components/features/movie-tracker/GroupDiscussions';
-import { writeTimezone } from '@/components/layout/preferences';
 import { ToastProvider } from '@/components/ui/toast';
 import type { DiscussionDetail } from '@/modules/discussions';
 
@@ -14,8 +13,15 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/groups/1',
 }));
 
+function stubTimeZone(timeZone: string): void {
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+    timeZone,
+  } as Intl.ResolvedDateTimeFormatOptions);
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -121,8 +127,8 @@ describe('GroupDiscussions feedback', () => {
     expect(toast).toHaveTextContent('Комментарий отправлен');
   });
 
-  it('shows a comment moment in the selected timezone and format', async () => {
-    writeTimezone('UTC');
+  it('shows a comment moment in the browser timezone and format', async () => {
+    stubTimeZone('UTC');
     const discussion: DiscussionDetail = {
       ...activeDiscussion,
       posts: [

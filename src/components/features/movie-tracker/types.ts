@@ -32,7 +32,8 @@ export type GenreCount = { genre: string; count: number };
 export type YearCount = { year: number; count: number };
 
 export type UserStats = {
-  count: number;
+  films: number;
+  series: number;
   genres: GenreCount[];
   years: YearCount[];
 };

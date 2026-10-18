@@ -78,6 +78,16 @@ describe('MyFilmsView watch-later tab', () => {
     expect(within(table).getByText('2026-02-03')).toBeInTheDocument();
   });
 
+  it('highlights watch-later rows on hover like the watched list', async () => {
+    renderView();
+    await userEvent.click(screen.getByRole('tab', { name: 'Буду смотреть' }));
+
+    const table = screen.getByTestId('my-films-watchlist');
+    const row = within(table).getByText('Начало').closest('tr')!;
+    expect(row.className).toContain('transition-hover');
+    expect(row.className).toContain('hover:bg-secondary');
+  });
+
   it('shows an empty state when the list is empty', async () => {
     renderView([]);
     await userEvent.click(screen.getByRole('tab', { name: 'Буду смотреть' }));

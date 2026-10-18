@@ -39,7 +39,11 @@ type PersonalRow = {
 
 const PERSONAL_SELECT = `u.id, u.user_id, u.media_id, m.kind AS media_kind,
   m.external_ref AS media_ref, m.title, m.year,
-  COALESCE((SELECT array_agg(g.name ORDER BY g.id) FROM genres g WHERE g.id = ANY(m.genre_ids)), '{}') AS genres,
+  COALESCE(
+    CASE WHEN m.kind = 1
+      THEN (SELECT array_agg(sg.name ORDER BY sg.id) FROM series_genres sg WHERE sg.id = ANY(m.genre_ids))
+      ELSE (SELECT array_agg(fg.name ORDER BY fg.id) FROM film_genres fg WHERE fg.id = ANY(m.genre_ids))
+    END, '{}') AS genres,
   u.rating, u.comment, u.watched_at, u.created_at`;
 
 function mapPersonal(row: PersonalRow): RatingEntry {
@@ -62,8 +66,12 @@ function mapPersonal(row: PersonalRow): RatingEntry {
 export async function upsertMedia(tx: PoolClient, metadata: SaveMetadata): Promise<number> {
   const result = await tx.query<{ id: number }>(
     `INSERT INTO media (kind, external_ref, title, year, director, genre_ids)
-     VALUES ($1, $2, $3, $4, $5,
-       COALESCE((SELECT array_agg(id ORDER BY id) FROM genres WHERE id = ANY($6::smallint[])), '{}'::smallint[]))
+     VALUES ($1::smallint, $2, $3, $4, $5,
+       COALESCE(
+         CASE WHEN $1::smallint = 1
+           THEN (SELECT array_agg(id ORDER BY id) FROM series_genres WHERE id = ANY($6::smallint[]))
+           ELSE (SELECT array_agg(id ORDER BY id) FROM film_genres WHERE id = ANY($6::smallint[]))
+         END, '{}'::smallint[]))
      ON CONFLICT (kind, external_ref) DO UPDATE SET
        title = EXCLUDED.title,
        year = EXCLUDED.year,
@@ -289,7 +297,11 @@ export async function listPersonalRatings(userId: number): Promise<RatingEntry[]
   const rows = await query<PersonalRow>(
     `SELECT r.id, r.user_id, r.media_id, m.kind AS media_kind, m.external_ref AS media_ref,
             m.title, m.year,
-            COALESCE((SELECT array_agg(g.name ORDER BY g.id) FROM genres g WHERE g.id = ANY(m.genre_ids)), '{}') AS genres,
+            COALESCE(
+              CASE WHEN m.kind = 1
+                THEN (SELECT array_agg(sg.name ORDER BY sg.id) FROM series_genres sg WHERE sg.id = ANY(m.genre_ids))
+                ELSE (SELECT array_agg(fg.name ORDER BY fg.id) FROM film_genres fg WHERE fg.id = ANY(m.genre_ids))
+              END, '{}') AS genres,
             r.rating, r.comment, r.watched_at, r.created_at
        FROM ratings r
        JOIN media m ON m.id = r.media_id

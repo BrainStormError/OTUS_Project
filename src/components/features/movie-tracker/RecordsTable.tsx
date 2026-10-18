@@ -158,7 +158,7 @@ export function RecordsTable({
                     <td
                       id={detailId}
                       colSpan={COLUMNS.length}
-                      className="px-4 pb-3 text-sm text-muted-foreground"
+                      className="px-4 pt-3 pb-3 text-sm text-muted-foreground"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <p className="min-w-0 break-words [overflow-wrap:anywhere] sm:flex-1">

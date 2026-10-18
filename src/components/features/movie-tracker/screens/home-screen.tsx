@@ -16,8 +16,11 @@ type WatchlistRead = { items: WatchlistEntry[] };
 type SearchRead = { items: CatalogSearchResult[] };
 
 export function HomeScreen() {
-  const core = useReadAll<[GenresRead, RecordsRead, WatchlistRead, WatchlistRead]>([
-    '/api/genres',
+  const core = useReadAll<
+    [GenresRead, GenresRead, RecordsRead, WatchlistRead, WatchlistRead]
+  >([
+    '/api/genres?kind=film',
+    '/api/genres?kind=series',
     '/api/records',
     '/api/watchlist?kind=film',
     '/api/watchlist?kind=series',
@@ -35,11 +38,14 @@ export function HomeScreen() {
     );
   }
 
-  const [genres, records, filmWatchlist, seriesWatchlist] = core.data;
+  const [filmGenres, seriesGenres, records, filmWatchlist, seriesWatchlist] = core.data;
 
   return (
     <HomeView
-      genres={genreOptionsFromCatalog(genres.items)}
+      genresByKind={{
+        film: genreOptionsFromCatalog(filmGenres.items),
+        series: genreOptionsFromCatalog(seriesGenres.items),
+      }}
       initialRecords={records.items.map(toWatchedRecord)}
       initialWatchlist={[...filmWatchlist.items, ...seriesWatchlist.items].map(
         toWatchlistItem,

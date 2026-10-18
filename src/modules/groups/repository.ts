@@ -6,6 +6,7 @@ import type {
   GroupInvitation,
   GroupInvitationStatus,
   GroupMemberSummary,
+  GroupStats,
   GroupSummary,
 } from './types';
 
@@ -129,7 +130,7 @@ async function membersByGroup(
   return map;
 }
 
-function mapGroup(row: GroupRow, members: GroupMemberSummary[]): GroupSummary {
+function mapGroup(row: GroupRow, members: GroupMemberSummary[], stats: GroupStats): GroupSummary {
   return {
     id: row.id,
     name: row.name,
@@ -137,7 +138,76 @@ function mapGroup(row: GroupRow, members: GroupMemberSummary[]): GroupSummary {
     tags: row.tags ?? [],
     restricted: row.restricted,
     members,
+    stats,
   };
+}
+
+const EMPTY_STATS: GroupStats = { films: 0, series: 0, genres: [], years: [] };
+
+type StatsRow = {
+  group_id: number;
+  kind: number;
+  year: number | null;
+  genres: string[] | null;
+};
+
+// Aggregates the group's rated media (the Оценки tab population: one entry per
+// distinct media, regardless of how many members rated it) into per-kind
+// counters and genre/year distributions.
+async function statsByGroup(groupIds: number[]): Promise<Map<number, GroupStats>> {
+  const map = new Map<number, GroupStats>();
+  if (groupIds.length === 0) {
+    return map;
+  }
+  const rows = await query<StatsRow>(
+    `SELECT rated.group_id, m.kind, m.year,
+       COALESCE(
+         CASE WHEN m.kind = 1
+           THEN (SELECT array_agg(sg.name ORDER BY sg.id) FROM series_genres sg WHERE sg.id = ANY(m.genre_ids))
+           ELSE (SELECT array_agg(fg.name ORDER BY fg.id) FROM film_genres fg WHERE fg.id = ANY(m.genre_ids))
+         END, '{}') AS genres
+       FROM (SELECT DISTINCT group_id, media_id FROM ratings WHERE group_id = ANY($1::bigint[])) rated
+       JOIN media m ON m.id = rated.media_id`,
+    [groupIds],
+  );
+
+  const perGroup = new Map<number, StatsRow[]>();
+  for (const row of rows) {
+    const list = perGroup.get(row.group_id) ?? [];
+    list.push(row);
+    perGroup.set(row.group_id, list);
+  }
+
+  for (const [groupId, groupRows] of perGroup) {
+    const genreMap = new Map<string, number>();
+    const yearMap = new Map<number, number>();
+    let films = 0;
+    let series = 0;
+    for (const row of groupRows) {
+      if (row.kind === 1) {
+        series += 1;
+      } else {
+        films += 1;
+      }
+      if (row.year !== null) {
+        yearMap.set(row.year, (yearMap.get(row.year) ?? 0) + 1);
+      }
+      for (const genre of row.genres ?? []) {
+        genreMap.set(genre, (genreMap.get(genre) ?? 0) + 1);
+      }
+    }
+    map.set(groupId, {
+      films,
+      series,
+      genres: Array.from(genreMap, ([genre, count]) => ({ genre, count })).sort(
+        (a, b) => b.count - a.count,
+      ),
+      years: Array.from(yearMap, ([year, count]) => ({ year, count })).sort(
+        (a, b) => b.count - a.count || b.year - a.year,
+      ),
+    });
+  }
+  return map;
 }
 
 export async function listGroupsForUser(userId: number): Promise<GroupSummary[]> {
@@ -150,7 +220,8 @@ export async function listGroupsForUser(userId: number): Promise<GroupSummary[]>
     [userId],
   );
   const members = await membersByGroup(rows.map((row) => row.id));
-  return rows.map((row) => mapGroup(row, members.get(row.id) ?? []));
+  const stats = await statsByGroup(rows.map((row) => row.id));
+  return rows.map((row) => mapGroup(row, members.get(row.id) ?? [], stats.get(row.id) ?? EMPTY_STATS));
 }
 
 export async function listDiscoverableGroups(userId: number): Promise<GroupSummary[]> {
@@ -165,7 +236,8 @@ export async function listDiscoverableGroups(userId: number): Promise<GroupSumma
     [userId],
   );
   const members = await membersByGroup(rows.map((row) => row.id));
-  return rows.map((row) => mapGroup(row, members.get(row.id) ?? []));
+  const stats = await statsByGroup(rows.map((row) => row.id));
+  return rows.map((row) => mapGroup(row, members.get(row.id) ?? [], stats.get(row.id) ?? EMPTY_STATS));
 }
 
 export async function findGroupById(id: number): Promise<GroupSummary | null> {
@@ -175,7 +247,8 @@ export async function findGroupById(id: number): Promise<GroupSummary | null> {
     return null;
   }
   const members = await membersByGroup([row.id]);
-  return mapGroup(row, members.get(row.id) ?? []);
+  const stats = await statsByGroup([row.id]);
+  return mapGroup(row, members.get(row.id) ?? [], stats.get(row.id) ?? EMPTY_STATS);
 }
 
 export async function isGroupMember(groupId: number, userId: number): Promise<boolean> {

@@ -25,7 +25,11 @@ type WatchlistRow = {
 
 const SELECT = `w.id, w.user_id, w.media_id, m.kind AS media_kind,
   m.external_ref AS media_ref, m.title, m.year,
-  COALESCE((SELECT array_agg(g.name ORDER BY g.id) FROM genres g WHERE g.id = ANY(m.genre_ids)), '{}') AS genres,
+  COALESCE(
+    CASE WHEN m.kind = 1
+      THEN (SELECT array_agg(sg.name ORDER BY sg.id) FROM series_genres sg WHERE sg.id = ANY(m.genre_ids))
+      ELSE (SELECT array_agg(fg.name ORDER BY fg.id) FROM film_genres fg WHERE fg.id = ANY(m.genre_ids))
+    END, '{}') AS genres,
   w.created_at`;
 
 function mapEntry(row: WatchlistRow): WatchlistEntry {

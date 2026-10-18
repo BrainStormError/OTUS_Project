@@ -49,6 +49,7 @@ export type {
 export type {
   GroupSummary,
   GroupMemberSummary,
+  GroupStats,
   GroupInvitation,
   GroupInvitationStatus,
 } from './types';

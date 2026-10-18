@@ -160,7 +160,7 @@ const memberGroup: Group = {
   name: 'Киновечера',
   tags: [],
   members: [{ id: 1, name: 'Алексей', handle: 'me', role: 'admin' }],
-  stats: { count: 0, genres: [], years: [] },
+  stats: { films: 0, series: 0, genres: [], years: [] },
 };
 
 const pendingInvitation: GroupInvitation = {

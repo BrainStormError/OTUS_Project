@@ -234,7 +234,7 @@ describe('friendship and group mutations reload the social lists', () => {
             id: 3,
             name: 'Клуб',
             tags: [],
-            stats: { count: 0, genres: [], years: [] },
+            stats: { films: 0, series: 0, genres: [], years: [] },
             members: [
               { id: 1, name: 'Админ', handle: 'admin', role: 'admin' },
               { id: 2, name: 'Гость', handle: 'guest', role: 'member' },

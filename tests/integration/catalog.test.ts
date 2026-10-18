@@ -26,12 +26,12 @@ async function makeUser(prefix: string): Promise<Actor> {
 
 beforeAll(async () => {
   await query(
-    `INSERT INTO genres (id, name) VALUES (18, 'Драма'), (878, 'Фантастика')
+    `INSERT INTO film_genres (id, name) VALUES (18, 'Драма'), (878, 'Фантастика')
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
   );
   await query(
-    `INSERT INTO genre_kinds (genre_id, kind) VALUES (18, 0), (18, 1), (878, 0)
-     ON CONFLICT (genre_id, kind) DO NOTHING`,
+    `INSERT INTO series_genres (id, name) VALUES (18, 'Драма')
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
   );
   installTmdbFetch(() => ({
     title: 'Начало',
@@ -47,7 +47,7 @@ afterAll(async () => {
 
 describe('genre catalog', () => {
   it('lists the stored genres with id and name from the seeded table', async () => {
-    const result = await listGenres();
+    const result = await listGenres('film');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const byId = new Map(result.value.map((genre) => [genre.id, genre.name]));

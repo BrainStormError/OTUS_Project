@@ -16,6 +16,7 @@ import { FriendListItem } from '@/components/features/movie-tracker/FriendListIt
 import { searchGroups } from '@/components/features/movie-tracker/group-search';
 import { recordsStore } from '@/components/features/movie-tracker/list-store';
 import type {
+  FilterOption,
   FriendContact,
   FriendRequest,
   Group,
@@ -96,6 +97,13 @@ const seriesCatalog: CatalogSearchResult[] = [
   },
 ];
 
+const filmGenreOptions: FilterOption[] = [
+  { value: '1', label: 'фантастика' },
+  { value: '2', label: 'боевик' },
+  { value: '3', label: 'драма' },
+  { value: '6', label: 'триллер' },
+];
+
 function mockCatalogFetch(catalog: CatalogSearchResult[]) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method && init.method !== 'GET') {
@@ -156,9 +164,16 @@ const seriesRecords: WatchedRecord[] = [
 ];
 
 const statsFixture: UserStats = {
-  count: 4,
-  genres: [{ genre: 'драма', count: 2 }],
-  years: [{ year: 2010, count: 1 }],
+  films: 3,
+  series: 1,
+  genres: [
+    { genre: 'драма', count: 2 },
+    { genre: 'фантастика', count: 1 },
+  ],
+  years: [
+    { year: 2010, count: 2 },
+    { year: 2020, count: 1 },
+  ],
 };
 
 const maria: PublicUser = { id: 2, handle: 'maria', name: 'Мария', isFriend: true, stats: statsFixture, recent: [] };
@@ -324,8 +339,8 @@ describe('My Films and records', () => {
   });
 
   it('filters the add-modal catalog by the selected genre id', async () => {
-    mockCatalogFetch(filmsCatalog);
-    render(<MyFilmsView initialRecords={[]} />);
+    const fetchMock = mockCatalogFetch(filmsCatalog);
+    render(<MyFilmsView initialRecords={[]} initialGenres={filmGenreOptions} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
     await userEvent.click(within(picker).getByText('Жанр'));
@@ -333,11 +348,14 @@ describe('My Films and records', () => {
     await userEvent.click(within(group).getByRole('checkbox', { name: 'триллер' }));
     await userEvent.click(within(picker).getByRole('button', { name: 'Найти' }));
     expect(await within(picker).findByRole('button', { name: /^Паразиты/ })).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/genres')),
+    ).toBe(false);
   });
 
   it('keeps the full catalog genres after a search changes the result set', async () => {
-    mockCatalogFetch(filmsCatalog);
-    render(<MyFilmsView initialRecords={[]} />);
+    const fetchMock = mockCatalogFetch(filmsCatalog);
+    render(<MyFilmsView initialRecords={[]} initialGenres={filmGenreOptions} />);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const picker = screen.getByRole('dialog');
     await userEvent.type(within(picker).getByLabelText('Название'), 'Паразиты');
@@ -348,6 +366,9 @@ describe('My Films and records', () => {
     const group = screen.getByRole('group', { name: 'Жанр' });
     expect(within(group).getByRole('checkbox', { name: 'фантастика' })).toBeInTheDocument();
     expect(within(group).getByRole('checkbox', { name: 'боевик' })).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/genres')),
+    ).toBe(false);
   });
 
   it('edits a record and deletes it only after confirmation', async () => {
@@ -601,14 +622,34 @@ describe('ProfileView', () => {
 });
 
 describe('StatisticsView', () => {
-  it('shows three statistics without an average rating card', () => {
+  it('shows four statistics without an average rating card', () => {
     render(<StatisticsView stats={statsFixture} />);
     const cards = screen.getAllByTestId('stat-card');
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
     expect(screen.getByText('Всего фильмов')).toBeInTheDocument();
+    expect(screen.getByText('Всего сериалов')).toBeInTheDocument();
     expect(screen.queryByText('Средняя оценка')).not.toBeInTheDocument();
     expect(screen.getByText('Любимый жанр')).toBeInTheDocument();
     expect(screen.getByText('Любимый год')).toBeInTheDocument();
+  });
+
+  it('shows the most watched release year even when a newer year has fewer entries', () => {
+    render(
+      <StatisticsView
+        stats={{
+          films: 3,
+          series: 0,
+          genres: [{ genre: 'драма', count: 2 }],
+          years: [
+            { year: 2010, count: 2 },
+            { year: 2020, count: 1 },
+          ],
+        }}
+      />,
+    );
+    const yearCard = screen.getAllByTestId('stat-card')[3]!;
+    expect(within(yearCard).getByText('2010')).toBeInTheDocument();
+    expect(within(yearCard).queryByText('2020')).not.toBeInTheDocument();
   });
 
   it('shows the restricted state instead of values', () => {
@@ -685,14 +726,9 @@ describe('SettingsView', () => {
     expect(window.localStorage.getItem('identity-display')).toBe('both');
   });
 
-  it('reflects and changes the timezone and hour-cycle controls', async () => {
+  it('reflects and changes the hour-cycle control with no timezone selector', async () => {
     render(<SettingsView />);
-    const zone = screen.getByLabelText('Тайм-зона');
-    expect(zone).toHaveValue('');
-
-    await userEvent.selectOptions(zone, 'Europe/Moscow');
-    expect(zone).toHaveValue('Europe/Moscow');
-    expect(window.localStorage.getItem('timezone')).toBe('Europe/Moscow');
+    expect(screen.queryByLabelText('Тайм-зона')).not.toBeInTheDocument();
 
     const twelve = screen.getByRole('radio', { name: '12 часов' });
     expect(twelve).toHaveAttribute('aria-checked', 'false');

@@ -11,7 +11,6 @@ import { IdentitySelect } from './IdentitySelect';
 import { PrivacyToggle, type SaveStatus } from './PrivacyToggle';
 import { invalidateReads, IDENTITY_READS } from './read-invalidation';
 import { ThemeSelect } from './ThemeSelect';
-import { TimezoneSelect } from './TimezoneSelect';
 
 type FlagKey = 'profileHidden' | 'statsHidden';
 type Flags = Record<FlagKey, boolean>;
@@ -87,9 +86,8 @@ export function SettingsView({
       <section className="space-y-3" aria-label="Время">
         <h2 className="text-lg font-medium">Время</h2>
         <p className="text-sm text-muted-foreground">
-          Тайм-зона и формат часов для всех моментов времени.
+          Формат часов для всех моментов времени.
         </p>
-        <TimezoneSelect />
         <HourCycleSelect />
       </section>
 

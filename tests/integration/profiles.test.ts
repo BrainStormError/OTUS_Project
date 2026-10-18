@@ -31,6 +31,15 @@ async function addRating(actor: Actor, value: number): Promise<void> {
   });
 }
 
+async function addSeriesRating(actor: Actor, value: number): Promise<void> {
+  await saveWatchedRecord(actor, {
+    mediaKind: 'series',
+    mediaRef: '1396',
+    rating: value,
+    watchedAt: '2026-08-12',
+  });
+}
+
 beforeAll(() => {
   installTmdbFetch(() => ({ title: 'Начало', year: 2010 }));
 });
@@ -77,9 +86,22 @@ describe('profile read', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.isOwn).toBe(true);
-    expect(result.value.stats.count).toBe(1);
+    expect(result.value.stats.films).toBe(1);
+    expect(result.value.stats.series).toBe(0);
     expect(result.value.recent).toHaveLength(1);
     expect(result.value.recent[0]?.title).toBe('Начало');
+  });
+
+  it('counts films and series separately in the profile statistics', async () => {
+    const owner = await makeUser('owner');
+    await addRating(owner, 8);
+    await addSeriesRating(owner, 7);
+
+    const result = await getOwnProfile(owner);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.stats.films).toBe(1);
+    expect(result.value.stats.series).toBe(1);
   });
 
   it('resolves another user by handle and reports unknown handles as not found', async () => {
@@ -121,7 +143,7 @@ describe('profile read', () => {
     const result = await getOwnProfile(owner);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.stats.count).toBe(2);
+    expect(result.value.stats.films).toBe(2);
     expect(result.value.recent).toHaveLength(1);
     expect(result.value.recent[0]?.mediaRef).toBe('27205');
   });
@@ -135,7 +157,7 @@ describe('profile read', () => {
     expect(asStranger.ok).toBe(true);
     if (asStranger.ok) {
       expect(asStranger.value.statsRestricted).toBe(true);
-      expect(asStranger.value.stats.count).toBe(0);
+      expect(asStranger.value.stats.films).toBe(0);
       expect(asStranger.value.recent).toHaveLength(0);
     }
 
@@ -143,7 +165,7 @@ describe('profile read', () => {
     expect(asOwner.ok).toBe(true);
     if (asOwner.ok) {
       expect(asOwner.value.statsRestricted).toBe(false);
-      expect(asOwner.value.stats.count).toBe(1);
+      expect(asOwner.value.stats.films).toBe(1);
     }
   });
 
@@ -160,7 +182,7 @@ describe('profile read', () => {
     if (asStranger.ok) {
       expect(asStranger.value.profileRestricted).toBe(true);
       expect(asStranger.value.statsRestricted).toBe(true);
-      expect(asStranger.value.stats.count).toBe(0);
+      expect(asStranger.value.stats.films).toBe(0);
       expect(asStranger.value.recent).toHaveLength(0);
     }
 
@@ -168,7 +190,7 @@ describe('profile read', () => {
     expect(asOwner.ok).toBe(true);
     if (asOwner.ok) {
       expect(asOwner.value.profileRestricted).toBe(false);
-      expect(asOwner.value.stats.count).toBe(1);
+      expect(asOwner.value.stats.films).toBe(1);
       expect(asOwner.value.recent).toHaveLength(1);
     }
   });

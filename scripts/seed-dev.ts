@@ -23,12 +23,16 @@ async function main() {
     await client.query(
       `TRUNCATE activity_events, discussion_posts, group_discussions, ratings,
          group_invitations, group_members, friendships, groups, media, tags,
-         genres, users
+         film_genres, series_genres, users
        RESTART IDENTITY CASCADE`,
     );
 
+    // Genre reference data is split per kind: each catalog holds that kind's
+    // own TMDB ids and names. Shared TMDB ids (for example 18 Драма) appear in
+    // both tables; film-only ids (for example 14 Фэнтези) and series-only ids
+    // (for example 10765) appear in one.
     await client.query(
-      `INSERT INTO genres (id, name) VALUES
+      `INSERT INTO film_genres (id, name) VALUES
          (12, 'Приключение'),
          (14, 'Фэнтези'),
          (16, 'Мультфильм'),
@@ -47,6 +51,19 @@ async function main() {
          (10749, 'Мелодрама'),
          (10751, 'Семейный'),
          (10752, 'Военный'),
+         (10770, 'Телевизионный фильм')`,
+    );
+
+    await client.query(
+      `INSERT INTO series_genres (id, name) VALUES
+         (16, 'Мультфильм'),
+         (18, 'Драма'),
+         (35, 'Комедия'),
+         (37, 'Вестерн'),
+         (80, 'Криминал'),
+         (99, 'Документальный'),
+         (9648, 'Детектив'),
+         (10751, 'Семейный'),
          (10759, 'Боевик и приключения'),
          (10762, 'Детский'),
          (10763, 'Новости'),
@@ -54,22 +71,7 @@ async function main() {
          (10765, 'Научная фантастика и фэнтези'),
          (10766, 'Мыльная опера'),
          (10767, 'Ток-шоу'),
-         (10768, 'Военный и политический'),
-         (10770, 'Телевизионный фильм')`,
-    );
-
-    // Genre kind membership: kind 0 = film, 1 = series. Shared TMDB ids (for
-    // example 18 Драма) belong to both kinds; film-only ids (for example 14
-    // Фэнтези) and TV-only ids (for example 10765) belong to one kind.
-    await client.query(
-      `INSERT INTO genre_kinds (genre_id, kind) VALUES
-         (12, 0), (14, 0), (16, 0), (16, 1), (18, 0), (18, 1),
-         (27, 0), (28, 0), (35, 0), (35, 1), (36, 0), (37, 0), (37, 1),
-         (53, 0), (80, 0), (80, 1), (99, 0), (99, 1), (878, 0),
-         (9648, 0), (9648, 1), (10402, 0), (10749, 0),
-         (10751, 0), (10751, 1), (10752, 0), (10770, 0),
-         (10759, 1), (10762, 1), (10763, 1), (10764, 1), (10765, 1),
-         (10766, 1), (10767, 1), (10768, 1)`,
+         (10768, 'Военный и политический')`,
     );
 
     await client.query(

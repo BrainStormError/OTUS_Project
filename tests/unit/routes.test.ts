@@ -67,6 +67,10 @@ describe('product identity', () => {
       'utf8',
     );
     expect(footer).toContain('Смотровик');
+    expect(footer).toContain('v1.0');
+    expect(footer).toContain('Данные о фильмах и сериалах предоставлены TMDB');
+    expect(footer).toContain('items-center');
+    expect(footer).toContain('text-center');
     expect(existsSync(join('src', 'app', 'icon.svg'))).toBe(true);
   });
 });

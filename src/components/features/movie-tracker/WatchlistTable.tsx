@@ -38,7 +38,7 @@ export function WatchlistTable({
         </thead>
         <tbody className="divide-y divide-border">
           {items.map((item) => (
-            <tr key={item.id}>
+            <tr key={item.id} className="transition-hover hover:bg-secondary">
               <th scope="row" className="px-4 py-3 font-medium">
                 <Link
                   href={`/${item.movie.kind === 'series' ? 'series' : 'film'}/${item.movie.tmdbId}`}

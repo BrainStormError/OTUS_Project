@@ -13,7 +13,7 @@ import { GroupActivity } from './GroupActivity';
 import { GroupDiscussions } from './GroupDiscussions';
 import { GroupRatings } from './GroupRatings';
 import { StatisticsView } from './StatisticsView';
-import type { Group } from './types';
+import type { FilterOption, Group, MediaKind } from './types';
 
 export const GROUP_TABS = [
   { id: 'discussions', label: 'Обсуждения' },
@@ -45,6 +45,7 @@ export function GroupTabs({
   currentUserId,
   discussions,
   ratings,
+  genresByKind,
   activityEvents,
   activityVisible,
   initialTab,
@@ -57,6 +58,7 @@ export function GroupTabs({
   currentUserId?: number;
   discussions: DiscussionDetail[];
   ratings: GroupRatingSummary[];
+  genresByKind?: Record<MediaKind, FilterOption[]>;
   activityEvents: FeedItem[];
   activityVisible: boolean;
   initialTab?: string;
@@ -151,6 +153,7 @@ export function GroupTabs({
             isAdmin={isAdmin}
             currentUserId={currentUserId}
             ratings={ratings}
+            genresByKind={genresByKind}
             onOpenDiscussion={openDiscussion}
           />
         ) : null}

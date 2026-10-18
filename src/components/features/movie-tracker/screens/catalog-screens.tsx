@@ -7,7 +7,7 @@ import type { RatingEntry } from '@/modules/ratings';
 import type { WatchlistEntry } from '@/modules/watchlist';
 
 import { toWatchedRecord, toWatchlistItem } from '../adapters';
-import { toMovie } from '../catalog-view';
+import { genreOptionsFromCatalog, toMovie } from '../catalog-view';
 import { FilmDetail } from '../FilmDetail';
 import { MyFilmsView } from '../MyFilmsView';
 import { MySeriesView } from '../MySeriesView';
@@ -15,12 +15,14 @@ import { RecordView } from '../RecordView';
 import { useRead, useReadAll } from '../read-store';
 import type { MediaKind } from '../types';
 
+type GenresRead = { items: { id: number; name: string }[] };
 type RecordsRead = { items: RatingEntry[] };
 type WatchlistRead = { items: WatchlistEntry[] };
 type DetailRead = { item: CatalogDetail };
 
 export function CatalogListScreen({ kind }: { kind: MediaKind }) {
-  const state = useReadAll<[RecordsRead, WatchlistRead]>([
+  const state = useReadAll<[GenresRead, RecordsRead, WatchlistRead]>([
+    `/api/genres?kind=${kind}`,
     '/api/records',
     `/api/watchlist?kind=${kind}`,
   ]);
@@ -34,13 +36,22 @@ export function CatalogListScreen({ kind }: { kind: MediaKind }) {
     );
   }
 
-  const records = state.data[0].items.map(toWatchedRecord);
-  const items = state.data[1].items.map(toWatchlistItem);
+  const genres = genreOptionsFromCatalog(state.data[0].items);
+  const records = state.data[1].items.map(toWatchedRecord);
+  const items = state.data[2].items.map(toWatchlistItem);
 
   return kind === 'film' ? (
-    <MyFilmsView initialRecords={records} initialWatchlist={items} />
+    <MyFilmsView
+      initialRecords={records}
+      initialWatchlist={items}
+      initialGenres={genres}
+    />
   ) : (
-    <MySeriesView initialRecords={records} initialWatchlist={items} />
+    <MySeriesView
+      initialRecords={records}
+      initialWatchlist={items}
+      initialGenres={genres}
+    />
   );
 }
 

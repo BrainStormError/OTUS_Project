@@ -67,9 +67,10 @@ describe('group request cache', () => {
 
     expect(await getGroupRole(3, actor.id)).toBe('admin');
 
-    // One read of the group row, one of its members and one of the role, shared
-    // by GroupPage, getGroup, canViewGroup and the panel services.
-    expect(queryMock).toHaveBeenCalledTimes(3);
+    // One read of the group row, one of its members, one of its statistics and
+    // one of the role, shared by GroupPage, getGroup, canViewGroup and the
+    // panel services.
+    expect(queryMock).toHaveBeenCalledTimes(4);
   });
 
   it('keeps separate groups as separate reads', async () => {
@@ -78,7 +79,7 @@ describe('group request cache', () => {
 
     await canViewGroup(actor, 4);
 
-    expect(queryMock.mock.calls.length).toBe(afterFirst + 3);
+    expect(queryMock.mock.calls.length).toBe(afterFirst + 4);
   });
 
   it('denies a viewer without a session without reading the group', async () => {

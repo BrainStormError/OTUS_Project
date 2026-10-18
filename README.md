@@ -1,14 +1,13 @@
 # Movie Tracker
 
 Инженерный фундамент проекта на Next.js: слоистая архитектура (`app -> modules -> core`),
-PostgreSQL через `pg` без ORM, `zod`-границы, Auth.js, обязательные проверки качества
-и один вертикальный срез (`directory`) как эталон модуля.
+PostgreSQL через `pg` без ORM, `zod`-границы, Auth.js и обязательные проверки качества.
 
-Полный гайд по соглашениям — в `GUIDE.md` и `docs/01`–`docs/09`.
+Полный гайд по соглашениям — в `docs/01`–`docs/09`.
 
 ## Стек
 
-Версии зафиксированы точно в `package.json` (см. раздел «Стек (зафиксированные версии)» в `GUIDE.md`).
+Версии зафиксированы точно в `package.json`.
 
 | Слой | Выбор | Версия |
 | --- | --- | --- |
@@ -87,7 +86,9 @@ curl -fsS http://127.0.0.1:3000/api/health   # {"status":"ok"}
    (`docker save | gzip | ssh 'gunzip | docker load'`), без реестра/GHCR.
    Туда же доставляется `docker-compose.yml`.
 2. `deploy` job по SSH выполняет `scripts/deploy.sh` на хосте (из каталога `DEPLOY_DIR`):
-   **save previous → db → migrate → up** (образы уже загружены на хост).
+   **save previous → db → migrate → analyze → sync genres → up** (образы уже
+   загружены на хост; синхронизация жанров — best-effort и пишет оба справочника,
+   `film_genres` и `series_genres`).
 
 Каталог деплоя на VPS задаётся секретом `DEPLOY_DIR` (например `/opt/watcher-platform`);
 CI сам создаёт его и копирует туда `docker-compose.yml`. Хостовый `.env` кладётся в этот
@@ -131,7 +132,7 @@ DRY_RUN=1 SIMULATE_FAILURE=1 bash scripts/deploy.sh
 
 ## Документация
 
-- `GUIDE.md` — исходный инженерный гайд.
+- `AI-Отчет.md` — отчёт по итогам работы над проектом: этапы, сбои, выводы.
 - `docs/01`–`docs/08` — гайд, адаптированный под проект.
 - `docs/09-runbook-health.md` — health/readiness и внешний uptime-монитор.
 - `docs/adr/` — ADR по неочевидным решениям.

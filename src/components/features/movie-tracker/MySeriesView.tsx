@@ -14,7 +14,7 @@ import { useWatchedRecords } from './record-store';
 import { RecordModal } from './RecordModal';
 import { RecordsTable, type SortKey, type SortState } from './RecordsTable';
 import { SearchField } from './SearchField';
-import type { Movie, SearchFilters, WatchedRecord, WatchlistItem } from './types';
+import type { FilterOption, Movie, SearchFilters, WatchedRecord, WatchlistItem } from './types';
 import { ViewTabs } from './ViewTabs';
 import { WatchlistTable } from './WatchlistTable';
 import { useWatchlist } from './watchlist-store';
@@ -29,9 +29,11 @@ type TabId = (typeof TABS)[number]['id'];
 export function MySeriesView({
   initialRecords,
   initialWatchlist = [],
+  initialGenres = [],
 }: {
   initialRecords: WatchedRecord[];
   initialWatchlist?: WatchlistItem[];
+  initialGenres?: FilterOption[];
 }) {
   const { records: allRecords, upsert, remove } = useWatchedRecords(initialRecords);
   const {
@@ -209,6 +211,7 @@ export function MySeriesView({
       <AddRecordModal
         open={adding}
         kind="series"
+        genres={initialGenres}
         watchedRefs={records.map((record) => String(record.movie.tmdbId))}
         onClose={() => setAdding(false)}
         onSelect={(movie) => {

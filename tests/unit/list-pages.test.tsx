@@ -49,6 +49,9 @@ function json(body: unknown): Response {
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url = new URL(String(input), 'http://localhost');
+  if (url.pathname === '/api/genres') {
+    return json({ items: [] });
+  }
   if (url.pathname === '/api/records') {
     return json({ items: [filmRecord, seriesRecord] });
   }

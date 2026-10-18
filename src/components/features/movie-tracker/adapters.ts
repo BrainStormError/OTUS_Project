@@ -16,7 +16,7 @@ import type {
   WatchlistItem,
 } from './types';
 
-const EMPTY_STATS: UserStats = { count: 0, genres: [], years: [] };
+const EMPTY_STATS: UserStats = { films: 0, series: 0, genres: [], years: [] };
 
 export function toPublicUser(user: SocialUser): PublicUser {
   return {
@@ -43,7 +43,7 @@ export function toGroup(group: GroupSummary): Group {
     description: group.description ?? undefined,
     tags: group.tags,
     members: group.members,
-    stats: EMPTY_STATS,
+    stats: group.stats,
     restricted: group.restricted,
   };
 }

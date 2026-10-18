@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 
-import { currentDateInTimeZone, useTimeFormat } from '@/components/layout/preferences';
+import { currentDateInTimeZone } from '@/components/layout/preferences';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,8 +57,7 @@ export function RatingForm({
   const dateId = useId();
   const errorId = useId();
 
-  const { timeZone } = useTimeFormat();
-  const maxDate = currentDateInTimeZone(timeZone);
+  const maxDate = currentDateInTimeZone();
 
   const [rating, setRating] = useState(
     initialRating === undefined ? '' : String(initialRating),

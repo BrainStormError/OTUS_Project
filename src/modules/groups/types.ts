@@ -5,6 +5,13 @@ export type GroupMemberSummary = {
   role: 'admin' | 'member';
 };
 
+export type GroupStats = {
+  films: number;
+  series: number;
+  genres: { genre: string; count: number }[];
+  years: { year: number; count: number }[];
+};
+
 export type GroupSummary = {
   id: number;
   name: string;
@@ -12,6 +19,7 @@ export type GroupSummary = {
   tags: string[];
   restricted: boolean;
   members: GroupMemberSummary[];
+  stats: GroupStats;
 };
 
 export type GroupInvitationStatus = 'pending' | 'accepted' | 'declined';

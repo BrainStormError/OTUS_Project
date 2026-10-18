@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Clapperboard } from 'lucide-react';
+import { BarChart3, CalendarDays, Clapperboard, Tv } from 'lucide-react';
 
 import { RestrictedState } from '@/components/ui/restricted-state';
 
@@ -21,8 +21,9 @@ export function StatisticsView({
 
   return (
     <div className="space-y-6" data-testid="statistics">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard label="Всего фильмов" value={stats.count} icon={Clapperboard} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Всего фильмов" value={stats.films} icon={Clapperboard} />
+        <StatCard label="Всего сериалов" value={stats.series} icon={Tv} />
         <StatCard
           label="Любимый жанр"
           value={topGenre ? topGenre.genre : '—'}

@@ -109,7 +109,20 @@ describe('compact domain migrations', () => {
     expect(indexDefs.some((def) => def.includes('media_kind_ref_key') && def.includes('UNIQUE'))).toBe(
       true,
     );
-    expect(await columns('genres')).toEqual(expect.arrayContaining(['id', 'name']));
+    expect(await columns('film_genres')).toEqual(expect.arrayContaining(['id', 'name']));
+    expect(await columns('series_genres')).toEqual(expect.arrayContaining(['id', 'name']));
+
+    const filmIndexes = await indexes('film_genres');
+    expect(
+      filmIndexes.some((def) => def.includes('film_genres_name_key') && def.includes('UNIQUE')),
+    ).toBe(true);
+    const seriesIndexes = await indexes('series_genres');
+    expect(
+      seriesIndexes.some((def) => def.includes('series_genres_name_key') && def.includes('UNIQUE')),
+    ).toBe(true);
+
+    expect(await tableExists(databaseUrl, 'genres')).toBe(false);
+    expect(await tableExists(databaseUrl, 'genre_kinds')).toBe(false);
   });
 
   it('creates the unified ratings table with partial unique indexes', async () => {
@@ -249,7 +262,8 @@ describe('compact domain migrations', () => {
       for (const table of [
         'users',
         'media',
-        'genres',
+        'film_genres',
+        'series_genres',
         'ratings',
         'friendships',
         'groups',
@@ -282,7 +296,10 @@ describe('compact domain migrations', () => {
         'friendships',
         'ratings',
         'media',
+        'film_genres',
+        'series_genres',
         'genres',
+        'genre_kinds',
         'users',
       ]) {
         expect(await tableExists(target.toString(), table), table).toBe(false);
@@ -291,6 +308,128 @@ describe('compact domain migrations', () => {
       await admin.query(`DROP DATABASE IF EXISTS ${dbName}`);
       await admin.end();
     }
+  });
+});
+
+describe('genre catalog split migration', () => {
+  const MIGRATION_FILE = resolve(
+    process.cwd(),
+    'src/core/db/migrations/1710000000019_split_genre_catalogs.sql',
+  );
+
+  function migrationParts(): { up: string; down: string } {
+    const source = readFileSync(MIGRATION_FILE, 'utf8');
+    const [up = '', down = ''] = source.split('-- Down Migration');
+    return { up: up.replace('-- Up Migration', ''), down };
+  }
+
+  async function withFreshDatabase(
+    run: (connectionString: string) => Promise<void>,
+  ): Promise<void> {
+    const adminUrl = new URL(databaseUrl);
+    adminUrl.pathname = '/postgres';
+    const admin = new Client({ connectionString: adminUrl.toString() });
+    await admin.connect();
+
+    const dbName = `genre_split_${Date.now()}`;
+    try {
+      await admin.query(`CREATE DATABASE ${dbName}`);
+      const target = new URL(databaseUrl);
+      target.pathname = `/${dbName}`;
+      await run(target.toString());
+    } finally {
+      await admin.query(`DROP DATABASE IF EXISTS ${dbName}`);
+      await admin.end();
+    }
+  }
+
+  it('copies each kind into its own table and drops the merged schema', async () => {
+    const { up } = migrationParts();
+    await withFreshDatabase(async (connectionString) => {
+      const client = new Client({ connectionString });
+      await client.connect();
+      try {
+        await client.query(`
+          CREATE TABLE genres (id smallint PRIMARY KEY, name varchar(80) NOT NULL);
+          CREATE UNIQUE INDEX genres_name_key ON genres (name);
+          CREATE TABLE genre_kinds (
+            genre_id  smallint NOT NULL REFERENCES genres(id) ON DELETE CASCADE,
+            kind      smallint NOT NULL CHECK (kind IN (0, 1)),
+            PRIMARY KEY (genre_id, kind)
+          );
+          INSERT INTO genres (id, name) VALUES
+            (14, 'Фэнтези'), (18, 'Драма'), (10765, 'Научная фантастика и фэнтези');
+          INSERT INTO genre_kinds (genre_id, kind) VALUES
+            (14, 0), (18, 0), (18, 1), (10765, 1);
+        `);
+
+        await client.query(up);
+
+        const film = await client.query<{ id: number; name: string }>(
+          'SELECT id, name FROM film_genres ORDER BY id',
+        );
+        const series = await client.query<{ id: number; name: string }>(
+          'SELECT id, name FROM series_genres ORDER BY id',
+        );
+        expect(film.rows).toEqual([
+          { id: 14, name: 'Фэнтези' },
+          { id: 18, name: 'Драма' },
+        ]);
+        expect(series.rows).toEqual([
+          { id: 18, name: 'Драма' },
+          { id: 10765, name: 'Научная фантастика и фэнтези' },
+        ]);
+
+        const dropped = await client.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name IN ('genres', 'genre_kinds')`,
+        );
+        expect(dropped.rows[0]?.count).toBe('0');
+      } finally {
+        await client.end();
+      }
+    });
+  });
+
+  it('rebuilds the merged schema from the per-kind tables on rollback', async () => {
+    const { up, down } = migrationParts();
+    await withFreshDatabase(async (connectionString) => {
+      const client = new Client({ connectionString });
+      await client.connect();
+      try {
+        await client.query(`
+          CREATE TABLE genres (id smallint PRIMARY KEY, name varchar(80) NOT NULL);
+          CREATE UNIQUE INDEX genres_name_key ON genres (name);
+          CREATE TABLE genre_kinds (
+            genre_id  smallint NOT NULL REFERENCES genres(id) ON DELETE CASCADE,
+            kind      smallint NOT NULL CHECK (kind IN (0, 1)),
+            PRIMARY KEY (genre_id, kind)
+          );
+          INSERT INTO genres (id, name) VALUES (18, 'Драма'), (10765, 'Фантастика');
+          INSERT INTO genre_kinds (genre_id, kind) VALUES (18, 0), (18, 1), (10765, 1);
+        `);
+        await client.query(up);
+        await client.query(down);
+
+        const merged = await client.query<{ id: number; name: string }>(
+          'SELECT id, name FROM genres ORDER BY id',
+        );
+        expect(merged.rows).toEqual([
+          { id: 18, name: 'Драма' },
+          { id: 10765, name: 'Фантастика' },
+        ]);
+        const kinds = await client.query<{ genre_id: number; kind: number }>(
+          'SELECT genre_id, kind FROM genre_kinds ORDER BY genre_id, kind',
+        );
+        expect(kinds.rows).toEqual([
+          { genre_id: 18, kind: 0 },
+          { genre_id: 18, kind: 1 },
+          { genre_id: 10765, kind: 1 },
+        ]);
+      } finally {
+        await client.end();
+      }
+    });
   });
 });
 

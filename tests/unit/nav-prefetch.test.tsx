@@ -131,7 +131,7 @@ describe('chrome and list links never prefetch', () => {
             name: 'Клуб',
             tags: [],
             members: [],
-            stats: { count: 0, genres: [], years: [] },
+            stats: { films: 0, series: 0, genres: [], years: [] },
           }}
         />
         <WatchlistTable

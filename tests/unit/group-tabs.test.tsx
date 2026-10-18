@@ -6,7 +6,6 @@ import { GroupActivity } from '@/components/features/movie-tracker/GroupActivity
 import { GroupDiscussions } from '@/components/features/movie-tracker/GroupDiscussions';
 import { GroupRatings } from '@/components/features/movie-tracker/GroupRatings';
 import { GroupTabs } from '@/components/features/movie-tracker/GroupTabs';
-import { writeTimezone } from '@/components/layout/preferences';
 import type { FeedItem } from '@/modules/activity';
 import type { DiscussionSummary, DiscussionDetail } from '@/modules/discussions';
 import type { GroupRatingSummary } from '@/modules/groups';
@@ -171,7 +170,12 @@ const group: Group = {
   name: 'Киновечера',
   tags: [],
   members: [{ id: 1, name: 'Админ', handle: 'admin', role: 'admin' }],
-  stats: { count: 0, genres: [], years: [] },
+  stats: {
+    films: 2,
+    series: 1,
+    genres: [{ genre: 'драма', count: 2 }],
+    years: [{ year: 2010, count: 2 }],
+  },
 };
 
 function renderTabs(overrides: Partial<Parameters<typeof GroupTabs>[0]> = {}) {
@@ -233,6 +237,18 @@ describe('GroupTabs controller', () => {
 
     expect(push).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalled();
+  });
+
+  it('renders the group statistics from the Оценки tab data', async () => {
+    renderTabs({ ratings: [rating] });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Статистика' }));
+
+    const statistics = screen.getByTestId('statistics');
+    const cards = within(statistics).getAllByTestId('stat-card');
+    expect(cards).toHaveLength(4);
+    expect(within(cards[0]!).getByText('2')).toBeInTheDocument();
+    expect(within(cards[1]!).getByText('1')).toBeInTheDocument();
   });
 
   it('opens a discussion from a cross-tab link in place', async () => {
@@ -465,6 +481,48 @@ describe('GroupRatings', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     vi.unstubAllGlobals();
+  });
+
+  it('scopes the picker genre options to the selected kind without a genres request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <GroupRatings
+        groupId={1}
+        isMember
+        isAdmin
+        ratings={[]}
+        genresByKind={{
+          film: [{ value: '28', label: 'Боевик' }],
+          series: [{ value: '10765', label: 'Научная фантастика' }],
+        }}
+        onOpenDiscussion={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить оценку' }));
+    const picker = screen.getByRole('dialog');
+    await userEvent.click(within(picker).getByText('Жанр'));
+    let group = screen.getByRole('group', { name: 'Жанр' });
+    expect(within(group).getByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
+    expect(
+      within(group).queryByRole('checkbox', { name: 'Научная фантастика' }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(within(picker).getByRole('button', { name: 'Сериалы' }));
+    await userEvent.click(within(picker).getByText('Жанр'));
+    group = screen.getByRole('group', { name: 'Жанр' });
+    expect(
+      within(group).getByRole('checkbox', { name: 'Научная фантастика' }),
+    ).toBeInTheDocument();
+    expect(within(group).queryByRole('checkbox', { name: 'Боевик' })).not.toBeInTheDocument();
+
+    expect(
+      fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/genres')),
+    ).toBe(false);
   });
 
   it('does not offer the start control to a member', () => {
@@ -710,8 +768,10 @@ describe('GroupActivity', () => {
     expect(screen.getByTestId('restricted-no-permission')).toBeInTheDocument();
   });
 
-  it('shows an event moment in the selected timezone and format', async () => {
-    writeTimezone('Europe/Moscow');
+  it('shows an event moment in the browser timezone and format', async () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      timeZone: 'Europe/Moscow',
+    } as Intl.ResolvedDateTimeFormatOptions);
     render(
       <GroupActivity
         visible

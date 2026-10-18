@@ -384,10 +384,13 @@ describe('HomeView', () => {
     render(
       <HomeView
         popularFilms={popularFilms}
-        genres={[
-          { value: '28', label: 'Боевик' },
-          { value: '878', label: 'Фантастика' },
-        ]}
+        genresByKind={{
+          film: [
+            { value: '28', label: 'Боевик' },
+            { value: '878', label: 'Фантастика' },
+          ],
+          series: [{ value: '10765', label: 'Фантастика' }],
+        }}
       />,
     );
     const genre = await openFilter('Жанр');
@@ -395,7 +398,12 @@ describe('HomeView', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Сериалы' }));
     const seriesGenre = await openFilter('Жанр');
-    expect(await within(seriesGenre).findByRole('checkbox', { name: 'Боевик' })).toBeInTheDocument();
+    expect(
+      within(seriesGenre).queryByRole('checkbox', { name: 'Боевик' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await within(seriesGenre).findByRole('checkbox', { name: 'Фантастика' }),
+    ).toBeInTheDocument();
 
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.includes('/api/genres'))).toBe(false);

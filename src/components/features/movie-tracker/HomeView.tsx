@@ -31,12 +31,12 @@ type SearchState =
 
 export function HomeView({
   popularFilms = [],
-  genres = [],
+  genresByKind = { film: [], series: [] },
   initialRecords = [],
   initialWatchlist = [],
 }: {
   popularFilms?: CatalogSearchResult[];
-  genres?: FilterOption[];
+  genresByKind?: Record<MediaKind, FilterOption[]>;
   initialRecords?: WatchedRecord[];
   initialWatchlist?: WatchlistItem[];
 }) {
@@ -146,7 +146,7 @@ export function HomeView({
         onFiltersChange={setFilters}
         onSearch={runSearch}
         onReset={() => setSearch({ status: 'idle' })}
-        genres={genres}
+        genres={genresByKind[kind]}
         kind={kind}
         onKindChange={changeKind}
       />

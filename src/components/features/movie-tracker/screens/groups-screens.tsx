@@ -13,6 +13,7 @@ import type { GroupInvitation, GroupRatingSummary, GroupSummary } from '@/module
 
 import { toGroup } from '../adapters';
 import { AdminMemberPanel } from '../AdminMemberPanel';
+import { genreOptionsFromCatalog } from '../catalog-view';
 import { DissolveGroupButton } from '../DissolveGroupButton';
 import { GroupInvitations } from '../GroupInvitations';
 import { GroupSettingsForm } from '../GroupSettingsForm';
@@ -20,7 +21,9 @@ import { GroupsView } from '../GroupsView';
 import { GroupTabs } from '../GroupTabs';
 import { LeaveGroupButton } from '../LeaveGroupButton';
 import { groupRead } from '../read-invalidation';
-import { useRead } from '../read-store';
+import { useRead, useReadAll } from '../read-store';
+
+type GenresRead = { items: { id: number; name: string }[] };
 
 type GroupsRead = {
   groups: GroupSummary[];
@@ -74,6 +77,10 @@ export function GroupScreen({ groupId }: { groupId: number }) {
   const identity = useShellIdentity();
   const params = useSearchParams();
   const state = useRead<GroupRead>(groupRead(groupId));
+  const genres = useReadAll<[GenresRead, GenresRead]>([
+    '/api/genres?kind=film',
+    '/api/genres?kind=series',
+  ]);
 
   if (state.status === 'loading') {
     return null;
@@ -90,6 +97,13 @@ export function GroupScreen({ groupId }: { groupId: number }) {
   const group = toGroup(summary);
   const isAdmin = role === 'admin';
   const isMember = role !== null;
+  const genresByKind =
+    genres.status === 'ready'
+      ? {
+          film: genreOptionsFromCatalog(genres.data[0].items),
+          series: genreOptionsFromCatalog(genres.data[1].items),
+        }
+      : undefined;
 
   const discussionParam = params.get('discussion');
   const parsedDiscussion =
@@ -123,6 +137,7 @@ export function GroupScreen({ groupId }: { groupId: number }) {
         currentUserId={identity?.id}
         discussions={discussions}
         ratings={ratings}
+        genresByKind={genresByKind}
         activityEvents={activity}
         activityVisible={isMember}
         initialTab={params.get('tab') ?? undefined}
