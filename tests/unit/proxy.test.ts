@@ -1,16 +1,26 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { describe, expect, it } from 'vitest';
 
 import { buildSessionCookieConfig } from '@/modules/auth/session-cookie';
 
-import { buildCsp, hasSessionCookie, proxy } from '@/proxy';
+import {
+  applyBuildMarker,
+  buildCsp,
+  hasSessionCookie,
+  proxy,
+  readBuildId,
+} from '@/proxy';
 
 const secureCookie = buildSessionCookieConfig(true).name;
 const plainCookie = buildSessionCookieConfig(false).name;
 
-function request(path: string, cookie?: string): NextRequest {
+function request(path: string, cookie?: string, headers: Record<string, string> = {}): NextRequest {
+  const merged = { ...headers };
+  if (cookie) {
+    merged.cookie = cookie;
+  }
   return new NextRequest(`http://localhost${path}`, {
-    headers: cookie ? { cookie } : undefined,
+    headers: Object.keys(merged).length > 0 ? merged : undefined,
   });
 }
 
@@ -67,5 +77,65 @@ describe('proxy session guard', () => {
 
   it('does not touch the database or crypto for the presence check', () => {
     expect(hasSessionCookie(request('/films', 'other=1'))).toBe(false);
+  });
+});
+
+describe('proxy defers the navigation cache policy to the header rules', () => {
+  const session = `${plainCookie}=token`;
+
+  it('does not set a cache-control of its own on any response class', () => {
+    for (const path of [
+      '/films',
+      '/films?_rsc=abc',
+      '/api/records',
+      '/login',
+      '/_next/static/chunk.js',
+    ]) {
+      const response = proxy(request(path, session));
+      expect(response.headers.get('cache-control')).toBeNull();
+    }
+  });
+});
+
+describe('deployment build marker', () => {
+  it('clears the HTTP cache once and stores the current marker on mismatch', () => {
+    const response = NextResponse.next();
+    applyBuildMarker(response, request('/films', `${plainCookie}=token`), 'build-new');
+
+    expect(response.headers.get('clear-site-data')).toBe('"cache"');
+    const setCookie = response.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain('build-id=build-new');
+  });
+
+  it('clears nothing when the marker matches', () => {
+    const response = NextResponse.next();
+    applyBuildMarker(response, request('/films', 'build-id=build-current'), 'build-current');
+
+    expect(response.headers.get('clear-site-data')).toBeNull();
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('never asks for storage to be cleared', () => {
+    const response = NextResponse.next();
+    applyBuildMarker(response, request('/films'), 'build-new');
+
+    const directive = response.headers.get('clear-site-data') ?? '';
+    expect(directive).toBe('"cache"');
+    expect(directive).not.toContain('storage');
+  });
+
+  it('does nothing when the running build id is unavailable', () => {
+    const response = NextResponse.next();
+    applyBuildMarker(response, request('/films'), null);
+    expect(response.headers.get('clear-site-data')).toBeNull();
+  });
+
+  it('clears when a real response carries a stale marker', () => {
+    const buildId = readBuildId();
+    if (buildId === null) {
+      return;
+    }
+    const response = proxy(request('/films', `${plainCookie}=token; build-id=stale`));
+    expect(response.headers.get('clear-site-data')).toBe('"cache"');
   });
 });

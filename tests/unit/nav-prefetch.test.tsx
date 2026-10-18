@@ -47,31 +47,30 @@ describe('shell link prefetching', () => {
     vi.useRealTimers();
   });
 
-  it('does not prefetch any shell destination just by rendering the shell', () => {
+  it('leaves every shell link on the framework default prefetch intent', () => {
     render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
-    expect(screen.getAllByRole('link').length).toBeGreaterThan(0);
+    const links = screen.getAllByRole('link');
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      // No explicit prop means the framework's viewport prefetch: one request
+      // per destination per freshness window, not the Full strategy.
+      expect(link).toHaveAttribute('data-prefetch', 'auto');
+    }
+  });
+
+  it('issues no manual prefetch of its own on render, hover, focus, or activation', () => {
+    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
+
+    for (const link of screen.getAllByRole('link')) {
+      fireEvent.pointerEnter(link);
+      fireEvent.focus(link);
+      fireEvent.click(link);
+    }
+
     expect(prefetchMock).not.toHaveBeenCalled();
   });
 
-  it('does not prefetch the destination of a hovered shell link', () => {
-    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
-    fireEvent.pointerEnter(screen.getByRole('link', { name: /Мои фильмы/ }));
-    expect(prefetchMock).not.toHaveBeenCalled();
-  });
-
-  it('does not prefetch the destination of a focused shell link', () => {
-    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
-    fireEvent.focus(screen.getByRole('link', { name: /Друзья/ }));
-    expect(prefetchMock).not.toHaveBeenCalled();
-  });
-
-  it('issues no prefetch when a shell link is activated', () => {
-    render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
-    fireEvent.click(screen.getByRole('link', { name: /Мои фильмы/ }));
-    expect(prefetchMock).not.toHaveBeenCalled();
-  });
-
-  it('issues no prefetch during browser idle time', async () => {
+  it('issues no manual prefetch during browser idle time', async () => {
     render(<NavLinks variant="rail" ariaLabel="Основная навигация" />);
     await vi.runAllTimersAsync();
     expect(prefetchMock).not.toHaveBeenCalled();

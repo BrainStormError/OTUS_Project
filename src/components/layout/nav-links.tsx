@@ -52,7 +52,6 @@ export function NavLinks({
           <li key={section.key} className={variant === 'tabs' ? 'flex' : undefined}>
             <Link
               href={section.href}
-              prefetch={false}
               aria-current={active ? 'page' : undefined}
               aria-label={iconOnly ? section.label : undefined}
               title={iconOnly ? section.label : undefined}
