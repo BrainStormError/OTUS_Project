@@ -12,9 +12,13 @@ export function getPool(): Pool {
   if (!globalForPool.__watcherPool) {
     globalForPool.__watcherPool = new Pool({
       connectionString: env.DATABASE_URL,
+      // min equal to max keeps every connection established for the lifetime of
+      // the process: pg-pool only closes idle clients while it is above min, so
+      // no request ever pays the host's multi-second connection setup again.
+      min: 10,
       max: 10,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 10_000,
     });
   }
   return globalForPool.__watcherPool;
@@ -30,6 +34,16 @@ export async function query<T extends Record<string, unknown>>(
 
 export async function pingDatabase(): Promise<void> {
   await getPool().query('SELECT 1');
+}
+
+// Establishes the pool's connections once at startup. pg-pool does not
+// pre-create clients from `min`, so without this the first burst after an idle
+// period would still open connections on demand. Concurrent trivial queries
+// force the pool to open up to `max` connections, which then stay established.
+export async function warmPool(): Promise<void> {
+  const pool = getPool();
+  const size = pool.options.max ?? 10;
+  await Promise.all(Array.from({ length: size }, () => pool.query('SELECT 1')));
 }
 
 export async function closePool(): Promise<void> {

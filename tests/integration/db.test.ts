@@ -2,13 +2,20 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { closePool, getPool, query } from '@/core/db/pool';
+import { closePool, getPool, query, warmPool } from '@/core/db/pool';
 import { withTransaction } from '@/core/db/transaction';
 import { insertUser } from '@/modules/auth/repository';
 
 afterAll(async () => {
   await closePool();
 });
+
+async function appConnections(): Promise<number> {
+  const rows = await query<{ count: number }>(
+    'SELECT count(*) AS count FROM pg_stat_activity WHERE datname = current_database()',
+  );
+  return Number(rows[0]?.count ?? 0);
+}
 
 describe('shared pool', () => {
   it('returns the same pool instance and executes a query', async () => {
@@ -31,6 +38,19 @@ describe('shared pool', () => {
     const rows = await query<{ id: number }>('SELECT id FROM users WHERE id = $1', [row.id]);
     expect(typeof rows[0]?.id).toBe('number');
     expect(rows[0]?.id).toBe(row.id);
+  });
+});
+
+describe('connection pool warm-up', () => {
+  it('establishes the connections up front so a query reuses them', async () => {
+    await warmPool();
+
+    const before = await appConnections();
+    expect(before).toBeGreaterThanOrEqual(10);
+
+    await query('SELECT 1');
+
+    expect(await appConnections()).toBe(before);
   });
 });
 

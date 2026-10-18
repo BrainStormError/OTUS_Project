@@ -36,13 +36,11 @@ export const GET = withRoute(
     }
 
     const role = await getGroupRole(input.groupId, actor.id);
-    const [discussions, ratings] = await Promise.all([
-      listDiscussionDetails(actor, input.groupId),
-      listGroupRatings(actor, input.groupId),
-    ]);
+    const discussions = await listDiscussionDetails(actor, input.groupId);
     if (!discussions.ok) {
       return discussions;
     }
+    const ratings = await listGroupRatings(actor, input.groupId);
     if (!ratings.ok) {
       return ratings;
     }

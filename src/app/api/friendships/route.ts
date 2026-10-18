@@ -23,17 +23,15 @@ export const GET = withRoute(
     headers: { 'cache-control': CACHE_SINGLE_AUTHOR },
   },
   async (_input, { actor }) => {
-    const [friends, incoming, outgoing] = await Promise.all([
-      getFriends(actor),
-      getIncomingRequests(actor),
-      getOutgoingRequests(actor),
-    ]);
+    const friends = await getFriends(actor);
     if (!friends.ok) {
       return friends;
     }
+    const incoming = await getIncomingRequests(actor);
     if (!incoming.ok) {
       return incoming;
     }
+    const outgoing = await getOutgoingRequests(actor);
     if (!outgoing.ok) {
       return outgoing;
     }

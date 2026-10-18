@@ -23,17 +23,15 @@ export const GET = withRoute(
     headers: { 'cache-control': CACHE_SINGLE_AUTHOR },
   },
   async (_input, { actor }) => {
-    const [groups, discover, invitations] = await Promise.all([
-      getGroups(actor),
-      getDiscoverableGroups(actor),
-      listMyInvitations(actor),
-    ]);
+    const groups = await getGroups(actor);
     if (!groups.ok) {
       return groups;
     }
+    const discover = await getDiscoverableGroups(actor);
     if (!discover.ok) {
       return discover;
     }
+    const invitations = await listMyInvitations(actor);
     if (!invitations.ok) {
       return invitations;
     }
